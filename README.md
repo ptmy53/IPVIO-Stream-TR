@@ -1,5 +1,7 @@
 # IPVIO Stream
 
+English | [Türkçe](README.tr.md)
+
 DOWNLOADER CODE: 4200542
 
 A free, open-source IPTV player for **Android TV, Google TV and Amazon Fire TV**, built with Kotlin and Jetpack Compose and designed for the remote control.

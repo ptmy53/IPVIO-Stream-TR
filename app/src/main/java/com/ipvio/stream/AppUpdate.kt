@@ -30,8 +30,13 @@ data class UpdateInfo(val code: Long, val name: String, val apkUrl: String, val 
  * Schlüssel signiert sein (siehe docs/RELEASE.md). Sonst lehnt Android die Installation ab.
  */
 object AppUpdate {
-    /** Fest eingebaute Update-Adresse: die neueste Veröffentlichung des Projekts auf GitHub. */
-    const val DEFAULT_URL = "https://api.github.com/repos/Emrodev/IPVIO-Stream/releases/latest"
+    /**
+     * Fest eingebaute Update-Adresse: die neueste Veröffentlichung dieses Forks auf GitHub.
+     * Wichtig: Die APK muss mit demselben Schlüssel signiert sein wie die installierte App, sonst
+     * lehnt Android das Update ab. Das Repository muss öffentlich sein, damit die API ohne Token antwortet;
+     * eine eigene Adresse lässt sich weiterhin unter Einstellungen > Über eintragen.
+     */
+    const val DEFAULT_URL = "https://api.github.com/repos/ptmy53/IPVIO-Stream-TR/releases/latest"
 
     /** Gefundenes Update (für die Glocke), null = keines bekannt. */
     var available by mutableStateOf<UpdateInfo?>(null)

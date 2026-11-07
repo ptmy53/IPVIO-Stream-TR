@@ -157,7 +157,7 @@ Geräte ({#0} von {#1})¦Devices ({#0} of {#1})¦Cihazlar ({#0} / {#1})¦Uređaj
 dieses Gerät¦this device¦bu cihaz¦ovaj uređaj¦ovaj uređaj¦ovaj uređaj¦este dispositivo¦cet appareil¦questo dispositivo
 Entfernen¦Remove¦Kaldır¦Ukloni¦Ukloni¦Ukloni¦Quitar¦Retirer¦Rimuovi
 Mit „Entfernen“ wird ein Platz frei, zum Beispiel für einen neuen Fernseher.¦“Remove” frees a slot, for example for a new TV.¦“Kaldır” bir yer açar, örneğin yeni bir TV için.¦„Ukloni“ oslobađa mjesto, na primjer za novi TV.¦„Ukloni“ oslobađa mjesto, na primjer za novi TV.¦„Ukloni“ oslobađa mesto, na primer za novi TV.¦«Quitar» libera un hueco, por ejemplo para una tele nueva.¦« Retirer » libère une place, par exemple pour une nouvelle télé.¦«Rimuovi» libera un posto, ad esempio per una nuova TV.
-Talk¦Talk show¦Talk show¦Talk show¦Talk show¦Talk show¦Tertulia¦Talk-show¦Talk show
+Talk¦Talk show¦Talk şov¦Talk show¦Talk show¦Talk show¦Tertulia¦Talk-show¦Talk show
 Wien¦Vienna¦Viyana¦Beč¦Beč¦Beč¦Viena¦Vienne¦Vienna
 Zürich¦Zurich¦Zürih¦Cirih¦Zürich¦Cirih¦Zúrich¦Zurich¦Zurigo
 Belgrad¦Belgrade¦Belgrad¦Beograd¦Beograd¦Beograd¦Belgrado¦Belgrade¦Belgrado
@@ -167,7 +167,7 @@ Lissabon¦Lisbon¦Lizbon¦Lisabon¦Lisabon¦Lisabon¦Lisboa¦Lisbonne¦Lisbona
 Moskau¦Moscow¦Moskova¦Moskva¦Moskva¦Moskva¦Moscú¦Moscou¦Mosca
 Tokio¦Tokyo¦Tokyo¦Tokio¦Tokio¦Tokio¦Tokio¦Tokyo¦Tokyo
 Seoul¦Seoul¦Seul¦Seul¦Seul¦Seul¦Seúl¦Séoul¦Seul
-Mexiko-Stadt¦Mexico City¦Mexico City¦Meksiko¦Meksiko¦Meksiko¦Ciudad de México¦Mexico¦Città del Messico
+Mexiko-Stadt¦Mexico City¦Meksiko¦Meksiko¦Meksiko¦Meksiko¦Ciudad de México¦Mexico¦Città del Messico
 Indien¦India¦Hindistan¦Indija¦Indija¦Indija¦India¦Inde¦India
 Schnell {0}¦Fast {0}¦Hızlı {0}¦Brzo {0}¦Brzo {0}¦Brzo {0}¦Rápido {0}¦Rapide {0}¦Veloce {0}
 Vancouver¦Vancouver¦Vancouver¦Vancouver¦Vancouver¦Vankuver¦Vancouver¦Vancouver¦Vancouver

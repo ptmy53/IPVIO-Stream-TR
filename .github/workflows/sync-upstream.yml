@@ -1,0 +1,107 @@
+name: Upstream Senkron
+
+# Emrodev/IPVIO-Stream ana dalını her gün denetler. Yeni commit varsa bu
+# depoya doğrudan yazmaz: incelemen ve merge etmen için bir Pull Request açar.
+# Saat: 04:00 Türkiye / 01:00 UTC.
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Sadece yeni commit var mı kontrol et"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_URL: https://github.com/Emrodev/IPVIO-Stream.git
+  UPSTREAM_BRANCH: main
+  TARGET_BRANCH: main
+
+jobs:
+  sync:
+    name: Emrodev/IPVIO-Stream güncellemesini PR olarak hazırla
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Upstream'i getir ve farkı denetle
+        id: check
+        run: |
+          git remote add upstream "$UPSTREAM_URL" 2>/dev/null || git remote set-url upstream "$UPSTREAM_URL"
+          git fetch --no-tags --prune upstream "$UPSTREAM_BRANCH"
+          if git merge-base --is-ancestor "upstream/$UPSTREAM_BRANCH" HEAD; then
+            echo "state=up-to-date" >> "$GITHUB_OUTPUT"
+            echo "Upstream güncel."
+          else
+            echo "state=behind" >> "$GITHUB_OUTPUT"
+            echo "Yeni upstream commitleri:"
+            git log --oneline "HEAD..upstream/$UPSTREAM_BRANCH"
+          fi
+
+      - name: Kuru çalıştırma özeti
+        if: ${{ steps.check.outputs.state == 'behind' && inputs.dry_run }}
+        run: echo "dry_run açık; dal ve PR oluşturulmadı."
+
+      - name: Upstream dalını gönder
+        id: branch
+        if: ${{ steps.check.outputs.state == 'behind' && !inputs.dry_run }}
+        run: |
+          BRANCH="upstream-sync/$(date -u +%Y-%m-%d)"
+          # Dal doğrudan upstream/main'ın işaret ettiği commit'e kurulur. Bu,
+          # GitHub'ın PR sayfasında gerçek çakışmaları göstermesini sağlar.
+          git push origin "upstream/$UPSTREAM_BRANCH:refs/heads/$BRANCH" --force
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Pull Request oluştur
+        id: pr
+        if: ${{ steps.branch.outputs.name != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="${{ steps.branch.outputs.name }}"
+          EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "number=$EXISTING" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "$BRANCH" \
+            --title "chore(upstream): $(date -u +%Y-%m-%d) senkronu" \
+            --body "$(cat <<'EOF'
+          Emrodev/IPVIO-Stream `main` dalındaki yeni commitler için otomatik PR.
+
+          - Kaynak: `https://github.com/Emrodev/IPVIO-Stream`
+          - Türkçe katman ve bu fork belgeleri merge öncesi gözden geçirilmelidir.
+          - GitHub çakışma bildirirse `Dict*.kt`, `README.md` ve fork belgelerini dikkatle çözün.
+
+          Otomatik oluşturuldu: `.github/workflows/sync-upstream.yml`
+          EOF
+          )"
+          NUMBER=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number')
+          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Özet
+        run: |
+          {
+            echo "### Upstream senkron"
+            echo ""
+            echo "| Alan | Değer |"
+            echo "|---|---|"
+            echo "| Durum | \`${{ steps.check.outputs.state }}\` |"
+            echo "| PR | \`${{ steps.pr.outputs.number || '-' }}\` |"
+            echo "| Kaynak | \`$UPSTREAM_URL\` / \`$UPSTREAM_BRANCH\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -57,7 +57,8 @@ class PhoneImportTest {
         assertEquals(0, PhoneImportLogic.langIndex("de-AT,de;q=0.9,en;q=0.8"))
         assertEquals(2, PhoneImportLogic.langIndex("tr-TR,tr;q=0.9"))
         assertEquals(5, PhoneImportLogic.langIndex("sr-Latn-RS"))
-        assertEquals(1, PhoneImportLogic.langIndex("ja-JP,nl;q=0.5"))
+        // İlk dil desteklenmiyorsa Accept-Language listesindeki sonraki desteklenen dil seçilir.
+        assertEquals(9, PhoneImportLogic.langIndex("ja-JP,nl;q=0.5"))
         assertEquals(1, PhoneImportLogic.langIndex(""))
         I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI)
         assertTrue(PhoneImportLogic.page(2).contains("Televizyona gönder"))
