@@ -59,20 +59,37 @@ jobs:
         id: branch
         if: ${{ steps.check.outputs.state == 'behind' && !inputs.dry_run }}
         run: |
-          BRANCH="upstream-sync/$(date -u +%Y-%m-%d)"
+          BRANCH="upstream-sync/main"
           # Dal doğrudan upstream/main'ın işaret ettiği commit'e kurulur. Bu,
           # GitHub'ın PR sayfasında gerçek çakışmaları göstermesini sağlar.
           git push origin "upstream/$UPSTREAM_BRANCH:refs/heads/$BRANCH" --force
           echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Pull Request oluştur
-        id: pr
-        if: ${{ steps.branch.outputs.name != '' }}
+      - name: Açık PR için dalı güncelle
+        id: update_existing
+        if: ${{ steps.branch.outputs.name == '' && steps.check.outputs.state == 'behind' && !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          BRANCH="${{ steps.branch.outputs.name }}"
+          BRANCH="upstream-sync/main"
           EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            git push origin "upstream/$UPSTREAM_BRANCH:refs/heads/$BRANCH" --force
+            echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+            echo "number=$EXISTING" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pull Request oluştur
+        id: pr
+        if: ${{ steps.branch.outputs.name != '' || steps.update_existing.outputs.name != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="${{ steps.branch.outputs.name || steps.update_existing.outputs.name }}"
+          EXISTING="${{ steps.update_existing.outputs.number }}"
+          if [ -z "$EXISTING" ]; then
+            EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty')
+          fi
           if [ -n "$EXISTING" ]; then
             echo "number=$EXISTING" >> "$GITHUB_OUTPUT"
             exit 0

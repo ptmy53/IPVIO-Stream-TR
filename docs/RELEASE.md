@@ -57,3 +57,71 @@ The download link in the README and the Downloader code always point to the newe
 - The first time, Android asks to allow "Install unknown apps" for IPVIO Stream.
 
 Version 1.0 has no update check yet, so 1.0 users install 1.1 once by hand (Downloader code or link). From 1.1 on it works from inside the app.
+# Kişisel GitHub Release
+
+Bu fork, isteğe bağlı olarak GitHub Actions ile **kişisel, imzalı APK** üretebilir.
+İmza anahtarı Android güncellemelerinde kritik olduğundan güvenli biçimde saklayın;
+anahtarı kaybederseniz mevcut uygulamanın üstüne yeni sürüm kuramazsınız.
+
+## Bir defalık imza anahtarı oluşturma
+
+PowerShell’de (Android Studio/JDK kurulu bilgisayarda):
+
+```powershell
+keytool -genkeypair -v -keystore ipvio-release.jks -alias ipvio -keyalg RSA -keysize 2048 -validity 10000
+```
+
+İstendiğinde parola belirleyin. `.jks` dosyasını ve parolaları çevrimdışı, güvenli
+bir yedekte saklayın. **JKS dosyasını GitHub’a, repoya veya sohbete yüklemeyin.**
+
+## GitHub Actions sırları
+
+JKS dosyasını Base64’e çevirin:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes('.\ipvio-release.jks')) |
+  Set-Clipboard
+```
+
+GitHub deposunda **Settings → Secrets and variables → Actions → New repository
+secret** ile aşağıdaki dört secret’ı ekleyin:
+
+| Secret adı | Değer |
+|---|---|
+| `RELEASE_KEYSTORE_BASE64` | Panodaki Base64 içeriği |
+| `RELEASE_STORE_PASSWORD` | JKS store parolası |
+| `RELEASE_KEY_ALIAS` | `ipvio` |
+| `RELEASE_KEY_PASSWORD` | Oluştururken belirlenen alias parolası |
+
+## Sürüm yayınlama
+
+1. `app/build.gradle.kts` içindeki `versionCode` değerini artırın ve `versionName`
+   değerini belirleyin (ör. `1.2`).
+2. Değişiklikleri `main` dalına gönderin.
+3. `v1.2` etiketi oluşturup gönderin:
+
+   ```powershell
+   git tag v1.2
+   git push origin v1.2
+   ```
+
+4. GitHub Actions testleri çalıştırır; aynı JKS ile release APK üretip GitHub
+   Release’e ekler. Etiket sürümü `versionName` ile uyuşmazsa workflow durur.
+
+Varsayılan uygulama içi güncelleme adresi `ptmy53/IPVIO-Stream-TR` Releases
+adresini kullandığından, uygulamanın GitHub API’siyle release bilgisini
+okuyabilmesi için repository visibility **Public** olmalıdır. Repo `Private`
+kalırsa APK’yı Actions artifact’ından indirebilirsiniz; ancak uygulamanın
+token’sız, uygulama içi release güncellemesi çalışmaz. Bu durumda repo’yu
+public yapın veya uygulama içi güncellemeyi kullanmayın.
+
+## Önemli güvenlik notları
+
+- İlk imzalı release, upstream’den yüklenen uygulamanın üstüne kurulamayabilir:
+  upstream kendi imza anahtarını kullanır. Önce upstream uygulamasını kaldırıp
+  fork APK’sını kurmanız gerekebilir; bu işlem uygulama içi veriyi siler. Önce
+  uygulama yedeğini alın.
+- JKS/parola sızarsa anahtarın güvenliği kalmaz. Git geçmişine veya build
+  artifact’ına yanlışlıkla girdiyse anahtarı açığa çıkmış kabul edin.
+- Release APK’sı yalnızca etikete push edildiğinde üretilir. Normal `main`
+  commit’leri test ve debug APK artifact’ı üretir.
