@@ -14,7 +14,7 @@ Android TV, Google TV ve Amazon Fire TV için Kotlin ve Jetpack Compose ile geli
 
 **Downloader uygulaması bulunan Fire TV / Android TV:** şu adresi girin:
 ```
-[https://github.com/ptmy53/IPVIO-Stream-TR/releases/download/v1.1/IPVIO-Stream.apk]
+https://github.com/ptmy53/IPVIO-Stream-TR/releases/download/v1.1/IPVIO-Stream.apk
 ```
 İstendiğinde Downloader (veya dosya yöneticiniz) için “Bilinmeyen uygulamaları yükle” izni verin, sonra kurun. Hesap veya kayıt gerekmez.
 
