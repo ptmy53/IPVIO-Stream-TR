@@ -102,8 +102,8 @@ object General {
     fun init(c: Context) {
         val p = prefs(c)
         autoStart = p.getBoolean("auto_start", false)
-        startTab = p.getInt("start_tab", 0).coerceIn(0, 4)
-        resumeLive = p.getBoolean("resume_live", false)
+        startTab = p.getInt("start_tab", 3).coerceIn(0, 4)
+        resumeLive = p.getBoolean("resume_live", true)
         resumeVod = p.getBoolean("resume_vod", false)
         confirmExit = p.getBoolean("confirm_exit", true)
         refreshMode = p.getInt("refresh_mode", 0).coerceIn(0, 4)

@@ -176,7 +176,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     var buffering by remember { mutableStateOf(true) }
     var playing by remember { mutableStateOf(true) }
     // Live (Runde 14): beim Öffnen gleich die Steuerleiste mit Sender und Sendung statt der kurzen Info-Box
-    var controls by remember { mutableStateOf(true) }
+    var controls by remember { mutableStateOf(!req.live) }
     var focusSeek by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(Panel.NONE) }
     // Technik-Info und Untertitel-Suche (OpenSubtitles)
@@ -1028,7 +1028,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                             val seg = activeSeg
                             if (showNextCard) { playEpisode(epList[epIdx + 1]); true }
                             else if (seg != null && segVisible) { skipSeg(seg); true }
-                            else if (cur.live) { controls = true; true }
+                            else if (cur.live) { openChannels(); true }
                             // Wie bei YouTube, Netflix & Co.: Während/kurz nach dem Spulen bestätigt OK die Zielposition und spielt weiter,
                             // statt zu pausieren (das passierte, weil man das Spulen „bestätigen“ will).
                             else if (scrubTarget >= 0) {

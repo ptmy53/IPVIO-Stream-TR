@@ -22,7 +22,8 @@ Ayrıntılı Türkçe kullanım: [Kurulum rehberi](docs/KURULUM_TR.md).
 
 ## Özellikler
 
-**Oynatma listeleri**
+**TiviMate benzeri TV başlangıcı**
+- Uygulama açıldığında son izlenen canlı kanal (yoksa ilk kanal) tam ekran çalışır; orta/OK tuşu kanal listesini açar, yukarı/aşağı ile gezinirken EPG bilgisi gösterilir.
 - Xtream Codes girişi (sunucu, kullanıcı adı, parola), M3U adresi veya dosyası, Stalker portalı (MAC adresi); Wi-Fi üzerinden telefondan giriş
 - Aynı anda birden fazla oynatma listesi (“Birlikte göster”), Film/Dizilerde kaynak filtresi ve Canlı TV’de kaynak değişimi
 - `get.php` engellendiğinde Xtream hesabını `player_api.php` ile otomatik yükleme

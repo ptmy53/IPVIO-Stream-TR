@@ -324,7 +324,10 @@ private fun AppContent() {
             General.startupHandled = true
             val lastId = History.ids.firstOrNull()
             val last = if (lastId == null || playing != null) null else all.firstOrNull { it.id == lastId }
-            if (last != null && last.kind == Kind.LIVE && General.resumeLive) start(last, last.title, last.url)
+            val lastLive = lastId?.let { id -> all.firstOrNull { it.id == id && it.kind == Kind.LIVE } }
+            val firstLive = liveAll.firstOrNull()
+            if (lastLive != null && General.resumeLive) start(lastLive, lastLive.title, lastLive.url)
+            else if (lastLive == null && General.resumeLive && firstLive != null) start(firstLive, firstLive.title, firstLive.url)
             else if (last != null && last.kind != Kind.LIVE && General.resumeVod) {
                 // nur mit gemerkter Stelle (fertig geschaute Filme starten nicht von vorn; bei Serien ggf. die nächste Folge)
                 val e = WatchStore.entries.firstOrNull { it.itemId == last.id }
