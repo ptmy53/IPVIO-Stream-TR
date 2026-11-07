@@ -10,7 +10,7 @@ Android TV, Google TV ve Amazon Fire TV için Kotlin ve Jetpack Compose ile geli
 
 ## Kurulum
 
-**İndir:** [IPVIO-Stream.apk (son sürüm)](https://github.com/ptmy53/IPVIO-Stream-TR/releases/latest/download/IPVIO-Stream.apk)
+**İndir:** [IPVIO-Stream.apk (son sürüm)]([https://github.com/ptmy53/IPVIO-Stream-TR/releases/download/v1.1/IPVIO-Stream.apk](https://github.com/ptmy53/IPVIO-Stream-TR/releases/download/v1.1/IPVIO-Stream.apk)
 
 **Downloader uygulaması bulunan Fire TV / Android TV:** şu adresi girin:
 ```
