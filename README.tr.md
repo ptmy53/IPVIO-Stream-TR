@@ -1,8 +1,6 @@
 # IPVIO Stream
 
-[English](README.md) | Türkçe
-
-**İndirme kodu:** `4200542`
+[English](README.en.md) | Türkçe
 
 Android TV, Google TV ve Amazon Fire TV için Kotlin ve Jetpack Compose ile geliştirilmiş, uzaktan kumanda odaklı, ücretsiz ve açık kaynaklı IPTV oynatıcı.
 

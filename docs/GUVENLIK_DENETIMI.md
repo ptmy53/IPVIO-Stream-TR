@@ -72,7 +72,7 @@ Telemetri, reklam analitiği veya otomatik crash-report upload uç noktası gör
 - Android, yeni APK’nın paket imzasını kurulu APK ile karşılaştırır; farklı anahtarla imzalanan APK mevcut uygulamanın üstüne kurulamaz. Bu, ana güncelleme korumasıdır.
 - Ancak uygulama indirme sonrasında SHA-256/asset digest kontrolü yapmaz. HTTPS ve Android paket imzasına dayanır.
 - Ayarlar’daki “kendi güncelleme adresi” özelliğini yalnızca güvendiğiniz HTTPS adresiyle kullanın (`SettingsHub.kt:1189`, `AppUpdate.kt:41-42`).
-- Bu forkta varsayılan adres `ptmy53/IPVIO-Stream-TR` olarak değiştirildi (`AppUpdate.kt:39`). Repo private iken GitHub API, uygulama token taşımadığı için release kontrolü/indirmesi çalışmaz. Kişisel release dağıtımı için repo public olmalı veya uygulama güncellemesini kapalı tutmalısınız.
+- Bu forkta varsayılan adres `ptmy53/IPVIO-Stream-TR` olarak değiştirildi (`AppUpdate.kt:39`). Repo public olduğundan uygulama token taşımadan GitHub Release bilgisini okuyabilir ve APK indirebilir.
 
 ## Yerel ağ aktarımı
 

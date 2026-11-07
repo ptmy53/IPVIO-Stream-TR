@@ -1,147 +1,150 @@
 # IPVIO Stream
 
-English | [Türkçe](README.tr.md)
+[English](README.en.md) | Türkçe
 
-A free, open-source IPTV player for **Android TV, Google TV and Amazon Fire TV**, built with Kotlin and Jetpack Compose and designed for the remote control.
+Android TV, Google TV ve Amazon Fire TV için Kotlin ve Jetpack Compose ile geliştirilmiş, uzaktan kumanda odaklı, ücretsiz ve açık kaynaklı IPTV oynatıcı.
 
-![IPVIO Stream home screen](docs/screenshots/homescreen.jpg)
+![IPVIO Stream ana ekranı](docs/screenshots/homescreen.jpg)
 
-> **IPVIO Stream does not provide any content.** It contains no channels, playlists, films or series. It is only a player for playlists that **you** add yourself (Xtream Codes login or M3U address). Only use sources that you are legally allowed to use.
+> **IPVIO Stream içerik sağlamaz.** Kanal, oynatma listesi, film veya dizi içermez. Yalnızca sizin eklediğiniz oynatma listelerini (Xtream Codes girişi veya M3U adresi) oynatır. Yalnızca kullanmaya yasal hakkınız olan kaynakları kullanın.
 
-## Install
+## Kurulum
 
-**Download:** [IPVIO-Stream.apk (latest release)](https://github.com/Emrodev/IPVIO-Stream/releases/latest/download/IPVIO-Stream.apk)
+**İndir:** [IPVIO-Stream.apk (son sürüm)](https://github.com/ptmy53/IPVIO-Stream-TR/releases/latest/download/IPVIO-Stream.apk)
 
-**Fire TV / Android TV with the Downloader app:** enter
+**Downloader uygulaması bulunan Fire TV / Android TV:** şu adresi girin:
 ```
-https://github.com/Emrodev/IPVIO-Stream/releases/latest/download/IPVIO-Stream.apk
+https://github.com/ptmy53/IPVIO-Stream-TR/releases/latest/download/IPVIO-Stream.apk
 ```
-Allow "Install unknown apps" for Downloader (or your file manager) when asked, then install. No account or registration needed.
+İstendiğinde Downloader (veya dosya yöneticiniz) için “Bilinmeyen uygulamaları yükle” izni verin, sonra kurun. Hesap veya kayıt gerekmez.
 
-## Features
+Ayrıntılı Türkçe kullanım: [Kurulum rehberi](docs/KURULUM_TR.md).
 
-**Playlists**
-- Xtream Codes login (server, user name, password), an M3U address or file, or a Stalker portal (MAC address); input from your phone over Wi-Fi
-- Several playlists at the same time ("Also show"), with a source filter in Movies/Series and a source switch in Live TV
-- Xtream accounts load through `player_api.php` automatically when `get.php` is blocked
-- Handles very large playlists: language filter while loading, resumable downloads, compact storage
-- Automatic background refresh (interval or fixed time, waits during playback)
+## Özellikler
 
-**Home screen**
-- Home, Movies and Series with a large rotating header image
-- The background follows the selected title and shows its title, ratings and description
-- Rows: Continue watching, Live now, Top 10 today, Because you watched …, My list, New, Top rated, genres
+**Oynatma listeleri**
+- Xtream Codes girişi (sunucu, kullanıcı adı, parola), M3U adresi veya dosyası, Stalker portalı (MAC adresi); Wi-Fi üzerinden telefondan giriş
+- Aynı anda birden fazla oynatma listesi (“Birlikte göster”), Film/Dizilerde kaynak filtresi ve Canlı TV’de kaynak değişimi
+- `get.php` engellendiğinde Xtream hesabını `player_api.php` ile otomatik yükleme
+- Çok büyük listeler: yükleme sırasında dil filtresi, kaldığı yerden indirme, sıkıştırılmış depolama
+- Otomatik arka plan yenilemesi (aralık veya sabit saat; oynatma sırasında bekler)
 
-**Browse and details**
-- Grid or cinema view, filters by sort order, rating, year, genre and country
-- "Top rated" and sorting by rating use IMDb first, then Rotten Tomatoes, TMDB and finally the provider's rating
-- Provider categories or automatic genres, search with typo tolerance
-- Detail page with resume, trailer, my list, favourites, choice of source/quality
-- Series: seasons on the left, episodes on the right with picture, rating and description; sections and "go to episode" for very long series
+**Ana ekran**
+- Ana Sayfa, Filmler ve Diziler için büyük, dönen başlık görseli
+- Seçilen yapımı takip eden arka plan; başlık, puan ve açıklama
+- İzlemeye devam et, Şimdi canlı, Bugünün ilk 10’u, İzlediklerinize göre, Listem, Yeni, En yüksek puanlılar ve tür satırları
 
-**Live TV**
-- Categories, favourites and your own channel lists
-- TV guide, catch-up/archive ("from the beginning"), reminders with notification
-- Rewind live TV with an on-device buffer, record the current show (internal storage or USB)
-- Sports section: sports on now and coming up, all sports channels
+**Gezinme ve ayrıntılar**
+- Izgara veya sinema görünümü; sıralama, puan, yıl, tür ve ülke filtreleri
+- “En yüksek puanlılar” ve puana göre sıralamada IMDb, Rotten Tomatoes, TMDB ve sağlayıcı puanı sırası
+- Sağlayıcı kategorileri veya otomatik türler; yazım hatasına toleranslı arama
+- Ayrıntı sayfasında kaldığı yerden devam, fragman, listem, favoriler ve kaynak/kalite seçimi
+- Dizilerde solda sezonlar, sağda görsel/puan/açıklama ile bölümler; çok uzun diziler için bölümler ve bölüme gitme
 
-**Player** (Media3 / ExoPlayer)
-- Audio and subtitle selection (remembered per title), preferred languages, subtitle style
-- FFmpeg audio decoder for AC3/E-AC3/DTS (also over Bluetooth headphones)
-- Skip intro and credits (TheIntroDB), next episode automatically
-- Quality selection with 4K check, fallback to another source on errors or stuttering
-- Buffer levels, connection watchdog, endless reconnect for live TV, reconnect after network change and standby
-- HLS, MPEG-DASH and MPEG-TS
-- Aspect ratio/zoom, frame-rate matching, technical info, clock overlay, sleep timer
+**Canlı TV**
+- Kategoriler, favoriler ve kendi kanal listeleriniz
+- TV rehberi, geçmişe dönük izleme/arşiv (“baştan izle”), bildirimli hatırlatıcılar
+- Cihaz içi arabellekle canlı yayını geri sarma, geçerli programı dahili depolamaya veya USB’ye kaydetme
+- Spor bölümü: şu an ve yakında oynayan spor yayınları, tüm spor kanalları
 
-**Personal**
-- Profiles ("Who's watching?"), parental controls with PIN
-- History, my list, favourites, backup and restore of settings
-- Transfer to another device over Wi-Fi, optional Google Drive backup
-- In-app updates from GitHub Releases
+**Oynatıcı** (Media3 / ExoPlayer)
+- Ses ve altyazı seçimi (her yapım için hatırlanır), tercih edilen diller, altyazı biçimi
+- AC3/E-AC3/DTS için FFmpeg ses kod çözücüsü (Bluetooth kulaklıkta da)
+- Jenerik/özet atlama (TheIntroDB), otomatik sonraki bölüm
+- 4K kontrolü ile kalite seçimi; hata veya takılmada başka kaynağa geçiş
+- Arabellek seviyeleri, bağlantı izleyicisi, canlı yayın için sınırsız yeniden bağlanma; ağ değişimi ve beklemeden sonra yeniden bağlanma
+- HLS, MPEG-DASH ve MPEG-TS
+- En-boy oranı/zoom, kare hızı eşleme, teknik bilgiler, saat göstergesi, uyku zamanlayıcısı
 
-**Look and feel**
-- IPVIO green on navy plus 12 colour themes, 5 backgrounds, custom colours
-- Fonts Outfit, Inter or system; adjustable text and display size; animations off/subtle/normal
-- Sidebar left, right or top, icons only or with text; phones: landscape, tap and double-tap controls
-- 10 languages: German, English, Turkish, Bosnian, Croatian, Serbian, Spanish, French, Italian, Dutch
+**Kişisel**
+- Profiller (“Kim izliyor?”), PIN ile ebeveyn denetimi
+- Geçmiş, listem, favoriler, ayar yedekleme ve geri yükleme
+- Wi-Fi ile başka cihaza aktarım, isteğe bağlı Google Drive yedeği
+- GitHub Releases üzerinden uygulama içi güncelleme
 
-## Screenshots
+**Görünüm ve kullanım**
+- Lacivert üzerinde IPVIO yeşili, ayrıca 12 renk teması, 5 arka plan ve özel renkler
+- Outfit, Inter veya sistem yazı tipi; ayarlanabilir metin/ekran boyutu; animasyon kapalı/hafif/normal
+- Sol, sağ veya üst kenar çubuğu; yalnız simgeler veya metinli; telefonlarda yatay kullanım, dokunma ve çift dokunma kontrolleri
+- 10 dil: Almanca, İngilizce, Türkçe, Boşnakça, Hırvatça, Sırpça, İspanyolca, Fransızca, İtalyanca ve Hollandaca
+
+## Ekran görüntüleri
 
 | | |
 |---|---|
-| ![Home screen](docs/screenshots/homescreen.jpg)<br>**Home** – rotating header, quick tiles, live TV now | ![Series details](docs/screenshots/details_series.jpg)<br>**Series details** – seasons, episodes with ratings, director |
-| ![Categories](docs/screenshots/categories_list.jpg)<br>**Automatic genres** – detected in the background | ![Director page](docs/screenshots/producer.jpg)<br>**Cast and crew pages** – with the titles from your playlist |
-| ![Player](docs/screenshots/player.jpg)<br>**Player** – skip intro, audio/subtitles, quality | ![TV guide](docs/screenshots/tvguide.jpg)<br>**TV guide** – timeline with preview |
-| ![Live TV](docs/screenshots/channel_list.jpg)<br>**Live TV** – now and next at a glance | ![Settings](docs/screenshots/settings.jpg)<br>**Settings** – grouped, remote-friendly |
+| ![Ana ekran](docs/screenshots/homescreen.jpg)<br>**Ana Sayfa** – dönen başlık, hızlı kutucuklar, canlı TV şimdi | ![Dizi ayrıntıları](docs/screenshots/details_series.jpg)<br>**Dizi ayrıntıları** – sezonlar, puan ve yönetmen bilgili bölümler |
+| ![Kategoriler](docs/screenshots/categories_list.jpg)<br>**Otomatik türler** – arka planda algılanır | ![Yapımcı](docs/screenshots/producer.jpg)<br>**Oyuncu ve ekip sayfaları** – oynatma listenizdeki yapımlarla |
+| ![Oynatıcı](docs/screenshots/player.jpg)<br>**Oynatıcı** – jenerik atlama, ses/altyazı, kalite | ![TV rehberi](docs/screenshots/tvguide.jpg)<br>**TV rehberi** – ön izlemeli zaman çizelgesi |
+| ![Canlı TV](docs/screenshots/channel_list.jpg)<br>**Canlı TV** – şimdi ve sonraki program bir bakışta | ![Ayarlar](docs/screenshots/settings.jpg)<br>**Ayarlar** – gruplu, uzaktan kumanda dostu |
 
-<sub>Screenshots taken on a TV. Film artwork, channel logos and programme data belong to their respective owners; provider categories are blurred.</sub>
+<sub>Ekran görüntüleri TV’de alınmıştır. Film görselleri, kanal logoları ve program verileri ilgili sahiplerine aittir; sağlayıcı kategorileri bulanıklaştırılmıştır.</sub>
 
-## Your own API keys (optional)
+## Kendi API anahtarlarınız (isteğe bağlı)
 
-The app ships **without any API keys**. You can enter your own free keys in the app under **Settings > API keys**:
+Uygulama **API anahtarı olmadan** gelir. Kendi ücretsiz anahtarlarınızı uygulamada **Ayarlar > API anahtarları** bölümüne girebilirsiniz:
 
-| Service | Used for | Key |
+| Hizmet | Kullanım | Anahtar |
 |---|---|---|
-| TMDB | posters, descriptions in your language, cast, trailers, automatic genres, episode info, similar titles | free, see below |
-| OMDb | IMDb and Rotten Tomatoes ratings | free, see below |
-| TheIntroDB | intro/recap/credits times | no key needed |
+| TMDB | Posterler, kendi dilinizde açıklamalar, oyuncular, fragmanlar, otomatik türler, bölüm bilgisi, benzer yapımlar | ücretsiz; aşağıya bakın |
+| OMDb | IMDb ve Rotten Tomatoes puanları | ücretsiz; aşağıya bakın |
+| TheIntroDB | Giriş/özet/jenerik zamanları | anahtar gerekmez |
 
-**Without keys** the app still works. With an Xtream Codes playlist it takes description, cover, rating, genres, running time and trailer **directly from your provider** (`player_api.php`). With a TMDB key it uses TMDB first and falls back to the provider when a title is not found. Keys are stored only on the device.
+Anahtarlar olmadan da uygulama çalışır. Xtream Codes listesinde açıklama, kapak, puan, tür, süre ve fragman bilgisi doğrudan sağlayıcınızın `player_api.php` yanıtından alınır. TMDB anahtarınız varsa önce TMDB kullanılır, bulunamayan yapımlarda sağlayıcıya dönülür. Anahtarlar yalnızca cihazda saklanır.
 
-### Get a free TMDB key
-1. Create an account at https://www.themoviedb.org/signup and confirm the e-mail address.
-2. **Log in.** The API page shows "restricted" as long as you are not logged in.
-3. Open https://www.themoviedb.org/settings/api (or: profile picture > Settings > API) and click **Request an API key**.
-4. Choose **Developer**, accept the terms and fill in the form (application name e.g. "IPVIO Stream", type "Personal use", a short description; the URL can be your GitHub page).
-5. Copy the **API Key** (the 32-character one, not the "API Read Access Token").
+### Ücretsiz TMDB anahtarı alma
+1. [TMDB](https://www.themoviedb.org/signup) hesabı oluşturun ve e-postayı doğrulayın.
+2. Giriş yapın; giriş olmadan API sayfası “restricted” görünebilir.
+3. [API ayarlarını](https://www.themoviedb.org/settings/api) açın ve **Request an API key** seçin.
+4. **Developer** seçin, koşulları kabul edin ve formu doldurun (uygulama adı ör. “IPVIO Stream”, tür “Personal use”).
+5. 32 karakterli **API Key** değerini kopyalayın; “API Read Access Token” değil.
 
-### Get a free OMDb key
-1. Open https://www.omdbapi.com/apikey.aspx, choose **FREE** (1,000 requests per day), enter your e-mail address and a short reason (e.g. "personal media player").
-2. You receive an e-mail with an 8-character key and an **activation link**. Click the link, otherwise the key does not work.
+### Ücretsiz OMDb anahtarı alma
+1. [OMDb API key sayfasını](https://www.omdbapi.com/apikey.aspx) açın, **FREE** planını seçin ve e-posta adresinizi girin.
+2. Gelen e-postadaki etkinleştirme bağlantısına tıklayın; aksi hâlde anahtar çalışmaz.
 
-### Enter the keys in the app
-Settings > **API keys**: paste the key into the field, press **Save and check** (a green "Key valid" confirms it) and restart the app once. Tip: type long keys with the phone import or an USB keyboard instead of the remote.
+### Anahtarları girme
 
-*This product uses the TMDB API but is not endorsed or certified by TMDB.*
+**Ayarlar > API anahtarları**: anahtarı yapıştırın, **Kaydet ve denetle** seçin; “Anahtar geçerli” mesajından sonra uygulamayı bir kez yeniden başlatın. Uzun anahtarları uzaktan kumanda yerine telefon aktarımı veya USB klavye ile girmek daha kolaydır.
 
-## Building
+*Bu ürün TMDB API kullanır ancak TMDB tarafından desteklenmemiş veya onaylanmamıştır.*
 
-Requirements: Android Studio (current version) with the Android SDK; the Gradle wrapper downloads everything else.
+## Derleme
 
-```
-git clone <this repository>
-cd IPVIO-Stream
+Gereksinimler: Android SDK yüklü güncel Android Studio; diğer her şeyi Gradle wrapper indirir.
+
+```bash
+git clone <bu-depo>
+cd IPVIO-Stream-TR
 ./gradlew assembleDebug        # Windows: gradlew.bat assembleDebug
 ```
 
-The APK is then in `app/build/outputs/apk/debug/`. For releases and in-app updates see [docs/RELEASE.md](docs/RELEASE.md): every release must be signed with the same key (`keystore.properties`), otherwise users lose their data when updating.
+APK `app/build/outputs/apk/debug/` altında oluşur. Sürüm ve uygulama içi güncelleme için [docs/RELEASE.md](docs/RELEASE.md) belgesine bakın: kullanıcı verilerinin korunması için her sürüm aynı anahtarla imzalanmalıdır.
 
-Optional Google Drive backup: [docs/GOOGLE_DRIVE.md](docs/GOOGLE_DRIVE.md).
+İsteğe bağlı Google Drive yedeği: [docs/GOOGLE_DRIVE.md](docs/GOOGLE_DRIVE.md).
 
-Developers can optionally copy `secrets.properties.example` to `secrets.properties` (ignored by Git) and put their keys there; they are only used when no key was entered in the app.
+Geliştiriciler `secrets.properties.example` dosyasını `secrets.properties` adıyla kopyalayıp anahtar ekleyebilir; bu dosya Git tarafından yok sayılır ve yalnızca uygulamada anahtar girilmemişse kullanılır.
 
-Unit tests for the pure logic: `./gradlew test`
+Saf mantık testleri için: `./gradlew test`
 
-## Project layout
+## Proje düzeni
 
 ```
-app/src/main/java/com/ipvio/stream/   all Kotlin sources (one package)
-  *Logic.kt                           pure, Android-free logic (covered by unit tests)
-  Dict*.kt                            translations (one row per text: de¦en¦tr¦bs¦hr¦sr¦es¦fr¦it)
-app/src/test/java/com/ipvio/stream/   JUnit tests
-app/src/main/res/font/                Outfit and Inter (SIL Open Font License)
-licenses/                             font licences
+app/src/main/java/com/ipvio/stream/   tüm Kotlin kaynakları (tek paket)
+  *Logic.kt                           Android’den bağımsız, test edilen mantık
+  Dict*.kt                            çeviri satırları (de¦en¦tr¦bs¦hr¦sr¦es¦fr¦it)
+app/src/test/java/com/ipvio/stream/   JUnit testleri
+app/src/main/res/font/                Outfit ve Inter (SIL Open Font License)
+licenses/                             yazı tipi lisansları
 ```
 
-## License
+## Lisans
 
-Copyright (C) 2026 IPVIO Stream contributors
+Telif Hakkı (C) 2026 IPVIO Stream katkıcıları
 
-IPVIO Stream is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License version 3** (see [LICENSE](LICENSE)). The GPL is required because the app includes the GPL-3.0 licensed FFmpeg audio decoder. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the libraries, fonts and services used.
+IPVIO Stream özgür yazılımdır: GNU Genel Kamu Lisansı sürüm 3 koşullarıyla yeniden dağıtabilir ve/veya değiştirebilirsiniz (bkz. [LICENSE](LICENSE)). Uygulama GPL-3.0 lisanslı FFmpeg ses kod çözücüsünü içerdiği için GPL gereklidir. Kullanılan kütüphaneler, yazı tipleri ve hizmetler için [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) belgesine bakın.
 
-The name "IPVIO" and the IPVIO logo identify the original project. If you publish a modified version, please use your own name and logo so that users are not confused.
+“IPVIO” adı ve IPVIO logosu orijinal projeyi tanımlar. Değiştirilmiş sürümünüzü yayımlarsanız kullanıcıların karışmaması için kendi adınızı ve logonuzu kullanın.
 
-## Disclaimer
+## Sorumluluk reddi
 
-This software is provided "as is", without warranty of any kind. The authors do not provide, host, sell or link to any streams or playlists and are not responsible for how the app is used. Using playlists without the rights holders' permission may be illegal in your country.
+Bu yazılım “olduğu gibi” sunulur; açık veya zımni hiçbir garanti verilmez. Yazarlar hiçbir yayın, kanal veya oynatma listesi sağlamaz, barındırmaz, satmaz ya da bağlantı vermez; kaynakların kullanım biçiminden sorumlu değildir. Hak sahiplerinin izni olmayan oynatma listelerini kullanmak bulunduğunuz ülkede yasa dışı olabilir.
