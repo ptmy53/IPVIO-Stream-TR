@@ -81,6 +81,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" app/build/outputs/apk/release/*.apk \
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          VERSION=$(grep -E 'versionName *= *"' app/build.gradle.kts | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          CODE=$(grep -E 'versionCode *= *[0-9]' app/build.gradle.kts | head -1 | sed -E 's/.*= *([0-9]+).*/\1/')
+          printf '{"versionCode": %s, "versionName": "%s", "apk": "IPVIO-Stream.apk", "sha256": "%s", "notes": "IPVIO Stream %s"}\n' \
+            "$CODE" "$VERSION" "$SHA" "$VERSION" > update.json
+          cp "$APK" IPVIO-Stream.apk
+          gh release create "$GITHUB_REF_NAME" IPVIO-Stream.apk update.json \
             --title "IPVIO Stream $GITHUB_REF_NAME" \
             --generate-notes

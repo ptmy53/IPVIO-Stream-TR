@@ -1,18 +1,20 @@
 name: Upstream Senkron
 
-# Emrodev/IPVIO-Stream ana dalını her gün denetler. Yeni commit varsa bu
-# depoya doğrudan yazmaz: incelemen ve merge etmen için bir Pull Request açar.
+# Emrodev/IPVIO-Stream ana dalını her gün denetler. Yeni commit varsa fork'un
+# main dalına DOĞRUDAN merge eder ve pushlar. Fork'a özel değişiklikler korunur:
+#   - README*, FORK.md, docs/, .github/workflows/  → fork sürümü kalır
+#   - AppUpdate.kt güncelleme uç noktaları           → ptmy53/IPVIO-Stream-TR kalır
+#   - Dict*.kt                                       → Türkçe sütun fork'tan geri yüklenir
+#   - DictConsistencyTest.kt                         → fork sürümü kalır
+# Çakışmalar çözülüp testler geçerse main pushlanır; versionName değiştiyse
+# v<paket> etiketi atılır ve imzalı APK otomatik release olarak yayınlanır.
+# Testler geçmezse merge geri alınır ve inceleme için PR açılır.
 # Saat: 04:00 Türkiye / 01:00 UTC.
 
 on:
   schedule:
     - cron: "0 1 * * *"
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Sadece yeni commit var mı kontrol et"
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -29,7 +31,7 @@ env:
 
 jobs:
   sync:
-    name: Emrodev/IPVIO-Stream güncellemesini PR olarak hazırla
+    name: Emrodev/IPVIO-Stream senkronu
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,97 +50,155 @@ jobs:
           else
             echo "state=behind" >> "$GITHUB_OUTPUT"
             echo "Yeni upstream commitleri:"
-            git log --oneline "HEAD..upstream/$UPSTREAM_BRANCH"
+            git log --oneline "HEAD..upstream/$UPSTREAM_BRANCH" | head -50
           fi
 
-      - name: Kuru çalıştırma özeti
-        if: ${{ steps.check.outputs.state == 'behind' && inputs.dry_run }}
-        run: echo "dry_run açık; dal ve PR oluşturulmadı."
-
-      - name: Upstream dalını gönder
-        id: branch
-        if: ${{ steps.check.outputs.state == 'behind' && !inputs.dry_run }}
+      - name: Otomatik merge (fork değişiklikleri korunarak)
+        id: merge
+        if: ${{ steps.check.outputs.state == 'behind' }}
         run: |
-          BRANCH="upstream-sync/main"
-          # Dal doğrudan upstream/main'ın işaret ettiği commit'e kurulur. Bu,
-          # GitHub'ın PR sayfasında gerçek çakışmaları göstermesini sağlar.
-          git push origin "upstream/$UPSTREAM_BRANCH:refs/heads/$BRANCH" --force
-          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
-
-      - name: Açık PR için dalı güncelle
-        id: update_existing
-        if: ${{ steps.branch.outputs.name == '' && steps.check.outputs.state == 'behind' && !inputs.dry_run }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          BRANCH="upstream-sync/main"
-          EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty')
-          if [ -n "$EXISTING" ]; then
-            git push origin "upstream/$UPSTREAM_BRANCH:refs/heads/$BRANCH" --force
-            echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
-            echo "number=$EXISTING" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Pull Request oluştur
-        id: pr
-        if: ${{ steps.branch.outputs.name != '' || steps.update_existing.outputs.name != '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          BRANCH="${{ steps.branch.outputs.name || steps.update_existing.outputs.name }}"
-          EXISTING="${{ steps.update_existing.outputs.number }}"
-          if [ -z "$EXISTING" ]; then
-            EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty' || true)
-          fi
-          if [ -n "$EXISTING" ]; then
-            echo "number=$EXISTING" >> "$GITHUB_OUTPUT"
-            echo "Açık PR zaten var: #$EXISTING"
+          set -e
+          git config user.name "opencode-sync"
+          git config user.email "opencode-sync@users.noreply.github.com"
+          git config core.quotepath false
+          if git merge --no-edit "upstream/$UPSTREAM_BRANCH"; then
+            echo "mode=clean" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "mode=conflict" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY'
+          import os, re, subprocess
 
-          set +e
-          CREATE_OUTPUT=$(gh pr create \
-            --base "$TARGET_BRANCH" \
-            --head "$BRANCH" \
-            --title "chore(upstream): $(date -u +%Y-%m-%d) senkronu" \
-            --body "$(cat <<'EOF'
-          Emrodev/IPVIO-Stream `main` dalındaki yeni commitler için otomatik PR.
+          def run(*args):
+              return subprocess.run(args, capture_output=True, text=True).stdout.strip()
 
-          - Kaynak: `https://github.com/Emrodev/IPVIO-Stream`
-          - Türkçe katman ve bu fork belgeleri merge öncesi gözden geçirilmelidir.
-          - GitHub çakışma bildirirse `Dict*.kt`, `README.md` ve fork belgelerini dikkatle çözün.
+          status = run("git", "status", "--porcelain")
+          conflicted = []
+          for line in status.splitlines():
+              code, path = line[:2], line[3:]
+              if code in ("UU", "AA", "DU"):
+                  conflicted.append(path)
+              elif code == "UD":
+                  run("git", "rm", "--", path)
 
-          Otomatik oluşturuldu: `.github/workflows/sync-upstream.yml`
-          EOF
-          )" 2>&1)
-          CREATE_STATUS=$?
+          fork_only = re.compile(r"(^|/)(README(\.en|\.tr)?\.md$|FORK\.md$|docs/|\.github/workflows/|DictConsistencyTest\.kt$)")
+          dict_re = re.compile(r"Dict[A-Za-z0-9]+\.kt$")
+
+          # Fork'un Türkçe sütunlarını sakla (de -> tr)
+          ours_tr = {}
+          for f in conflicted:
+              if dict_re.search(f):
+                  try:
+                      content = run("git", "show", f"HEAD:{f}")
+                  except Exception:
+                      content = ""
+                  m = {}
+                  for line in content.splitlines():
+                      if "¦" in line and not line.lstrip().startswith("#"):
+                          cols = line.split("¦")
+                          if len(cols) >= 3:
+                              m[cols[0].strip()] = cols[2].strip()
+                  ours_tr[f] = m
+
+          for f in conflicted:
+              if fork_only.search(f):
+                  run("git", "checkout", "--ours", "--", f)
+              else:
+                  run("git", "checkout", "--theirs", "--", f)
+
+          # Fork'a özel düzeltmeleri yeniden uygula
+          for f in conflicted:
+              if not os.path.isfile(f):
+                  continue
+              try:
+                  text = open(f, encoding="utf-8").read()
+              except Exception:
+                  continue
+              orig = text
+              if f.endswith("AppUpdate.kt"):
+                  # Güncelleme uç noktaları bu forku işaret etsin
+                  text = text.replace("Emrodev/IPVIO-Stream", "ptmy53/IPVIO-Stream-TR")
+              if dict_re.search(f) and f in ours_tr:
+                  out = []
+                  for line in text.splitlines(keepends=True):
+                      nl = "\n" if line.endswith("\n") else ""
+                      line = line.rstrip("\r\n")
+                      if "¦" in line and not line.lstrip().startswith("#"):
+                          cols = line.split("¦")
+                          if len(cols) >= 3:
+                              key, en, tr = cols[0].strip(), cols[1].strip(), cols[2].strip()
+                              src = ours_tr[f].get(key, "")
+                              if (tr == "" or tr == en) and src:
+                                  cols[2] = src
+                                  line = "¦".join(cols)
+                      out.append(line + nl)
+                  text = "".join(out)
+              if text != orig:
+                  open(f, "w", encoding="utf-8").write(text)
+
+          run("git", "add", "-A")
+          print("Çözülen çakışmalar:", ", ".join(conflicted) or "(yok)")
+          PY
+          git commit --no-edit
+
+      - name: Birim testler
+        id: tests
+        if: ${{ steps.check.outputs.state == 'behind' }}
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Main'e pushla ve sürüm etiketi at
+        id: push
+        if: ${{ steps.check.outputs.state == 'behind' }}
+        run: |
           set -e
-
-          if [ "$CREATE_STATUS" -ne 0 ]; then
-            echo "$CREATE_OUTPUT"
-            EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty' || true)
-            if [ -n "$EXISTING" ]; then
-              echo "number=$EXISTING" >> "$GITHUB_OUTPUT"
-              echo "PR oluşturma başarısız oldu ancak açık PR mevcut: #$EXISTING"
-              exit 0
-            fi
-            echo "::error::PR oluşturulamadı ve açık PR bulunamadı. Repo Actions ayarlarında 'Allow GitHub Actions to create and approve pull requests' açık olmalı."
-            exit "$CREATE_STATUS"
+          git push origin "$TARGET_BRANCH"
+          VERSION=$(grep -E 'versionName *= *"' app/build.gradle.kts | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "tag=exists" >> "$GITHUB_OUTPUT"
+          else
+            git tag "v$VERSION"
+            git push origin "v$VERSION"
+            echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-          echo "$CREATE_OUTPUT"
-          NUMBER=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty' || true)
-          if [ -n "$NUMBER" ]; then
-            echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
-          fi
       - name: Özet
+        if: ${{ success() && steps.check.outputs.state == 'behind' }}
         run: |
           {
-            echo "### Upstream senkron"
+            echo "### Upstream senkron tamamlandı"
             echo ""
             echo "| Alan | Değer |"
             echo "|---|---|"
-            echo "| Durum | \`${{ steps.check.outputs.state }}\` |"
-            echo "| PR | \`${{ steps.pr.outputs.number || '-' }}\` |"
-            echo "| Kaynak | \`$UPSTREAM_URL\` / \`$UPSTREAM_BRANCH\` |"
+            echo "| Mod | \`${{ steps.merge.outputs.mode }}\` |"
+            echo "| Sürüm | \`v${{ steps.push.outputs.version }}\` |"
+            echo "| Etiket | \`${{ steps.push.outputs.tag }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # --- Fallback: testler geçmezse merge'i geri al, inceleme için PR aç ---
+      - name: Merge'i geri al
+        id: revert
+        if: ${{ failure() && steps.merge.outputs.mode != '' }}
+        run: git reset --hard ORIG_HEAD
+
+      - name: PR aç (otomatik merge başarısız oldu)
+        if: ${{ failure() && steps.merge.outputs.mode != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="upstream-sync/main"
+          git push origin "upstream/$UPSTREAM_BRANCH:refs/heads/$BRANCH" --force
+          EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty' || true)
+          if [ -z "$EXISTING" ]; then
+            set +e
+            gh pr create --base "$TARGET_BRANCH" --head "$BRANCH" \
+              --title "chore(upstream): $(date -u +%F) senkronu (çakışma/çözümlenemedi)" \
+              --body "Otomatik merge testleri geçmedi veya çözülemedi. İnceleme gerekiyor. Fork'a özel Dict*.kt Türkçe sütunları ve README/docs korunmalı." || true
+            set -e
+            EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty' || true)
+          fi
+          if [ -n "$EXISTING" ]; then
+            echo "PR #$EXISTING incelemeye hazır."
+          else
+            echo "::error::PR açılamadı. Repo Actions ayarlarında 'Allow GitHub Actions to create and approve pull requests' gerekli."
+          fi
