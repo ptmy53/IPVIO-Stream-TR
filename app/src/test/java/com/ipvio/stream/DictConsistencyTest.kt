@@ -42,9 +42,14 @@ class DictConsistencyTest {
             "Playlist", "Anime", "Normal", "Mono", "Stereo", "1× (Normal)", "PIN",
             "XMLTV: {0}", "Serif", "Monospace", "Reality", "Tokyo", "Vancouver",
             "EPG", "Outfit", "Inter", "Google Drive", "Golf",
-            "Letterboxd, MyAnimeList, Trakt", "Letterboxd: ZIP oder CSV · MyAnimeList: XML · Trakt: JSON",
+            "Letterboxd, MyAnimeList, Trakt",
+            "Letterboxd: ZIP oder CSV · MyAnimeList: XML · Trakt: JSON",
+            "Letterboxd: ZIP or CSV · MyAnimeList: XML · Trakt: JSON",
             "Letterboxd · Gesehen", "Letterboxd · Merkliste", "Trakt · Gesehen", "Trakt · Merkliste",
-            "MyAnimeList · Gesehen", "MyAnimeList · Merkliste", "Formula 1", "Sprint", "Form", "Set",
+            "MyAnimeList · Gesehen", "MyAnimeList · Merkliste",
+            "Letterboxd · Watched", "Letterboxd · Watchlist", "Trakt · Watched", "Trakt · Watchlist",
+            "MyAnimeList · Watched", "MyAnimeList · Watchlist",
+            "Formula 1", "Sprint", "Form", "Set",
         )
         val fehlend = ArrayList<String>()
         val unuebersetzt = ArrayList<String>()
