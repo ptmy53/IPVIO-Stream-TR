@@ -12,6 +12,9 @@ import androidx.compose.runtime.setValue
  *   TMDB   https://www.themoviedb.org/settings/api  – posters, descriptions, cast, trailers, automatic genres
  *   OMDb   https://www.omdbapi.com/apikey.aspx      – IMDb and Rotten Tomatoes ratings
  *
+ *   OpenSubtitles https://www.opensubtitles.com/consumers – online subtitle search in the player
+ *   SubDL         https://subdl.com/panel/api              – online subtitle search in the player
+ *
  * Intro/credits times come from TheIntroDB, which needs no key for reading.
  * Without keys the app works normally and only hides the extra information.
  */
@@ -20,7 +23,7 @@ object Config {
         private set
     @Volatile var OMDB_KEY: String = clean(BuildConfig.OMDB_KEY)
         private set
-    /** true, wenn der Schlüssel in der App eingetragen wurde (nicht aus secrets.properties). */
+    /** true if the key was entered in the app (not from secrets.properties). */
     var tmdbOwn by androidx.compose.runtime.mutableStateOf(false)
         private set
     var omdbOwn by androidx.compose.runtime.mutableStateOf(false)
@@ -29,7 +32,7 @@ object Config {
 
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences("ipvio_keys", Context.MODE_PRIVATE)
 
-    /** Nur Buchstaben und Ziffern (ein Schlüssel darf nie Sonderzeichen in Adressen einschleusen). */
+    /** Letters and digits only (a key must never smuggle special characters into addresses). */
     fun clean(s: String): String = s.trim().filter { it.isLetterOrDigit() }.take(64)
 
     @Synchronized
@@ -43,7 +46,7 @@ object Config {
         if (o.isNotEmpty()) { OMDB_KEY = o; omdbOwn = true }
     }
 
-    /** Speichert die eingetragenen Schlüssel; leer = Schlüssel entfernen (dann gilt ggf. wieder secrets.properties). */
+    /** Stores the entered keys; empty = remove key (then secrets.properties applies again if present). */
     fun save(c: Context, tmdb: String, omdb: String) {
         val t = clean(tmdb); val o = clean(omdb)
         prefs(c).edit().putString("tmdb", t).putString("omdb", o).apply()
@@ -52,14 +55,32 @@ object Config {
         inited = true
     }
 
-    /** Eingetragener Schlüssel (für das Eingabefeld); Schlüssel aus secrets.properties werden nicht angezeigt. */
+    /** Keys for the online subtitle search (see [SubSearch]); empty = that service is not asked. */
+    @Volatile var OS_KEY: String = ""
+        private set
+    @Volatile var SD_KEY: String = ""
+        private set
+
+    @Synchronized
+    fun initSubs(c: Context) {
+        val p = prefs(c)
+        OS_KEY = SubSearchLogic.cleanKey(p.getString("opensubtitles", "").orEmpty())
+        SD_KEY = SubSearchLogic.cleanKey(p.getString("subdl", "").orEmpty())
+    }
+
+    fun saveSubs(c: Context, os: String, sd: String) {
+        OS_KEY = SubSearchLogic.cleanKey(os); SD_KEY = SubSearchLogic.cleanKey(sd)
+        prefs(c).edit().putString("opensubtitles", OS_KEY).putString("subdl", SD_KEY).apply()
+    }
+
+    /** Entered key (for the input field); keys from secrets.properties are not shown. */
     fun ownTmdb(c: Context): String = clean(prefs(c).getString("tmdb", "").orEmpty())
     fun ownOmdb(c: Context): String = clean(prefs(c).getString("omdb", "").orEmpty())
 }
 
-/** Prüft einen Schlüssel mit einer kleinen Abfrage beim Dienst. */
+/** Checks a key with a small request to the service. */
 object KeyCheck {
-    /** null = in Ordnung, sonst Fehlertext (deutsch, wird übersetzt). */
+    /** null = OK, otherwise error text (German, gets translated). */
     suspend fun tmdb(key: String): String? = check("https://api.themoviedb.org/3/configuration?api_key=" + Config.clean(key)) { code, body ->
         if (code == 200) null else if (code == 401) "Schlüssel ungültig" else "Fehler $code"
     }
@@ -68,6 +89,9 @@ object KeyCheck {
         if (code == 200 && body.contains("\"Response\":\"True\"")) null
         else if (code == 401 || body.contains("Invalid API key")) "Schlüssel ungültig" else "Fehler $code"
     }
+
+    suspend fun openSubtitles(key: String): String? = SubSearch.checkOs(key)
+    suspend fun subdl(key: String): String? = SubSearch.checkSd(key)
 
     private suspend fun check(url: String, eval: (Int, String) -> String?): String? =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

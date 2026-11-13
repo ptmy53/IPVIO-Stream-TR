@@ -47,7 +47,7 @@ class PlaylistLogicTest {
         var now = 1_000_000L
         repeat(4) { assertFalse(g.record(false, now)) }
         assertEquals(0L, g.waitSec(now))
-        assertTrue(g.record(false, now))          // 5. Fehlversuch sperrt
+        assertTrue(g.record(false, now))          // 5th failed attempt locks
         assertEquals(60L, g.waitSec(now))
         now += 30_000; assertEquals(30L, g.waitSec(now))
         now += 30_000; assertEquals(0L, g.waitSec(now))
@@ -55,17 +55,17 @@ class PlaylistLogicTest {
     }
 }
 
-/** Titel aus der Playlist: HTML-Zeichen und „|EN|“-Kennung (Runde 12). */
+/** Titles from the playlist: HTML characters and the "|EN|" tag (round 12). */
 class TitleTextTest {
     @Test fun htmlZeichen() {
         assertEquals("Asterix & Obelix: The Big Fight", TitleText.decode("Asterix &amp; Obelix: The Big Fight"))
         assertEquals("Agatha Christie's Seven Dials", TitleText.decode("Agatha Christie&#039;s Seven Dials"))
-        assertEquals("Agatha Christie's", TitleText.decode("Agatha Christie&amp;#039;s"))     // doppelt kodiert
+        assertEquals("Agatha Christie's", TitleText.decode("Agatha Christie&amp;#039;s"))     // double-encoded
         assertEquals("Café \"Größe\"", TitleText.decode("Caf&eacute; &quot;Gr&ouml;&szlig;e&quot;"))
         assertEquals("A'B", TitleText.decode("A&#x27;B"))
-        assertEquals("Tom & Jerry", TitleText.decode("Tom & Jerry"))                             // kein Eintrag: bleibt
+        assertEquals("Tom & Jerry", TitleText.decode("Tom & Jerry"))                             // no entry: stays
         assertEquals("a &foo; b", TitleText.decode("a &foo; b"))
-        assertEquals("x &#0; y", TitleText.decode("x &#0; y"))                                   // Steuerzeichen nicht einsetzen
+        assertEquals("x &#0; y", TitleText.decode("x &#0; y"))                                   // do not insert control characters
     }
 
     @Test fun kennungAmAnfang() {
@@ -73,8 +73,8 @@ class TitleTextTest {
         assertEquals("When The War Is Over", TitleText.title("EN| When The War Is Over"))
         assertEquals("Agatha Christie's Seven Dials", TitleText.title("EN| Agatha Christie&#039;s Seven Dials"))
         assertEquals("Dark", TitleText.title("[DE] Dark"))
-        assertEquals("CSI: Miami", TitleText.title("CSI: Miami"))                                 // Doppelpunkt bleibt
-        assertEquals("EN|", TitleText.title("EN|"))                                               // nichts übrig: unverändert
+        assertEquals("CSI: Miami", TitleText.title("CSI: Miami"))                                 // colon stays
+        assertEquals("EN|", TitleText.title("EN|"))                                               // nothing left: unchanged
         assertEquals("Rock | Pop", TitleText.title("Rock | Pop"))
     }
 
@@ -96,7 +96,7 @@ http://h/movie/u/p/9.mkv
     }
 }
 
-/** Runde 14: Doppelte Titel und Kurzfassung der Beschreibung. */
+/** Round 14: duplicate titles and short version of the description. */
 class Runde14ListTest {
     @Test fun ersterJeSchluessel() {
         assertEquals(listOf("a1", "b1", "c1"), PlaylistLogic.firstPerKey(listOf("a1", "b1", "a2", "c1", "b2")) { it.take(1) })
@@ -110,7 +110,7 @@ class Runde14ListTest {
         assertTrue(s.length <= 250)
         assertTrue(s.endsWith("…"))
         assertFalse(s.contains("  "))
-        // an einer Wortgrenze gekürzt
+        // shortened at a word boundary
         assertTrue(s.removeSuffix("…").split(" ").all { it.startsWith("Wort") && it.length > 4 })
     }
 }

@@ -4,13 +4,15 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 /**
- * Ein gemeinsamer HTTP-Client für die ganze App. Abgeleitete Clients (andere Zeitlimits) teilen
- * Verbindungs-Pool und Threads, statt dass jeder Bereich eigene anlegt – spart Speicher auf schwachen Geräten.
+ * One shared HTTP client for the whole app. Derived clients (other timeouts) share
+ * the connection pool and threads instead of each area creating its own – saves memory on weak devices.
  */
 object Net {
     val base: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        // Backup servers: if an Xtream server fails, requests go to one of the backup servers entered for it
+        .addInterceptor(HostFailover.Interceptor)
         .build()
 
     fun withTimeouts(connectSec: Long, readSec: Long): OkHttpClient =

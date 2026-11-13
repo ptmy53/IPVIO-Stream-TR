@@ -6,8 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * Kleine Fehler-Merkliste für den Diagnosebereich. Speichert bewusst NUR kurze Meldungen:
- * keine Adressen, keine Benutzernamen, keine Passwörter.
+ * Small error log for the diagnostics area. Deliberately stores ONLY short messages:
+ * no addresses, no user names, no passwords.
  */
 object Diag {
     var lastError by mutableStateOf<String?>(null)

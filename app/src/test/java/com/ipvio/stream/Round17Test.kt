@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Nachtrag 17: Untertitel-Versatz, Technik-Info-Texte, Update-Regeln, Verlauf im Menü. */
+/** Addendum 17: subtitle offset, technical-info texts, update rules, history in the menu. */
 class Round17Test {
     // T224
     @Test fun technik_texte() {

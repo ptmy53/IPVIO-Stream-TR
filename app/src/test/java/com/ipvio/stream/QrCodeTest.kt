@@ -21,12 +21,12 @@ class QrCodeTest {
     @Test fun eckenMuster() {
         val m = QrCode.encode("https://www.google.com/device")!!
         val n = m.size
-        // Eckquadrat oben links: 7×7-Rahmen, innen weiß, Mitte dunkel
+        // Top-left finder square: 7×7 frame, white inside, dark center
         for (i in 0..6) { assertTrue(m[0][i]); assertTrue(m[6][i]); assertTrue(m[i][0]); assertTrue(m[i][6]) }
         assertTrue(!m[1][1] && m[3][3])
-        assertTrue(m[0][n - 1] && m[n - 1][0])                                       // die anderen beiden Ecken
-        assertTrue(m[n - 8][8])                                                      // festes dunkles Feld
-        for (i in 8..n - 9) assertEquals(i % 2 == 0, m[6][i])                        // Taktstreifen
+        assertTrue(m[0][n - 1] && m[n - 1][0])                                       // the other two corners
+        assertTrue(m[n - 8][8])                                                      // fixed dark module
+        for (i in 8..n - 9) assertEquals(i % 2 == 0, m[6][i])                        // timing pattern
     }
 
     @Test fun gleicherTextGleichesRaster() {

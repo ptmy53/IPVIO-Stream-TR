@@ -1,3 +1,5 @@
+> **Removed in 1.2. Planned again for 1.4 (LiveSync). Old code: tag V1.1.**
+
 # Google Drive backup (optional)
 
 IPVIO Stream can store its backup (history, continue watching, favorites, lists, settings and, if wanted, the

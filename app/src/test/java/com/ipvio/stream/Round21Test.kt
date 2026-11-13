@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Runde 21: Serien mit Platzhalter (Folgen erst beim Öffnen laden). */
+/** Round 21: series with placeholder (episodes are only loaded on open). */
 class Round21Test {
     private val acct = XtreamLogic.Acct("http://srv.tld:8080", "user", "pa ss")
     private val series = XtreamLogic.Series("4711", "Dark", "http://img/c.jpg", "Drama")
@@ -39,12 +39,12 @@ class Round21Test {
         val s = stubItem("http://srv.tld/series/u/p/1.xtser")
         assertTrue(XtreamLogic.isLazy(s))
         assertEquals(1, XtreamLogic.lazyUrls(s).size)
-        // echte Folgen sind kein Platzhalter
+        // real episodes are not a placeholder
         val real = s.copy(episodes = listOf(Episode(1, 1, "E1", "http://srv.tld/series/u/p/9.mkv"), Episode(1, 2, "E2", "http://srv.tld/series/u/p/10.mkv")))
         assertFalse(XtreamLogic.isLazy(real))
-        // eine einzelne echte Folge auch nicht
+        // a single real episode is not one either
         assertFalse(XtreamLogic.isLazy(s.copy(episodes = listOf(Episode(1, 1, "E1", "http://srv.tld/series/u/p/9.mkv")))))
-        // Filme und Sender nie
+        // movies and channels never
         assertFalse(XtreamLogic.isLazy(s.copy(kind = Kind.MOVIE)))
     }
 
@@ -53,9 +53,9 @@ class Round21Test {
         val (se, n, url) = XtreamLogic.episodeParts(acct, f, null)!!
         assertEquals(2, se); assertEquals(4, n)
         assertEquals("http://srv.tld:8080/series/user/pa%20ss/123.mkv", url)
-        // Staffel aus dem Schlüssel, wenn die Folge keine nennt
+        // season from the key if the episode names none
         assertEquals(3, XtreamLogic.episodeParts(acct, mapOf("id" to "5", "episode_num" to "1"), 3)!!.first)
-        // unbrauchbar
+        // unusable
         assertNull(XtreamLogic.episodeParts(acct, mapOf("id" to "x", "episode_num" to "1"), 1))
         assertNull(XtreamLogic.episodeParts(acct, mapOf("id" to "5"), 1))
         assertNull(XtreamLogic.episodeParts(acct, mapOf("id" to "5", "episode_num" to "100000"), 1))

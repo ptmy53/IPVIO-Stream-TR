@@ -13,57 +13,69 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
 
-/** Allgemeine App-Einstellungen: Start, Beenden, Aktualisierung. Eigene Datei, damit sie beim Zurücksetzen getrennt behandelt werden. */
+/** General app settings: start, quit, refresh. Own file so they are handled separately on reset. */
 object General {
     private const val PREFS = "ipvio_general"
+    /** Refresh mode when the user never picked one: 2 = daily (see [refreshMode]). */
+    const val DEFAULT_REFRESH_MODE = 2
     var autoStart by mutableStateOf(false)
     var startTab by mutableIntStateOf(0)
     var resumeLive by mutableStateOf(false)
-    /** Zuletzt gesehenen Film / zuletzt gesehene Serie beim Start an der gemerkten Stelle fortsetzen. */
+    /** Resume the last watched movie / series at start at the remembered position. */
     var resumeVod by mutableStateOf(false)
     var confirmExit by mutableStateOf(true)
-    /** Playlist-Aktualisierung: 0 = bei jedem Start, 1 = alle X Stunden, 2 = täglich, 3 = wöchentlich, 4 = nur von Hand */
-    var refreshMode by mutableIntStateOf(0)
+    /** Live TV: show the quality variants of one channel (8K/4K/FHD/HD/SD) as a single row. */
+    var bundleLive by mutableStateOf(true)
+    /** Playlist refresh: 0 = at every start, 1 = every X hours, 2 = daily, 3 = weekly, 4 = by hand only */
+    var refreshMode by mutableIntStateOf(DEFAULT_REFRESH_MODE)
     var refreshInterval by mutableIntStateOf(12)
     var refreshHour by mutableIntStateOf(4)
     var refreshMinute by mutableIntStateOf(0)
     var refreshDow by mutableIntStateOf(java.util.Calendar.MONDAY)
     var lastRefresh by mutableStateOf(0L)
-    /** Sprache: "" = Gerät, sonst Code aus Lang.CODES */
+    /** Language: "" = device, otherwise code from Lang.CODES */
     var lang by mutableStateOf("")
-    /** Zeitzone: "" = Systemzeit des Geräts */
+    /** Time zone: "" = system time of the device */
     var tzId by mutableStateOf("")
-    /** Zeitformat: 0 = System, 1 = 24 Stunden, 2 = 12 Stunden */
+    /** Time format: 0 = system, 1 = 24 hours, 2 = 12 hours */
     var timeFmt by mutableIntStateOf(0)
     var sys24 by mutableStateOf(true)
     var fontIdx by mutableIntStateOf(0)
     var textScaleIdx by mutableIntStateOf(1)
-    /** Standard-Bildformat im Player (Index in [ASPECT_NAMES]). */
+    /** Default aspect ratio in the player (index in [ASPECT_NAMES]). */
     var defaultAspect by mutableIntStateOf(0)
     /**
-     * Bildformate (Runde 14). 0–2 unterscheiden sich nur, wenn das Bild ein anderes Seitenverhältnis als der Fernseher hat
-     * (bei 16:9-Sendern sah man daher keinen Unterschied). 3–5 ändern das Bild immer sichtbar.
+     * Aspect ratios (round 14). 0–2 differ only if the picture has a different aspect ratio than the TV
+     * (with 16:9 channels there was therefore no visible difference). 3–5 always change the picture visibly.
      */
     val ASPECT_NAMES = listOf("Einpassen", "Bildschirm füllen", "Strecken", "Zoom 115 %", "Zoom 133 %", "4:3")
-    /** Kartengröße in den Reihen (Knopf „Ansicht“ oben): 0 = klein, 1 = normal, 2 = groß. */
+    /** Card size in the rows ("View" button at the top): 0 = small, 1 = normal, 2 = large. */
     var cardSize by mutableIntStateOf(2)
-    /** Titel pro Zeile in Reihen, Raster und Kategorien (Knopf „Ansicht“): 0 = automatisch nach Kartengröße. */
+    /** Titles per row in rows, grid and categories ("View" button): 0 = automatic by card size. */
     var perRow by mutableIntStateOf(0)
-    /** Titel pro Zeile in der Kino-Ansicht (getrennt vom Raster, 0 = Automatisch) */
+    /** Titles per row in the cinema view (separate from the grid, 0 = automatic) */
     var kinoPerRow by mutableIntStateOf(0)
-    /** Vorschau beim Markieren eines Titels in den Reihen: 0 = Infos auf dem Poster (Karte bleibt, nichts verschiebt sich), 1 = breites Szenenbild (alt). */
+    /** Preview when highlighting a title in the rows: 0 = info on the poster (card stays, nothing shifts), 1 = wide scene image (old). */
     var previewStyle by mutableIntStateOf(0)
-    /** Bilder der Film-/Serienkarten: 0 = Cover (Hochformat), 1 = Szenenbild (Querformat). */
+    /** Images of the movie/series cards: 0 = cover (portrait), 1 = scene image (landscape). */
     var cardArt by mutableIntStateOf(0)
-    /** Wechselzeit des Start-Banners in Sekunden, 0 = nicht automatisch wechseln */
+    /** Switch time of the start banner in seconds, 0 = do not switch automatically */
     var heroSec by mutableIntStateOf(9)
+    /** Clock next to the profile icon (default: on). */
+    var showClock by mutableStateOf(true)
+    /** Sports: show real results (unofficial ESPN source). When off, the sports area uses only playlist and TV guide. */
+    var sportLive by mutableStateOf(true)
+    /** Adjust screen (1.2): margin in percent left/right and top/bottom so nothing is cut off at the TV edge. */
+    var fitX by mutableIntStateOf(0)
+    var fitY by mutableIntStateOf(0)
+    val FIT_STEPS = listOf(0, 1, 2, 3, 4, 5, 6, 8, 10)
 
     fun plan() = UpdatePlan(refreshMode, refreshInterval, refreshHour, refreshMinute, refreshDow)
     fun zone(): java.util.TimeZone = SettingsLogic.zoneOf(tzId)
 
     /**
-     * Schriften (Runde 17): Outfit (Standard, eingebaut, geometrisch und cinematisch), Inter (eingebaut, sehr gut lesbar auf
-     * Distanz) und die Systemschriften des Geräts. Beide eingebauten Schriften: SIL Open Font License (OFL_*.txt im Projekt).
+     * Fonts (round 17): Outfit (default, built in, geometric and cinematic), Inter (built in, very readable at
+     * a distance) and the system fonts of the device. Both built-in fonts: SIL Open Font License (OFL_*.txt in the project).
      */
     val FONTS = listOf("Outfit", "Inter", "System", "Kompakt", "Serif", "Leicht", "Monospace")
     private val FONT_FAMILIES = listOf(null, null, null, "sans-serif-condensed", "serif", "sans-serif-light", "monospace")
@@ -82,7 +94,7 @@ object General {
     private val TEXT_FACTORS = floatArrayOf(0.9f, 1f, 1.15f, 1.3f)
     fun textFactor(i: Int = textScaleIdx): Float = TEXT_FACTORS[i.coerceIn(0, TEXT_FACTORS.lastIndex)]
 
-    /** Schriftfamilie der Auswahl. Es sind Systemschriften, die jedes Android-Gerät mitbringt. */
+    /** Font family of the choice. These are system fonts every Android device brings along. */
     fun fontFamily(idx: Int = fontIdx): FontFamily? {
         val i = idx.coerceIn(0, FONTS.lastIndex)
         if (i == 0) return OUTFIT
@@ -94,7 +106,7 @@ object General {
         ).also { familyCache[i] = it }
     }
 
-    /** Einmal pro Prozess: Startaktionen (letzten Sender abspielen) nicht bei jedem Zurückkehren wiederholen. */
+    /** Once per process: do not repeat start actions (play last channel) on every return. */
     @Volatile var startupHandled = false
 
     private fun prefs(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -106,7 +118,17 @@ object General {
         resumeLive = p.getBoolean("resume_live", true)
         resumeVod = p.getBoolean("resume_vod", false)
         confirmExit = p.getBoolean("confirm_exit", true)
-        refreshMode = p.getInt("refresh_mode", 0).coerceIn(0, 4)
+        bundleLive = p.getBoolean("bundle_live", true)
+        // Users who never chose a mode get "daily": the first start still loads the list once (lastRefresh = 0),
+        // later starts use the cache. Before 1.4 the default was "at every start", which re-downloaded the whole line each time.
+        // One-time switch for existing installs: "at every start" (0, the old default) becomes "daily" (maintainer decision,
+        // 12 Nov 2026). Runs once per profile; a later choice of "at every start" is kept.
+        if (!p.getBoolean("refresh_daily_v2", false)) {
+            val e = p.edit().putBoolean("refresh_daily_v2", true)
+            if (p.getInt("refresh_mode", DEFAULT_REFRESH_MODE) == 0) e.putInt("refresh_mode", DEFAULT_REFRESH_MODE)
+            e.apply()
+        }
+        refreshMode = p.getInt("refresh_mode", DEFAULT_REFRESH_MODE).coerceIn(0, 4)
         refreshInterval = p.getInt("refresh_interval", 12).coerceIn(1, 168)
         refreshHour = p.getInt("refresh_hour", 4).coerceIn(0, 23)
         refreshMinute = p.getInt("refresh_minute", 0).coerceIn(0, 59)
@@ -116,12 +138,16 @@ object General {
         tzId = p.getString("tz_id", "") ?: ""
         timeFmt = p.getInt("time_fmt", 0).coerceIn(0, 2)
         sys24 = android.text.format.DateFormat.is24HourFormat(c)
-        // Neue Schriftliste (Runde 17): eigener Schlüssel. Wer früher eine andere Systemschrift als „Standard“ gewählt hatte, behält sie.
+        // New font list (round 17): own key. Whoever had chosen another system font than "Default" before keeps it.
         fontIdx = if (p.contains("font2")) p.getInt("font2", 0).coerceIn(0, FONTS.lastIndex)
             else p.getInt("font", 0).let { old -> if (old in 1..4) old + 2 else 0 }
         textScaleIdx = p.getInt("text_scale", 1).coerceIn(0, TEXT_SCALES.lastIndex)
         defaultAspect = p.getInt("aspect", 0).coerceIn(0, ASPECT_NAMES.lastIndex)
         heroSec = p.getInt("hero_sec", 9).coerceIn(0, 60)
+        showClock = p.getBoolean("show_clock", true)
+        sportLive = p.getBoolean("sport_live", true)
+        fitX = p.getInt("fit_x", 0).coerceIn(0, 10)
+        fitY = p.getInt("fit_y", 0).coerceIn(0, 10)
         cardSize = p.getInt("card_size", 2).coerceIn(0, 2)
         perRow = p.getInt("per_row", 0).let { if (it == 0) 0 else it.coerceIn(3, 14) }
         kinoPerRow = p.getInt("kino_per_row", 0).let { if (it == 0) 0 else it.coerceIn(3, 14) }
@@ -136,6 +162,7 @@ object General {
     fun setStartTab(c: Context, v: Int) { startTab = v.coerceIn(0, 4); prefs(c).edit().putInt("start_tab", startTab).apply() }
     fun setResumeLive(c: Context, v: Boolean) { resumeLive = v; prefs(c).edit().putBoolean("resume_live", v).apply() }
     fun setResumeVod(c: Context, v: Boolean) { resumeVod = v; prefs(c).edit().putBoolean("resume_vod", v).apply() }
+    fun setBundleLive(c: Context, v: Boolean) { bundleLive = v; prefs(c).edit().putBoolean("bundle_live", v).apply() }
     fun setConfirmExit(c: Context, v: Boolean) { confirmExit = v; prefs(c).edit().putBoolean("confirm_exit", v).apply() }
     fun setPlan(c: Context, mode: Int = refreshMode, interval: Int = refreshInterval, hour: Int = refreshHour, minute: Int = refreshMinute, dow: Int = refreshDow) {
         refreshMode = mode.coerceIn(0, 4); refreshInterval = interval.coerceIn(1, 168)
@@ -157,21 +184,39 @@ object General {
         prefs(c).edit().putInt("card_size", cardSize).putInt("card_art", cardArt).apply()
     }
     fun setPreviewStyle(c: Context, v: Int) { previewStyle = v.coerceIn(0, 1); prefs(c).edit().putInt("preview_style", previewStyle).apply() }
+    fun setSportLive(c: Context, v: Boolean) { sportLive = v; prefs(c).edit().putBoolean("sport_live", v).apply() }
+    fun setShowClock(c: Context, v: Boolean) { showClock = v; prefs(c).edit().putBoolean("show_clock", v).apply() }
+    fun setFit(c: Context, x: Int = fitX, y: Int = fitY) {
+        fitX = x.coerceIn(0, 10); fitY = y.coerceIn(0, 10)
+        prefs(c).edit().putInt("fit_x", fitX).putInt("fit_y", fitY).apply()
+    }
     fun setHeroSec(c: Context, v: Int) { heroSec = v.coerceIn(0, 60); prefs(c).edit().putInt("hero_sec", heroSec).apply() }
     fun markRefreshed(c: Context) { lastRefresh = System.currentTimeMillis(); prefs(c).edit().putLong("last_refresh", lastRefresh).apply() }
 
     fun resetAll(c: Context) {
-        // Jugendschutz (PIN) bleibt beim Zurücksetzen bestehen, sonst wäre er mit einem Klick umgehbar
+        // Parental control (PIN) survives a reset, otherwise it could be bypassed with one click
         val keep = prefs(c).all.filterKeys { it.startsWith("parental_") }
         val e = prefs(c).edit().clear()
         for ((k, v) in keep) when (v) { is Boolean -> e.putBoolean(k, v); is String -> e.putString(k, v) }
         e.apply(); init(c); Updater.apply(c)
     }
 
-    /** Wird nach dem Systemstart vom BootReceiver gefragt. */
+    /**
+     * Resets only the given preference keys to their defaults: removes them and reloads every value from storage
+     * (the defaults are the ones in [init]). All other settings, including the parental control, keep their saved value.
+     */
+    fun resetKeys(c: Context, keys: Set<String>) {
+        if (keys.isEmpty()) return
+        val e = prefs(c).edit()
+        keys.forEach { e.remove(it) }
+        e.apply()
+        init(c)
+    }
+
+    /** Asked by the BootReceiver after system start. */
     fun autoStartEnabled(c: Context): Boolean = prefs(c).getBoolean("auto_start", false)
 
-    // ---- Speicher ----
+    // ---- Storage ----
     fun sizeOf(f: File): Long = if (!f.exists()) 0L else if (f.isFile) f.length() else (f.listFiles()?.sumOf { sizeOf(it) } ?: 0L)
 
     class Area(val name: String, val note: String, val files: (Context) -> List<File>)
@@ -183,7 +228,7 @@ object General {
         Area("Bilder", "Zwischengespeicherte Cover und Hintergründe") { listOf(File(it.cacheDir, "image_cache")) }
     )
 
-    /** Einmalig: Dateien früherer Versionen löschen (alter IMDb-Datensatz, rund 20 MB). Läuft im Hintergrund. */
+    /** One-time: delete files of earlier versions (old IMDb data set, about 20 MB). Runs in the background. */
     fun cleanupLegacy(c: Context) {
         val p = prefs(c)
         if (p.getInt("cleanup_v", 0) >= 1) return
@@ -206,14 +251,14 @@ object General {
     }
 }
 
-/** Startet die App nach dem Einschalten des Geräts, wenn der Nutzer es in den Einstellungen erlaubt hat. */
+/** Starts the app after the device is switched on if the user has allowed it in the settings. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         val a = i.action
         if (a != Intent.ACTION_BOOT_COMPLETED && a != "android.intent.action.QUICKBOOT_POWERON") return
-        // Erinnerungen an Sendungen: Wecker nach dem Neustart neu stellen
+        // Reminders for shows: set the alarm again after the restart
         runCatching { Reminders.schedule(c) }
-        if (!General.autoStartEnabled(c)) return
+        if (!General.autoStartEnabled(c) && !Boomer.isOn(c)) return
         try {
             c.startActivity(Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) {

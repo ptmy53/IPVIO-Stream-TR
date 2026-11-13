@@ -24,7 +24,7 @@ class I18nCoreTest {
         assertEquals("  Reload active playlist ", I18nCore.translate("  Aktive Playlist neu laden ", EN))
     }
     @Test fun noEmojisInDictionaries() {
-        // Symbole sind gezeichnet (AppIcons), Texte enthalten keine Emojis/Bildzeichen
+        // Symbols are drawn (AppIcons), texts contain no emojis/pictographs
         for (d in listOf(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI)) for (ch in d) {
             val c = ch.code
             val pictographic = c in 0x2190..0x21FF && ch != '→' && ch != '↑' && ch != '↓' || c in 0x2300..0x23FF || c in 0x2460..0x27BF ||

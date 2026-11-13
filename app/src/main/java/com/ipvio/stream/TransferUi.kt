@@ -33,8 +33,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Einstellungen > Speicher: auf ein anderes Gerät übertragen (Runde 20).
- * WLAN: kleine Seite für das Handy (Sicherung herunterladen / einspielen, Absturzbericht). Google Drive: optional.
+ * Settings > Storage: transfer to another device (round 20).
+ * Wi-Fi: small page for the phone (download/upload backup, crash report). Google Drive: optional.
  */
 @Composable
 internal fun TransferSection(ctx: Context) {
@@ -47,7 +47,7 @@ internal fun TransferSection(ctx: Context) {
             backup = { pl -> Backup.exportText(ctx, pl) }
             restore = { t ->
                 val ok = Backup.restoreText(ctx, t) >= 0
-                // Neu starten, damit alle Einstellungen gelten (nach dem Antworten an das Handy)
+                // Restart so all settings apply (after answering the phone)
                 if (ok) Handler(Looper.getMainLooper()).postDelayed({ Profiles.restart(ctx) }, 1500)
                 ok
             }
@@ -76,66 +76,9 @@ internal fun TransferSection(ctx: Context) {
             PillButton("Übertragung beenden") { server.stop(); serving = false }
         }
     }
-    if (DriveSync.available()) DriveSection(ctx)
 }
 
-@Composable
-private fun DriveSection(ctx: Context) {
-    val scope = rememberCoroutineScope()
-    remember { DriveSync.init(ctx); 0 }
-    var status by remember { mutableStateOf("") }
-    var code by remember { mutableStateOf<DriveSync.DeviceCode?>(null) }
-    var withPl by remember { mutableStateOf(false) }
-    SectionTitle("Google Drive")
-    if (!DriveSync.connected) {
-        val c = code
-        if (c == null) PillButton("Mit Google verbinden") {
-            status = "Bitte warten …"
-            scope.launch {
-                DriveSync.start().onSuccess { d ->
-                    code = d; status = ""
-                    val ok = DriveSync.poll(ctx, d)
-                    code = null
-                    status = if (ok) "Verbunden." else "Nicht verbunden (abgelehnt oder Zeit abgelaufen)."
-                }.onFailure { status = it.message ?: "Fehler" }
-            }
-        } else {
-            Text("Am Handy öffnen und den Code eingeben:", color = Muted, fontSize = 15.sp)
-            Text(c.url.removePrefix("https://"), color = Accent2, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, raw = true)
-            QrWithLabel(c.url)
-            Text(c.user, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, raw = true)
-        }
-        Hint("Die App speichert nur in ihrem eigenen, versteckten Ordner in deinem Google Drive und sieht sonst nichts.")
-    } else {
-        if (DriveSync.lastBackup > 0) Text("Letzte Sicherung: " + dayLabel(DriveSync.lastBackup / 1000) + " " + hhmm(DriveSync.lastBackup / 1000), color = Muted, fontSize = 15.sp)
-        ToggleRow("Playlists mit Zugangsdaten mitsichern", "Praktisch für ein neues Gerät. Die Zugangsdaten liegen dann in deinem Google Drive.", withPl) { withPl = it }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PillButton("Jetzt in Drive sichern") {
-                status = "Sichern …"
-                scope.launch {
-                    val t = withContext(Dispatchers.IO) { Backup.exportText(ctx, withPl) }
-                    status = if (t == null) "Sicherung fehlgeschlagen." else DriveSync.upload(ctx, t).fold({ "Gesichert." }, { it.message ?: "Fehler" })
-                }
-            }
-            ConfirmPill("Aus Drive wiederherstellen") {
-                status = "Laden …"
-                scope.launch {
-                    DriveSync.download(ctx).onSuccess { t ->
-                        if (t == null) status = "In Drive gibt es noch keine Sicherung."
-                        else {
-                            val n = withContext(Dispatchers.IO) { Backup.restoreText(ctx, t) }
-                            if (n >= 0) Profiles.restart(ctx) else status = "Die Sicherung in Drive ist ungültig."
-                        }
-                    }.onFailure { status = it.message ?: "Fehler" }
-                }
-            }
-            ConfirmPill("Trennen") { DriveSync.disconnect(ctx); status = "" }
-        }
-    }
-    if (status.isNotBlank()) Text(status, color = Accent2, fontSize = 15.sp)
-}
-
-/** QR-Code (schwarz auf weiß, mit Rand – so lesen ihn Handy-Kameras auch auf dunklem Bildschirm). */
+/** QR code (black on white, with a border – so phone cameras also read it on a dark screen). */
 @Composable
 internal fun QrImage(text: String, size: Dp = 160.dp) {
     val m = remember(text) { QrCode.encode(text) } ?: return
@@ -147,7 +90,7 @@ internal fun QrImage(text: String, size: Dp = 160.dp) {
     }
 }
 
-/** QR-Code mit kurzem Hinweis daneben. */
+/** QR code with a short hint next to it. */
 @Composable
 internal fun QrWithLabel(text: String, size: Dp = 160.dp, scanLabel: Boolean = true) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {

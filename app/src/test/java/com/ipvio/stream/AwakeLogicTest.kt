@@ -5,26 +5,26 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Pflichtanforderung: Bildschirm bleibt bei laufendem Stream an, wird sonst freigegeben. */
+/** Hard requirement: the screen stays on while a stream plays and is released otherwise. */
 class AwakeLogicTest {
     private fun need(pwr: Boolean, st: Int, err: Boolean = false, fg: Boolean = true) =
         AwakeLogic.playerNeedsScreen(pwr, st, err, fg)
 
     @Test fun laeuftOderLaedt_bleibtWach() {
         assertTrue(need(true, AwakeLogic.STATE_READY))
-        assertTrue(need(true, AwakeLogic.STATE_BUFFERING))   // Nachladen und Neuverbinden
+        assertTrue(need(true, AwakeLogic.STATE_BUFFERING))   // reloading and reconnecting
     }
 
     @Test fun pause_ende_fehler_hintergrund_geben_frei() {
-        assertFalse(need(false, AwakeLogic.STATE_READY))      // Pause / Sleep-Timer
-        assertFalse(need(true, AwakeLogic.STATE_ENDED))       // Ende
-        assertFalse(need(true, AwakeLogic.STATE_IDLE))        // gestoppt / nach Fehler
+        assertFalse(need(false, AwakeLogic.STATE_READY))      // pause / sleep timer
+        assertFalse(need(true, AwakeLogic.STATE_ENDED))       // end
+        assertFalse(need(true, AwakeLogic.STATE_IDLE))        // stopped / after error
         assertFalse(need(true, AwakeLogic.STATE_READY, err = true))
-        assertFalse(need(true, AwakeLogic.STATE_READY, fg = false))  // App im Hintergrund
+        assertFalse(need(true, AwakeLogic.STATE_READY, fg = false))  // app in background
     }
 
     @Test fun ablauf_mitAbbruchUndReconnect() {
-        // Start -> läuft -> Netzabbruch (Fehler) -> Reconnect (Buffering) -> läuft -> Pause
+        // Start -> playing -> network drop (error) -> reconnect (buffering) -> playing -> pause
         val steps = listOf(
             Triple(true, AwakeLogic.STATE_BUFFERING, false) to true,
             Triple(true, AwakeLogic.STATE_READY, false) to true,
@@ -40,9 +40,9 @@ class AwakeLogicTest {
         val t = AwakeTags()
         assertTrue(t.set("player", true))
         assertTrue(t.set("playlist", true))
-        assertTrue(t.set("playlist", false))   // Playlist fertig, Player läuft noch
+        assertTrue(t.set("playlist", false))   // playlist done, player still running
         assertFalse(t.set("player", false))
         assertFalse(t.active)
-        assertFalse(t.set("player", false))    // doppeltes Freigeben ist harmlos
+        assertFalse(t.set("player", false))    // releasing twice is harmless
     }
 }

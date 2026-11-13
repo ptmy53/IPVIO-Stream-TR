@@ -11,8 +11,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * Was dieses Gerät kann (einmal ermittelt): größte Bildschirm-Auflösung und ob ein Hardware-Decoder 4K (HEVC) schafft.
- * Grundlage für „Qualität automatisch“: ein schwaches Gerät bekommt keine 4K-Quelle, die es nicht flüssig spielen kann.
+ * What this device can do (determined once): largest screen resolution and whether a hardware decoder handles 4K (HEVC).
+ * Basis for "Quality automatic": a weak device does not get a 4K source it cannot play smoothly.
  */
 object DeviceCaps {
     @Volatile private var done = false
@@ -21,9 +21,17 @@ object DeviceCaps {
     var hevc4k = false
         private set
 
+    /** Starts the check on a background thread: the codec query takes noticeable time on weak boxes and must not delay the first screen. */
+    fun initAsync(c: Context) {
+        if (done) return
+        val app = c.applicationContext
+        Thread({ runCatching { init(app) } }, "device-caps").start()
+    }
+
+    /** Blocking; waits for a running [initAsync]. */
+    @Synchronized
     fun init(c: Context) {
         if (done) return
-        done = true
         displayHeight = runCatching {
             @Suppress("DEPRECATION")
             val d = (c.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay
@@ -39,9 +47,10 @@ object DeviceCaps {
                 hw && ci.getCapabilitiesForType(type).videoCapabilities?.isSizeSupported(3840, 2160) == true
             }
         }.getOrDefault(false)
+        done = true
     }
 
-    /** Kurzbeschreibung für die Einstellungen. */
+    /** Short description for the settings. */
     fun summary(): String {
         val disp = when {
             displayHeight >= 2000 -> "4K-Bildschirm"
@@ -52,22 +61,22 @@ object DeviceCaps {
         return disp + " · 4K-Decoder: " + (if (hevc4k) "ja" else "nein")
     }
 
-    /** Hat das Gerät gerade Internet? (Ohne Netz zählt ein Fehler nicht gegen den Link.) */
+    /** Does the device currently have internet? (Without a network an error does not count against the link.) */
     fun online(c: Context): Boolean = runCatching {
         val cm = c.getSystemService(ConnectivityManager::class.java)
         cm?.activeNetwork != null
     }.getOrDefault(true)
 }
 
-/** Einstellungen zur Quelle/Qualität und was die App über dieses Gerät gelernt hat (gilt für alle Profile). */
+/** Settings for source/quality and what the app has learned about this device (applies to all profiles). */
 object PlaybackPrefs {
     /** [QualityLogic.AUTO] … [QualityLogic.MAX_HD] */
     var quality by mutableIntStateOf(QualityLogic.AUTO)
         private set
-    /** Bei Ruckeln/Fehler automatisch auf eine andere (kleinere) Quelle wechseln. */
+    /** On stutter/error switch automatically to another (smaller) source. */
     var autoFallback by mutableStateOf(true)
         private set
-    /** Gelernte Grenze: 3 = höchstens Full HD (4K ruckelte hier mehrfach), 0 = keine. */
+    /** Learned limit: 3 = at most Full HD (4K stuttered here several times), 0 = none. */
     var learnedCap by mutableIntStateOf(0)
         private set
     private var fails4k = 0
@@ -78,7 +87,7 @@ object PlaybackPrefs {
     fun init(c: Context) {
         if (inited) return
         inited = true
-        DeviceCaps.init(c)
+        DeviceCaps.initAsync(c)
         val p = prefs(c)
         quality = p.getInt("quality", QualityLogic.AUTO).coerceIn(0, 3)
         autoFallback = p.getBoolean("fallback", true)
@@ -86,16 +95,17 @@ object PlaybackPrefs {
         fails4k = p.getInt("fails_4k", 0)
     }
 
-    /** Höchster Rang, den die Automatik gerade wählt. */
+    /** Highest rank the automatic mode currently chooses. */
     fun cap(c: Context): Int {
         init(c)
+        DeviceCaps.init(c)
         return QualityLogic.cap(quality, QualityLogic.deviceMax(DeviceCaps.displayHeight, DeviceCaps.hevc4k, learnedCap))
     }
 
     fun setQuality(c: Context, v: Int) { quality = v.coerceIn(0, 3); prefs(c).edit().putInt("quality", quality).apply() }
     fun setFallback(c: Context, v: Boolean) { autoFallback = v; prefs(c).edit().putBoolean("fallback", v).apply() }
 
-    /** 4K musste hier ausweichen (Ruckeln/Decoder). Nach zwei Mal spielt die Automatik höchstens Full HD. */
+    /** 4K had to give way here (stutter/decoder). After two times the automatic mode plays at most Full HD. */
     fun note4kTrouble(c: Context) {
         init(c)
         fails4k++
@@ -110,7 +120,7 @@ object PlaybackPrefs {
     }
 }
 
-/** Gemerkte Ton-/Untertitelwahl je Titel (Serie, Film, Sender) – die nächste Folge startet gleich richtig. */
+/** Remembered audio/subtitle choice per title (series, movie, channel) – the next episode starts right straight away. */
 object TrackMemory {
     private const val MAX = 300
     private fun prefs(c: Context) = Profiles.sp(c, "ipvio_tracks")
@@ -129,15 +139,15 @@ object TrackMemory {
 }
 
 /**
- * Defekte Links: Adressen, die beim Abspielen „nicht mehr vorhanden“ meldeten oder mehrmals scheiterten.
- * Die App prüft NICHT von sich aus Tausende Adressen (das würde der Anbieter als Missbrauch werten) – sie merkt sich nur,
- * was beim Abspielen schiefging. Spielt ein Link wieder, wird er sofort freigegeben.
+ * Broken links: addresses that reported "no longer available" when playing or failed several times.
+ * The app does NOT check thousands of addresses by itself (the provider would treat that as abuse) – it only remembers
+ * what went wrong during playback. If a link plays again, it is released immediately.
  */
 object DeadLinks {
     private const val MAX = 3000
     private val map = HashMap<Int, Triple<Int, Long, Boolean>>()
     @Volatile private var inited = false
-    /** Ändert sich nur beim Umschalten „ausblenden“ und beim Leeren – nicht bei jedem neuen Fehler (sonst würde die ganze Liste neu berechnet). */
+    /** Changes only when toggling "hide" and when clearing – not with every new error (otherwise the whole list would be recomputed). */
     var version by mutableIntStateOf(0)
         private set
     var hide by mutableStateOf(false)
@@ -206,15 +216,15 @@ object DeadLinks {
         version++
     }
 
-    /** Liste ohne gestörte Filme und Sender (Serien bleiben: dort betrifft es einzelne Folgen). */
+    /** List without broken movies and channels (series stay: there it concerns single episodes). */
     @Synchronized
     fun filter(list: List<Item>): List<Item> =
         if (map.isEmpty()) list else list.filterNot { it.kind != Kind.SERIES && isDead(it.url) }
 }
 
 /**
- * Mehrere Quellen desselben Films (z. B. „Matrix“ in 4K, FHD und HD als eigene Einträge des Anbieters):
- * gleiche Art, gleicher bereinigter Titel und gleiches Jahr. Die Sprache bleibt gleich – die App wechselt nie von selbst die Sprache.
+ * Several sources of the same movie (e.g. "Matrix" in 4K, FHD and HD as separate entries of the provider):
+ * same kind, same cleaned title and same year. The language stays the same – the app never switches the language by itself.
  */
 object Sources {
     fun alternatives(item: Item, all: List<Item>): List<Item> {
@@ -225,7 +235,7 @@ object Sources {
     }
 
     fun asVariants(list: List<Item>): List<Variant> {
-        // Bezeichnungen eindeutig machen (gleiche Qualität im selben Ordner: „HD · Filme (2)“), damit man sie auswählen kann
+        // Make labels unique (same quality in the same folder: "HD · Movies (2)") so they can be selected
         val seen = HashMap<String, Int>()
         return list.map {
             val base = listOfNotNull(it.quality, it.group.take(18)).joinToString(" · ").ifBlank { "Quelle" }

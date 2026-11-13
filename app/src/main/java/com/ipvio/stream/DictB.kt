@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Übersetzungen Teil B: Startseite, Suche, Live TV, TV-Guide, Player
+// Translations part B: home screen, search, live TV, TV guide, player
 val DictB = """
 Noch einmal Zurück drücken zum Beenden¦Press Back again to exit¦Çıkmak için tekrar Geri'ye basın¦Pritisnite Nazad ponovo za izlaz¦Pritisnite Natrag ponovo za izlaz¦Pritisnite Nazad ponovo za izlaz¦Pulsa Atrás otra vez para salir¦Appuyez à nouveau sur Retour pour quitter¦Premi di nuovo Indietro per uscire
 Die Playlist konnte nicht geladen werden¦The playlist could not be loaded¦Playlist yüklenemedi¦Playlista nije mogla biti učitana¦Playlista nije mogla biti učitana¦Plejlista nije mogla biti učitana¦No se pudo cargar la lista¦Impossible de charger la playlist¦Impossibile caricare la playlist

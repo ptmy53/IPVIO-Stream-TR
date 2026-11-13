@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -40,21 +41,28 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 object SearchState {
     var query by mutableStateOf("")
+    /** Quick filter: 0 all, 1 movies, 2 series, 3 live TV, 4 sports hub. Survives switching between keyboard and results. */
+    var filter by mutableIntStateOf(0)
+}
+
+/** Titles of the big picture per area (tab) with the candidate ids they were picked from. */
+private object HeroCache {
+    val byTab = HashMap<Int, Pair<List<String>, List<Item>>>()
 }
 
 private object HomeReturn {
     var returning = false
 }
 
-/** Zuletzt übernommener Genre-Stand und Trend-Liste – bleiben über das Verlassen der Startseite hinweg erhalten. */
+/** Last adopted genre state and trend list – kept when leaving the home screen. */
 private object HomeVer {
     var value = -1
     var trend: Set<String> = emptySet()
@@ -90,8 +98,8 @@ private fun providerGroups(list: List<Item>): Map<String, List<Item>> {
 }
 
 /**
- * Alles, was die Startseite aus der Playlist ableitet. Wird im Hintergrund-Thread berechnet (bei 100.000+ Titeln
- * dauert das spürbar), die Oberfläche zeigt solange den vorherigen Stand bzw. das Lade-Skelett.
+ * Everything the home screen derives from the playlist. Computed on a background thread (with 100,000+ titles
+ * this takes noticeable time); the UI shows the previous state or the loading skeleton meanwhile.
  */
 private class HomeData(
     val live: List<Item>, val movies: List<Item>, val series: List<Item>,
@@ -104,7 +112,7 @@ private class HomeData(
 private fun buildHome(all: List<Item>, ipvioWanted: Boolean, trend: Set<String>): HomeData {
     val live = ArrayList<Item>(); val movies0 = ArrayList<Item>(); val series = ArrayList<Item>()
     for (i in all) when (i.kind) { Kind.LIVE -> live.add(i); Kind.MOVIE -> movies0.add(i); Kind.SERIES -> series.add(i) }
-    // Derselbe Film in mehreren Fassungen (HD, 4K, …) nur einmal zeigen; die Fassung wählt man auf der Detailseite (Quelle)
+    // Show the same movie in several versions (HD, 4K, …) only once; the version is chosen on the detail page (source)
     val movies = PlaylistLogic.firstPerKey(movies0) { it.mk + "|" + it.lang }
     val genresOk = MetaRepo.enabled() && Classifier.supported(movies.size + series.size)
     val ipvio = ipvioWanted && genresOk
@@ -118,7 +126,37 @@ private fun buildHome(all: List<Item>, ipvioWanted: Boolean, trend: Set<String>)
     )
 }
 
-/** Letztes Ergebnis: Beim Zurückkehren auf die Startseite (z. B. von der Detailseite) muss nichts neu gerechnet werden. */
+/**
+ * The home data is rebuilt when only the genre progress changed (every 45 s while genres are detected); the live channels are the
+ * same then. Reusing the previous list objects lets Live TV keep its cached genres and bundles instead of recomputing them on the
+ * main thread while it is open.
+ */
+private fun keepLiveLists(d: HomeData, prev: HomeData?): HomeData {
+    if (prev == null) return d
+    val live = if (sameItems(d.live, prev.live)) prev.live else d.live
+    val liveP = if (d.liveP.size == prev.liveP.size && d.liveP.keys.zip(prev.liveP.keys).all { (a, b) -> a == b } &&
+        d.liveP.all { (k, l) -> sameItems(l, prev.liveP[k]) }) prev.liveP else d.liveP
+    if (live === d.live && liveP === d.liveP) return d
+    return HomeData(live, d.movies, d.series, liveP, d.movieP, d.seriesP, d.movieG, d.seriesG, d.topM, d.topS, d.byId, d.trendItems, d.genresOk)
+}
+
+private fun sameItems(a: List<Item>, b: List<Item>?): Boolean {
+    if (b == null || a.size != b.size) return false
+    for (i in a.indices) if (a[i] !== b[i]) return false
+    return true
+}
+
+/** Filtered lists per area, so the same list object comes back and [HomeCache] can recognize it (no full recompute on every tab switch). */
+private object AreaCache {
+    private val m = HashMap<String, Pair<List<Item>, List<Item>>>()
+    @Synchronized fun get(all: List<Item>, tab: Int, k: Int): List<Item> {
+        val key = "$tab|$k"
+        m[key]?.let { if (it.first === all) return it.second }
+        return AreaSource.filter(all, tab, k).also { m[key] = all to it }
+    }
+}
+
+/** Last result: when returning to the home screen (e.g. from the detail page) nothing has to be recomputed. */
 private object HomeCache {
     private var all: List<Item>? = null
     private var order: Map<String, Int>? = null
@@ -134,7 +172,7 @@ private object HomeCache {
         this.all = all; this.order = order; this.want = want; this.ver = ver; this.trend = trend; data = d
     }
 
-    /** Für die Wartezeit nach einer Änderung: lieber den vorigen Stand zeigen als ein leeres Skelett. */
+    /** For the wait after a change: better show the previous state than an empty skeleton. */
     @Synchronized fun last(): HomeData? = data
 }
 
@@ -160,21 +198,24 @@ fun HomeScreen(
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val all = PlaylistStore.channels
+    val allRaw = PlaylistStore.channels
+    // Movies/series: playlist selection at the top (with several shown playlists) – only titles of this playlist
+    val areaK = if (tab in 1..2) AreaSource.get(tab) else -1
+    val all = remember(allRaw, areaK, tab) { if (areaK < 0) allRaw else AreaCache.get(allRaw, tab, areaK) }
     val order = PlaylistStore.catOrder
-    // Genre-Fortschritt höchstens alle 10 s übernehmen: jede Übernahme rechnet Reihen und Top-Listen neu
+    // Adopt genre progress at most every 45 s: every adoption recomputes rows and top lists
     var ver by remember { mutableIntStateOf(HomeVer.value.takeIf { it >= 0 } ?: Classifier.version) }
-    LaunchedEffect(Unit) { while (true) { delay(10_000); if (ver != Classifier.version) { ver = Classifier.version; HomeVer.value = ver } } }
+    LaunchedEffect(Unit) { while (true) { delay(45_000); if (ver != Classifier.version) { ver = Classifier.version; HomeVer.value = ver } } }
     var trend by remember { mutableStateOf(HomeVer.trend) }
     LaunchedEffect(all.isNotEmpty()) { if (all.isNotEmpty()) { trend = Trending.titles(); HomeVer.trend = trend } }
     val wantIpvio = AppSettings.ipvioFilter
     val cached = HomeCache.get(all, order, wantIpvio, ver, trend)
-    // Bei geänderten Eingaben bleibt bis zum neuen Ergebnis der bisherige Stand sichtbar (produceState behält den Wert)
+    // When inputs change, the previous state stays visible until the new result (produceState keeps the value)
     val dataState = produceState(cached, all, order, wantIpvio, ver, trend) {
         value = HomeCache.get(all, order, wantIpvio, ver, trend)
-            ?: withContext(Dispatchers.Default) { buildHome(all, wantIpvio, trend) }.also { HomeCache.put(all, order, wantIpvio, ver, trend, it) }
+            ?: withContext(Dispatchers.Default) { keepLiveLists(buildHome(all, wantIpvio, trend), HomeCache.last()) }.also { HomeCache.put(all, order, wantIpvio, ver, trend, it) }
     }
-    // Während neu gerechnet wird: vorigen Stand zeigen, nur beim allerersten Mal das Lade-Skelett
+    // While recomputing: show the previous state, the loading skeleton only the very first time
     val prev = HomeCache.last()
     val data = dataState.value ?: prev?.takeIf { it.byId.isNotEmpty() && all.isNotEmpty() } ?: EMPTY_HOME
     val computing = dataState.value == null && prev == null && all.isNotEmpty()
@@ -190,11 +231,29 @@ fun HomeScreen(
     val topS = data.topS
     val byId = data.byId
     val cardW = AppSettings.cardW
-    val hist = History.ids.mapNotNull { byId[it] }
-    val watchList = Library.watch.mapNotNull { byId[it] }
-    val favLive = Library.favs.mapNotNull { byId[it] }.filter { it.kind == Kind.LIVE }
+    // derivedStateOf: the lists are rebuilt only when history / favorites / My list really change, not on every
+    // recomposition; the same list object lets the rows below skip instead of recomposing all their cards
+    val hist by remember(byId) { derivedStateOf { History.ids.mapNotNull { byId[it] } } }
+    val watchList by remember(byId) { derivedStateOf { Library.watch.mapNotNull { byId[it] } } }
+    val favLive by remember(byId) { derivedStateOf { Library.favs.mapNotNull { byId[it] }.filter { it.kind == Kind.LIVE } } }
+    // Row lists that were built anew inside the rows on every recomposition
+    val newMovies = remember(movies) { movies.takeLast(40).reversed() }
+    val newSeries = remember(series) { series.takeLast(40).reversed() }
+    val histTop = remember(hist) { hist.take(30) }
     val trendItems = data.trendItems
-    // „Weil du X geschaut hast“: ähnliche Titel (TMDB) des zuletzt gestarteten Films/der Serie, abgeglichen mit der eigenen Playlist
+    val trendTop = remember(trendItems) { trendItems.take(10) }
+    val wlVod = remember(watchList) { watchList.filter { it.kind != Kind.LIVE } }
+    // Live TV opens faster: genres and quality bundling of all channels are prepared in the background (both keep their result)
+    LaunchedEffect(live) {
+        if (live.isEmpty()) return@LaunchedEffect
+        delay(2500)
+        withContext(Dispatchers.Default) {
+            runCatching { LiveGenre.split(live) }
+            if (General.bundleLive) runCatching { LiveBundleLogic.bundle(live) }
+            runCatching { SportWatch.prewarm(live) }
+        }
+    }
+    // "Because you watched X": similar titles (TMDB) of the last started movie/series, matched against the own playlist
     val becauseSrc = hist.firstOrNull { it.kind != Kind.LIVE }
     val because by produceState<Pair<Item, List<Item>>?>(null, becauseSrc?.id, byId.size) {
         val src = becauseSrc ?: return@produceState
@@ -208,24 +267,26 @@ fun HomeScreen(
         if (l.size >= 4) value = src to l.take(20)
     }
 
-    // Neue Folgen bei Favoriten-Serien prüfen (Glocke)
+    // Check new episodes of favorite series (bell)
     LaunchedEffect(byId.size, Library.favs.size) {
         if (byId.isNotEmpty()) NewEpisodes.check(ctx, Library.favs.mapNotNull { byId[it] }.filter { it.kind == Kind.SERIES })
     }
 
     SideEffect { NavState.tab = tab; ContentFocus.tab = if (tab in 0 until MenuLogic.COUNT) tab else -1 }
 
-    // Kopfzeile (Suche, Erinnerungen, Profil) und Schnellzugriff wie im Entwurf
+    // Header (search, reminders, profile) and quick access as in the design
     var picker by remember { mutableStateOf(false) }
     val ready = remember { mutableStateListOf<Item>() }
-    val candidates = remember(all, trendItems, tab) {
+    // Also use the sizes of movies/series as a key: if the computed home screen arrives only after the list (and without trend titles,
+    // i.e. the same empty trend list), the selection stayed empty and the big picture was missing.
+    val candidates = remember(all, trendItems, movies.size, series.size, tab) {
         when (tab) {
             1 -> (trendItems.filter { it.kind == Kind.MOVIE }.take(8) + movies.takeLast(30).reversed())
             2 -> (trendItems.filter { it.kind == Kind.SERIES }.take(8) + series.takeLast(30).reversed())
             else -> (trendItems.take(8) + movies.takeLast(25).reversed() + series.takeLast(15).reversed())
         }.distinctBy { it.id }
     }
-    // Filme/Serien: Reiter oben neben der Suche (statt der großen Knöpfe unter dem Bild)
+    // Movies/series: tabs at the top next to the search (instead of the big buttons under the picture)
     val isVod = tab == 1 || tab == 2
     val vodBase = if (tab == 1) movies else series
     val vodTop = if (tab == 1) topM else topS
@@ -233,7 +294,39 @@ fun HomeScreen(
     val openCats: () -> Unit = {
         scope.launch {
             val g = if (data.genresOk) withContext(Dispatchers.Default) { ipvioGroups(vodBase) } else emptyMap()
-            onCategories(CatReq("$vodNoun · Kategorien", g, if (tab == 1) movieP else seriesP, SORT_NEW))
+            // Own imported lists (Letterboxd, Trakt, MyAnimeList) come first, next to the genres
+            val imported = ImportedLists.groups(ctx, if (tab == 1) Kind.MOVIE else Kind.SERIES, byId)
+            val prov = if (tab == 1) movieP else seriesP
+            onCategories(CatReq("$vodNoun · Kategorien", imported + g, imported + prov, SORT_NEW, area = if (tab == 1) CatOrder.MOVIE else CatOrder.SERIES))
+        }
+    }
+    // One header button per imported service (Letterboxd, Trakt, MyAnimeList) that has titles in this area
+    val importedTabs = if (!isVod) emptyList() else remember(tab, byId) {
+        val g = ImportedLists.groups(ctx, if (tab == 1) Kind.MOVIE else Kind.SERIES, byId)
+        ImportedLists.SOURCES.mapNotNull { src ->
+            val l = g.filter { it.key.startsWith("$src · ") }.values.flatten().distinctBy { it.id }
+            if (l.isEmpty()) null else Triple(src, l, "tb:imp$src$tab")
+        }
+    }
+    // Asked by the View settings' live preview (consumed at once so a later visit does not open it again)
+    LaunchedEffect(AppNav.openCatsSignal) { if (AppNav.openCatsSignal > 0) { AppNav.openCatsSignal = 0; if (tab == 1) openCats() } }
+    LaunchedEffect(AppNav.openBrowseSignal) {
+        if (AppNav.openBrowseSignal > 0) { AppNav.openBrowseSignal = 0; if (tab == 1) onBrowse(BrowseReq("Alle $vodNoun", vodBase, SORT_NEW)) }
+    }
+    // Asked by the View settings preview: bring the home rows into view (they are far down the list)
+    LaunchedEffect(AppNav.homeScrollKey) {
+        val want = AppNav.homeScrollKey
+        if (want.isEmpty()) return@LaunchedEffect
+        AppNav.homeScrollKey = ""
+        if (tab != 0) return@LaunchedEffect
+        val st = states[0]
+        if (want == "top") { st.scrollToItem(0); return@LaunchedEffect }
+        val keys = want.split("|")
+        repeat(25) {
+            val hit = st.layoutInfo.visibleItemsInfo.filter { it.key in keys }.minByOrNull { it.index }
+            if (hit != null) { st.scrollToItem(hit.index); return@LaunchedEffect }
+            if (!st.canScrollForward) return@LaunchedEffect
+            st.animateScrollBy(700f)
         }
     }
     val navTabs = if (!isVod) emptyList() else listOf(
@@ -241,7 +334,7 @@ fun HomeScreen(
         HeaderTab("Top bewertet", AIcon.Star, "tb:top$tab") { onBrowse(BrowseReq("Top bewertet · $vodNoun", vodTop, SORT_RATING)) },
         HeaderTab("Neu hinzugefügt", AIcon.Sparkle, "tb:new$tab") { onBrowse(BrowseReq("Neu hinzugefügt · $vodNoun", vodBase, SORT_NEW)) },
         HeaderTab("Alle $vodNoun", AIcon.Grid, "tb:all$tab") { onBrowse(BrowseReq("Alle $vodNoun", vodBase, SORT_NEW)) }
-    )
+    ) + importedTabs.map { (src, l, id) -> HeaderTab(src, AIcon.Download, id) { onBrowse(BrowseReq("$src · $vodNoun", l, SORT_NEW)) } }
     var inHeader by remember { mutableStateOf(false) }
     val header: @Composable (Modifier) -> Unit = { m ->
         HeaderBar(
@@ -249,21 +342,22 @@ fun HomeScreen(
             onSearch = { onTab(4) },
             onReminder = { r -> byId[r.chId]?.let(onOpen) },
             onNewEpisode = { id -> byId[id]?.let(onOpen) },
-            // Nur ein Profil: direkt zur Profil-Seite der Einstellungen (vorher: Einstellungen allgemein)
+            // Only one profile: go directly to the profile page of settings (before: general settings)
             onProfile = { if (Profiles.list.size > 1) picker = true else { SettingsNav.openPage = SettingsNav.PROFILES; onTab(MenuLogic.SETTINGS) } },
             tabs = navTabs,
-            // Runde 20: Ansicht-Knopf entfällt (steht jetzt in Einstellungen > Ansicht), oben rechts nur Glocke und Profil
+            areaTab = tab,
+            // Round 20: the View button is gone (now in Settings > View), only bell and profile at the top right
             showView = false,
-            // Ohne großes Bild (noch keine Titelbilder): der erste Reiter ist das Ziel aus der Seitenleiste
+            // Without a big picture (no title images yet): the first tab is the target from the sidebar
             firstIsContent = isVod && ready.isEmpty()
         )
     }
-    // Kacheln mit echten Bildern aus der eigenen Bibliothek (Runde 15): Szenenbild eines Top-Titels je Bereich,
-    // bei Favoriten und Meiner Liste ein Titel daraus, bei Live TV die Logos der Lieblingssender.
+    // Tiles with real images from the own library (round 15): scene image of a top title per area,
+    // for favorites and My list a title from it, for Live TV the logos of favorite channels.
     val nowChannels = remember(favLive, hist, live) {
         (favLive + hist.filter { it.kind == Kind.LIVE }).distinctBy { it.id }.ifEmpty { live.take(20) }
     }
-    val favVod = Library.favs.mapNotNull { byId[it] }.filter { it.kind != Kind.LIVE }
+    val favVod by remember(byId) { derivedStateOf { Library.favs.mapNotNull { byId[it] }.filter { it.kind != Kind.LIVE } } }
     val tileImg by produceState(emptyMap<Int, String>(), topM.size, topS.size, favVod.size, watchList.size) {
         val used = HashSet<String>()
         val out = HashMap<Int, String>()
@@ -288,14 +382,23 @@ fun HomeScreen(
     DisposableEffect(Unit) { onDispose { HomeReturn.returning = true } }
 
     LaunchedEffect(candidates) {
+        // Switching between Home / Movies / Series: the big picture of this area is taken over at once instead of
+        // vanishing and being looked up title by title again
+        val ids = candidates.map { it.id }
+        val hit = HeroCache.byTab[tab]
+        if (hit != null && hit.first == ids) {
+            if (ready.toList() != hit.second) { ready.clear(); ready.addAll(hit.second) }
+            return@LaunchedEffect
+        }
         ready.clear()
         for (c in candidates) {
             val m = MetaRepo.basic(ctx, c)
             if (m?.backdrop != null) ready.add(c)
             if (ready.size >= 6) break
         }
+        HeroCache.byTab[tab] = ids to ready.toList()
     }
-    // Über die Seitenleiste von einem anderen Bildschirm (z. B. Suche) hierher gewechselt: Inhalt fokussieren
+    // Switched here from another screen via the sidebar (e.g. search): focus the content
     LaunchedEffect(Unit) {
         if (AppNav.focusTab == tab && LastFocus.pending == null) {
             AppNav.focusTab = -1
@@ -320,21 +423,21 @@ fun HomeScreen(
 
     var inSidebar by remember { mutableStateOf(false) }
     val sideFocus = remember { FocusRequester() }
-    // App-Start: Fokus auf „Jetzt ansehen“ statt auf der Seitenleiste. Das Bild oben erscheint erst, wenn Playlist und Infos geladen
-    // sind (kann einige Sekunden dauern); darum wird bis zu 15 s wiederholt, und der Merker wird erst bei Erfolg gesetzt.
-    // Nach 3 s nur noch, solange der Fokus noch in der Seitenleiste liegt (hat der Nutzer schon selbst gewählt, wird nichts gestohlen).
+    // App start: focus on "Watch now" instead of the sidebar. The top picture appears only once playlist and info are loaded
+    // (can take a few seconds); so it retries for up to 15 s, and the marker is set only on success.
+    // After 3 s only while focus is still in the sidebar (if the user has already chosen, nothing is stolen).
     LaunchedEffect(ready.isNotEmpty(), tab) {
         if (tab != 0 || HomeFlags.heroDone || LastFocus.pending != null) return@LaunchedEffect
         var waited = 0
-        while (waited < 15000) {
+        while (waited < 45000) {
             delay(150); waited += 150
             if (ready.isEmpty() && waited < 6000) continue
             if (waited > 3000 && !inSidebar) return@LaunchedEffect
             if (runCatching { ContentFocus.req.requestFocus() }.getOrDefault(false)) { HomeFlags.heroDone = true; return@LaunchedEffect }
         }
     }
-    // Beenden: zweimal Zurück innerhalb von 2,5 s. Unabhängig davon, wo der Fokus gerade liegt (sonst führte das zweite
-    // Zurück wieder auf die Startseite statt zu beenden).
+    // Quit: back twice within 2.5 s. Independent of where the focus currently is (otherwise the second
+    // back led to the home screen again instead of quitting).
     var lastBack by remember { mutableLongStateOf(0L) }
     fun exitApp() {
         val act = generateSequence<android.content.Context>(ctx) { (it as? android.content.ContextWrapper)?.baseContext }
@@ -344,8 +447,8 @@ fun HomeScreen(
     BackHandler(enabled = !inSidebar && all.isNotEmpty()) {
         val now = System.currentTimeMillis()
         if (tab == 0 && General.confirmExit && now - lastBack < 2500) exitApp()
-        // Runde 17: Zurück geht genau eine Ebene hoch – weiter unten auf der Startseite zuerst nach oben zu „Jetzt ansehen“,
-        // erst von dort in die Seitenleiste (wie in Filme/Serien)
+        // Round 17: Back goes up exactly one level – further down the home screen first up to "Watch now",
+        // only from there into the sidebar (like in Movies/Series)
         else if (tab == 0 && states[0].firstVisibleItemIndex > 0) scope.launch {
             runCatching { states[0].scrollToItem(0) }
             repeat(8) {
@@ -356,7 +459,7 @@ fun HomeScreen(
         }
         else runCatching { sideFocus.requestFocus() }
     }
-    // Filme/Serien: Zurück aus den Reihen führt zuerst zu den Reitern oben, von dort in die Seitenleiste
+    // Movies/series: Back from the rows leads first to the tabs at the top, from there into the sidebar
     BackHandler(enabled = !inSidebar && !inHeader && isVod && all.isNotEmpty()) {
         scope.launch {
             runCatching { states[tab].scrollToItem(0) }
@@ -374,19 +477,25 @@ fun HomeScreen(
         else { lastBack = now; android.widget.Toast.makeText(ctx, Lang.tr("Noch einmal Zurück drücken zum Beenden"), android.widget.Toast.LENGTH_SHORT).show() }
     }
 
-    val resumeList = WatchStore.entries.mapNotNull { e -> byId[e.itemId]?.let { e to it } }
+    val resumeList by remember(byId) { derivedStateOf { WatchStore.entries.mapNotNull { e -> byId[e.itemId]?.let { e to it } } } }
+    // Movies/series tab: the same lists filtered by kind, kept between recompositions
+    val vodKind = if (tab == 1) Kind.MOVIE else Kind.SERIES
+    val resumeK = remember(resumeList, vodKind) { resumeList.filter { it.second.kind == vodKind } }
+    val watchK = remember(watchList, vodKind) { watchList.filter { it.kind == vodKind } }
+    val histK = remember(hist, vodKind) { hist.filter { it.kind == vodKind } }
+    val trendK = remember(trendItems, vodKind) { trendItems.filter { it.kind == vodKind } }
     val reload: () -> Unit = { PlaylistStore.savedUrl(ctx)?.let { u -> scope.launch { PlaylistStore.load(ctx, u, false) } } }
 
-    // Runde 17b (Cinematic Remake): Hintergrund und Infos folgen dem markierten Titel, sobald das große Bild weggescrollt ist
+    // Round 17b (Cinematic Remake): background and info follow the selected title once the big picture has scrolled away
     val bbTab = tab in 0..2
     val bbState = states[tab.coerceIn(0, states.lastIndex)]
-    // Runde 18: Auch wenn das große Bild noch teilweise zu sehen ist (z. B. erste Reihe „Beliebte Serien“), zeigt der Hintergrund
-    // die Infos des markierten Titels – und das große Bild (Slideshow) pausiert.
-    // Infos oben nur bei den normalen Titelreihen (ab „Top 10 heute“ bzw. „Neu hinzugefügt“), nicht bei Kacheln, Live TV, Weiterschauen,
-    // Meine Liste und Zuletzt geschaut. Und nur, wenn die Reihe tief genug steht, dass sie die Infos nicht überdeckt.
+    // Round 18: even when the big picture is still partly visible (e.g. first row "Popular series"), the background shows
+    // the info of the selected title – and the big picture (slideshow) pauses.
+    // Info at the top only for the normal title rows (from "Top 10 today" or "Newly added"), not for tiles, Live TV, Continue watching,
+    // My list and Recently watched. And only if the row is low enough not to cover the info.
     val listTop = remember { floatArrayOf(0f) }
     val noBb = remember { setOf("hero", "top", "tiles", "resume", "chnow", "hero1", "hero2", "top1", "top2", "res1", "res2", "wl1", "wl2", "hr1", "hr2", "hint1", "hint2") }
-    val bbOn by remember(tab) {
+    val bbOnState = remember(tab) {
         derivedStateOf {
             if (!bbTab || !Billboard.cardFocus || Billboard.focused == null) return@derivedStateOf false
             val co = Billboard.focusCo
@@ -398,33 +507,48 @@ fun HomeScreen(
                 row.offset >= (li.viewportEndOffset - li.viewportStartOffset) * 0.33f
         }
     }
-    SideEffect { Billboard.active = bbOn }
+    // Read only in effects and in BillboardLayer: reading it here would recompose the whole home screen
+    LaunchedEffect(bbOnState) { snapshotFlow { bbOnState.value }.collect { Billboard.active = it } }
     LaunchedEffect(inSidebar) { if (inSidebar) Billboard.cardFocus = false }
     LaunchedEffect(tab) { Billboard.cardFocus = false }
-    var bbItem by remember { mutableStateOf<Item?>(Billboard.focused) }
-    // 17c: erst nach kurzem Verweilen wechseln (beim schnellen Durchblättern werden keine großen Bilder geladen)
-    LaunchedEffect(Billboard.focused) { if (bbItem != null) delay(450); bbItem = Billboard.focused }
-    val bbA by animateFloatAsState(if (bbOn && bbItem != null) 1f else 0f, tween(if (Look.motion == 0) 0 else 520), label = "bbA")
+    val bbItemState = remember { mutableStateOf<Item?>(Billboard.focused) }
+    // 17c: switch only after a short dwell (no big images are loaded while browsing quickly)
+    // snapshotFlow instead of LaunchedEffect(Billboard.focused): reading the focused title here recomposed the whole home screen
+    // (all visible rows and cards) on every move of the highlight
+    LaunchedEffect(Unit) {
+        snapshotFlow { Billboard.focused }.collectLatest { f -> if (bbItemState.value != null) delay(450); bbItemState.value = f }
+    }
+    val bbAnim = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(bbOnState) {
+        snapshotFlow { bbOnState.value && bbItemState.value != null }.collectLatest { on ->
+            val t = if (on) 1f else 0f
+            if (Look.motion == 0) bbAnim.snapTo(t) else bbAnim.animateTo(t, tween(520))
+        }
+    }
+    // Read only in draw / layer lambdas and in BillboardLayer (no recomposition per animation frame)
+    val bbA: () -> Float = remember(bbAnim) { { bbAnim.value } }
     val pivotSpec = remember(tab) { PivotSpec(0.5f) { states[tab.coerceIn(0, states.lastIndex)] } }
     Box(Modifier.fillMaxSize()) {
-        if (bbTab && bbA > 0.01f) BillboardBackdrop(bbItem, Modifier.fillMaxSize().graphicsLayer { alpha = bbA })
-        if (bbTab && bbA > 0.01f) bbItem?.let { bi ->
-            BillboardInfo(bi, Modifier.padding(start = SideStart + dpx(56), top = dpx(64) + (if (SidebarPrefs.pos == SidebarPrefs.TOP) TopBarH else 0.dp)).graphicsLayer { alpha = bbA; translationY = (1f - bbA) * 20.dp.toPx() })
-        }
+        if (bbTab) BillboardLayer(bbA, bbItemState, Modifier.padding(start = SideStart + dpx(56), top = dpx(64) + (if (SidebarPrefs.pos == SidebarPrefs.TOP) TopBarH else 0.dp)))
         BoxWithConstraints(Modifier.fillMaxSize().sidebarPad()) {
-            // Kartenbreiten und Höhe des großen Bildes aus dem verfügbaren Platz (wie im Entwurf: alles auf einen Blick)
+            // Card widths and height of the big picture from the available space (as in the design: everything at a glance)
             val grid = remember(maxWidth, Design.k, General.cardSize) { cardGrid(maxWidth - RowPadX * 2) }
-            // Entwurf: großes Bild 420 px hoch (Start), 345 px (Filme/Serien)
+            // Design: big picture 420 px high (start), 345 px (movies/series)
             val heroH = dpx(if (tab == 0) 540 else 450)
+            val keepSettings = AddFlowLogic.keepsSettingsPage(tab, PlaylistStore.lists.isNotEmpty())
             when {
-                // Download/Einlesen ohne angezeigte Liste: Ladebildschirm mit Fortschritt (und ggf. Sprachauswahl)
-                PlaylistStore.loading && all.isEmpty() && PlaylistStore.heavy -> PlaylistLoadingOverlay()
-                (PlaylistStore.loading && all.isEmpty()) || computing -> SkeletonHome()
-                all.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // Download/parse without a shown list: loading screen with progress (and possibly language selection)
+                // On the settings tab only when a language choice is waiting: a mode switch re-parses the stored copy (heavy)
+                // and would otherwise unmount the settings, which then reopen on their first page
+                PlaylistStore.loading && all.isEmpty() && PlaylistStore.heavy && (!keepSettings || PlaylistStore.langAsk != null) -> PlaylistLoadingOverlay()
+                // The settings page stays mounted while the list is empty or being rebuilt (e.g. after a playlist mode switch):
+                // replacing it would drop the focus, and the next OK press could land on "Add playlist"
+                !keepSettings && ((PlaylistStore.loading && all.isEmpty()) || computing) -> SkeletonHome()
+                !keepSettings && all.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         BrandMark(Modifier.size(72.dp))
                         val err = PlaylistStore.error
-                        // Alles ausgeblendet (Sprachfilter passt nicht zu dieser Playlist): direkt zurückholen können
+                        // Everything hidden (language filter does not fit this playlist): be able to get it back directly
                         val allHidden = err == null && PlaylistStore.langCounts.isNotEmpty() && PlaylistStore.langCounts.keys.all { it in LangFilter.hidden }
                         Text(
                             when { err != null -> "Die Playlist konnte nicht geladen werden"; allHidden -> "Alle Sprachen dieser Playlist sind ausgeblendet"; else -> "Noch keine Sender" },
@@ -442,15 +566,15 @@ fun HomeScreen(
                     }
                 }
                 tab == 3 -> LiveTab(live, liveP, favLive, onOpen, onPlayNow)
-                tab == MenuLogic.SPORT -> SportTab(live) { ch, l -> ZapContext.list = l; ZapContext.key = null; onOpen(ch) }
-                // Markierte Reihe bleibt in der unteren Hälfte stehen (PivotSpec); darüber werden Reihen ausgeblendet, damit oben
-                // Titel und Infos des markierten Titels frei stehen (Billboard)
+                tab == MenuLogic.SPORT -> SportHub(live) { ch, l -> ZapContext.list = l; ZapContext.key = null; onOpen(ch) }
+                // The selected row stays in the lower half (PivotSpec); rows above are hidden so that at the top
+                // title and info of the selected title are free (billboard)
                 else -> CompositionLocalProvider(
                     LocalCardGrid provides grid, LocalScrollTop provides { states[tab].scrollToItem(0) },
                     androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides (if (bbTab) pivotSpec else SmoothSpec)
                 ) { LazyColumn(Modifier.fillMaxSize().onGloballyPositioned { listTop[0] = it.positionInRoot().y }.drawWithContent {
-                    // Solange die Infos oben stehen (auch beim Ausblenden): alles über der markierten Reihe weg, das große Bild immer.
-                    val ct = if (bbTab && bbA > 0.01f) {
+                    // While the info is at the top (also while fading out): everything above the selected row is gone, the big picture always.
+                    val ct = if (bbTab && bbA() > 0.01f) {
                         val li = states[tab].layoutInfo
                         val co = Billboard.focusCo
                         var edge = size.height * 0.5f - dpx(140).toPx()
@@ -466,40 +590,67 @@ fun HomeScreen(
                 }, state = states[tab], contentPadding = PaddingValues(bottom = dpx(420))) {
                     when (tab) {
                         0 -> {
-                            if (ready.isNotEmpty()) item(key = "hero") { Hero(ready.toList(), heroH, true, onOpen, onPlayNow, header, { heroScroll(states[0]) }) { scope.launch { states[0].animateScrollToItem(0) } } }
+                            // Order and selection of the blocks: Settings > Customize home (HomeLayout)
+                            if (HomeEdit.active) item(key = "editTop") {
+                                Row(Modifier.padding(start = RowPadX + dpx(2), top = dpx(12)), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    PillButton("Fertig", light = true, icon = AIcon.Check) { HomeEdit.active = false }
+                                    Text("Bearbeiten: Über jeder Reihe kannst du sie verschieben oder ausblenden.", color = Muted, fontSize = 15.sp)
+                                }
+                            }
+                            if (ready.isNotEmpty() && HomeLayout.shown("hero")) item(key = "hero") { Hero(ready.toList(), heroH, true, onOpen, onPlayNow, header, { heroScroll(states[0]) }) { scope.launch { states[0].animateScrollToItem(0) } } }
                             else item(key = "top") { header(Modifier) }
-                            item(key = "tiles") { QuickTiles(tiles) }
-                            // Weiterschauen ganz oben, direkt unter den Kacheln: wer viel schaut, will mit wenigen Klicks weiter
-                            if (resumeList.isNotEmpty()) item(key = "resume") { ResumeRow(resumeList, cardW, onResume) }
-                            if (nowChannels.isNotEmpty()) item(key = "chnow") { ChannelNowRow("Live TV", nowChannels, onOpen) { onTab(3) } }
-                            // Top 10 immer als ganze Cover (unabhängig von der Bild-Einstellung)
-                            if (trendItems.size >= 3) item(key = "trend") {
-                                ItemsRow("Top 10 heute", trendItems.take(10), cardW, onOpen, style = CARD_TOP10) { onBrowse(BrowseReq("Im Trend", trendItems, SORT_PLAYLIST)) }
+                            val wl = wlVod
+                            for (blockId in HomeLayout.order) {
+                                if (blockId == "hero") continue
+                                val editing = HomeEdit.active
+                                if (editing) item(key = "eb$blockId") { HomeEditBar(ctx, blockId) }
+                                if (!HomeLayout.shown(blockId)) continue
+                                when (blockId) {
+                                    "tiles" -> { item(key = "tiles") { QuickTiles(tiles) } }
+                                    "clock" -> { item(key = "clock") { ClockWidget() } }
+                                    // Continue watching directly under the tiles: whoever watches a lot wants to continue in few clicks
+                                    "resume" -> { if (resumeList.isNotEmpty()) item(key = "resume") { ResumeRow(resumeList, cardW, onResume) } }
+                                    "favch" -> { if (favLive.isNotEmpty()) item(key = "favch") { ItemsRow("Meine Sender", favLive, cardW, onOpen) { onTab(3) } } }
+                                    "chnow" -> { if (nowChannels.isNotEmpty()) item(key = "chnow") { ChannelNowRow("Live TV", nowChannels, onOpen) { onTab(3) } } }
+                                    // Top 10 always as whole covers (independent of the picture setting)
+                                    "trend" -> { if (trendItems.size >= 3) item(key = "trend") {
+                                        ItemsRow("Top 10 heute", trendTop, cardW, onOpen, style = CARD_TOP10) { onBrowse(BrowseReq("Im Trend", trendItems, SORT_PLAYLIST)) }
+                                    } }
+                                    "because" -> { because?.let { (src, l) ->
+                                        item(key = "because") { ItemsRow("Weil du „" + src.title + "“ geschaut hast", l, cardW, onOpen) { onBrowse(BrowseReq("Ähnlich wie " + src.title, l, SORT_PLAYLIST)) } }
+                                    } }
+                                    "wl" -> { if (wl.isNotEmpty()) item(key = "wl") { ItemsRow("Meine Liste", wl, cardW, onOpen) { onTab(MenuLogic.MYLIST) } } }
+                                    "hist" -> { if (hist.isNotEmpty()) item(key = "hist") { ItemsRow("Zuletzt geschaut", histTop, cardW, onOpen) { onBrowse(BrowseReq("Zuletzt geschaut", hist, SORT_PLAYLIST)) } } }
+                                    "newm" -> { if (movies.isNotEmpty()) item(key = "newm") {
+                                        ItemsRow("Neu hinzugefügt · Filme", newMovies, cardW, onOpen) { onBrowse(BrowseReq("Neu hinzugefügt · Filme", movies, SORT_NEW)) }
+                                    } }
+                                    "topm" -> { if (topM.size >= 8) item(key = "topm") {
+                                        ItemsRow("Top bewertet · Filme", topM, cardW, onOpen) { onBrowse(BrowseReq("Top bewertet · Filme", topM, SORT_RATING)) }
+                                    } }
+                                    "news" -> { if (series.isNotEmpty()) item(key = "news") {
+                                        ItemsRow("Neu hinzugefügt · Serien", newSeries, cardW, onOpen) { onBrowse(BrowseReq("Neu hinzugefügt · Serien", series, SORT_NEW)) }
+                                    } }
+                                    "tops" -> { if (topS.size >= 8) item(key = "tops") {
+                                        ItemsRow("Top bewertet · Serien", topS, cardW, onOpen) { onBrowse(BrowseReq("Top bewertet · Serien", topS, SORT_RATING)) }
+                                    } }
+                                    "sg" -> { seriesG.entries.take(3).forEach { (g, l) ->
+                                        item(key = "s$g") { ItemsRow("Serien · $g", l, cardW, onOpen) { onBrowse(BrowseReq("Serien · $g", l, SORT_NEW)) } }
+                                    } }
+                                    "mg" -> { movieG.entries.take(3).forEach { (g, l) ->
+                                        item(key = "m$g") { ItemsRow("Filme · $g", l, cardW, onOpen) { onBrowse(BrowseReq("Filme · $g", l, SORT_NEW)) } }
+                                    } }
+                                }
                             }
-                            because?.let { (src, l) ->
-                                item(key = "because") { ItemsRow("Weil du „" + src.title + "“ geschaut hast", l, cardW, onOpen) { onBrowse(BrowseReq("Ähnlich wie " + src.title, l, SORT_PLAYLIST)) } }
+                            // Build own home screen: entry at the end of the page
+                            item(key = "editHome") {
+                                Row(Modifier.padding(start = RowPadX + dpx(2), top = dpx(24))) {
+                                    SmallPill("Startseite anpassen", icon = AIcon.Sliders) { HomeEdit.active = true; scope.launch { states[0].animateScrollToItem(0) } }
+                                }
                             }
-                            val wl = watchList.filter { it.kind != Kind.LIVE }
-                            if (wl.isNotEmpty()) item(key = "wl") { ItemsRow("Meine Liste", wl, cardW, onOpen) { onTab(MenuLogic.MYLIST) } }
-                            if (movies.isNotEmpty()) item(key = "newm") {
-                                ItemsRow("Neu hinzugefügt · Filme", movies.takeLast(40).reversed(), cardW, onOpen) { onBrowse(BrowseReq("Neu hinzugefügt · Filme", movies, SORT_NEW)) }
+                            if (movies.isEmpty() && series.isEmpty()) {
+                                item { EmptyHint("Diese Playlist enthält keine Filme oder Serien. Live TV findest du links.") }
+                                item { EmptyHint(CONTENT_MODE_HINT.format("movies or series", "live TV only")) }
                             }
-                            if (topM.size >= 8) item(key = "topm") {
-                                ItemsRow("Top bewertet · Filme", topM, cardW, onOpen) { onBrowse(BrowseReq("Top bewertet · Filme", topM, SORT_RATING)) }
-                            }
-                            if (series.isNotEmpty()) item(key = "news") {
-                                ItemsRow("Neu hinzugefügt · Serien", series.takeLast(40).reversed(), cardW, onOpen) { onBrowse(BrowseReq("Neu hinzugefügt · Serien", series, SORT_NEW)) }
-                            }
-                            if (topS.size >= 8) item(key = "tops") {
-                                ItemsRow("Top bewertet · Serien", topS, cardW, onOpen) { onBrowse(BrowseReq("Top bewertet · Serien", topS, SORT_RATING)) }
-                            }
-                            seriesG.entries.take(3).forEach { (g, l) ->
-                                item(key = "s$g") { ItemsRow("Serien · $g", l, cardW, onOpen) { onBrowse(BrowseReq("Serien · $g", l, SORT_NEW)) } }
-                            }
-                            movieG.entries.take(3).forEach { (g, l) ->
-                                item(key = "m$g") { ItemsRow("Filme · $g", l, cardW, onOpen) { onBrowse(BrowseReq("Filme · $g", l, SORT_NEW)) } }
-                            }
-                            if (movies.isEmpty() && series.isEmpty()) item { EmptyHint("Diese Playlist enthält keine Filme oder Serien. Live TV findest du links.") }
                         }
                         1, 2 -> {
                             val isM = tab == 1
@@ -510,9 +661,9 @@ fun HomeScreen(
                             val groups = if (isM) movieG else seriesG
                             if (ready.isNotEmpty()) item(key = "hero$tab") { Hero(ready.toList(), heroH, false, onOpen, onPlayNow, header, { heroScroll(states[tab]) }) { scope.launch { states[tab].animateScrollToItem(0) } } }
                             else item(key = "top$tab") { header(Modifier) }
-                            // Beliebt (im Trend, sonst top bewertet) direkt unter dem großen Bild. Erste Reihe:
-                            // „Alle anzeigen“ hoch = Profil oben rechts, links = „Zur Liste“ im Bild
-                            val tt = trendItems.filter { it.kind == kind }
+                            // Popular (trending, otherwise top rated) directly under the big picture. First row:
+                            // "Show all" up = profile at the top right, left = "To list" in the picture
+                            val tt = trendK
                             val pop = if (tt.size >= 5) tt else top
                             if (pop.size >= 3) item(key = "pop$tab") {
                                 ItemsRow(if (isM) "Beliebte Filme" else "Beliebte Serien", pop, cardW, onOpen,
@@ -520,22 +671,25 @@ fun HomeScreen(
                                     onBrowse(BrowseReq((if (isM) "Beliebte Filme" else "Beliebte Serien"), pop, SORT_PLAYLIST))
                                 }
                             }
-                            if (ready.isEmpty() && pop.size < 3) item(key = "hint$tab") { EmptyHint("Oben findest du alle $noun, Neuheiten, Top bewertet und Kategorien.") }
-                            val rl = resumeList.filter { it.second.kind == kind }
+                            if (base.isNotEmpty() && ready.isEmpty() && pop.size < 3) item(key = "hint$tab") { EmptyHint("Oben findest du alle $noun, Neuheiten, Top bewertet und Kategorien.") }
+                            val rl = resumeK
                             if (rl.isNotEmpty()) item(key = "res$tab") { ResumeRow(rl, cardW, onResume) }
-                            val wl = watchList.filter { it.kind == kind }
+                            val wl = watchK
                             if (wl.isNotEmpty()) item(key = "wl$tab") { ItemsRow("Meine Liste", wl, cardW, onOpen) { onBrowse(BrowseReq("Meine Liste · $noun", wl, SORT_PLAYLIST)) } }
-                            val recent = hist.filter { it.kind == kind }
+                            val recent = histK
                             if (recent.isNotEmpty()) item(key = "hr$tab") { ItemsRow("Zuletzt geschaut", recent, cardW, onOpen) { onBrowse(BrowseReq("Zuletzt geschaut · $noun", recent, SORT_PLAYLIST)) } }
-                            if (base.isEmpty()) item { EmptyHint("Keine $noun in dieser Playlist") }
-                            if (base.isNotEmpty()) item(key = "new$tab") { ItemsRow("Neu hinzugefügt", base.takeLast(40).reversed(), cardW, onOpen) { onBrowse(BrowseReq("Neu hinzugefügt · $noun", base, SORT_NEW)) } }
+                            if (base.isEmpty()) {
+                                item { EmptyHint("Keine $noun in dieser Playlist") }
+                                item { EmptyHint(CONTENT_MODE_HINT.format(if (isM) "movies" else "series", "live TV only")) }
+                            }
+                            if (base.isNotEmpty()) item(key = "new$tab") { ItemsRow("Neu hinzugefügt", if (isM) newMovies else newSeries, cardW, onOpen) { onBrowse(BrowseReq("Neu hinzugefügt · $noun", base, SORT_NEW)) } }
                             if (top.size >= 8) item(key = "best$tab") { ItemsRow("Top bewertet", top, cardW, onOpen) { onBrowse(BrowseReq("Top bewertet · $noun", top, SORT_RATING)) } }
                             groups.entries.take(12).forEach { (g, l) -> item(key = "G$tab$g") { ItemsRow(g, l, cardW, onOpen) { onBrowse(BrowseReq(g, l, SORT_NEW)) } } }
                             if (groups.size > 12) item { EmptyHint("Weitere Kategorien findest du unter „Kategorien“ oben.") }
 
                         }
                         MenuLogic.FAVS -> {
-                            // Runde 14: neben Sendern auch Filme und Serien (Detailseite > „Zu Favoriten“)
+                            // Round 14: besides channels also movies and series (detail page > "Add to favorites")
                             val favM = Library.favs.mapNotNull { byId[it] }.filter { it.kind == Kind.MOVIE }
                             val favS = Library.favs.mapNotNull { byId[it] }.filter { it.kind == Kind.SERIES }
                             item(key = "favtop") { header(Modifier) }
@@ -550,15 +704,15 @@ fun HomeScreen(
                             }
                             if (favLive.isNotEmpty()) {
                                 item(key = "favh") { RowTitle("Favoriten · Sender", null, null, onAll = null) }
-                                item(key = "favg") { ChannelDetailRows(favLive, ContentFocus.req, onOpen) }
+                                item(key = "favg") { ChannelDetailRows(favLive, ContentFocus.req, onOpen, reorder = favLive) }
                             }
                             if (favM.isNotEmpty()) {
                                 item(key = "favmh") { RowTitle("Favoriten · Filme", null, null, onAll = null) }
-                                item(key = "favm") { CardGridRows(favM, if (General.cardArt == 1) CARD_LAND else CARD_POSTER, if (favLive.isEmpty()) ContentFocus.req else null, onOpen) }
+                                cardGridItems("favm", favM, if (General.cardArt == 1) CARD_LAND else CARD_POSTER, if (favLive.isEmpty()) ContentFocus.req else null, onOpen, reorder = favM)
                             }
                             if (favS.isNotEmpty()) {
                                 item(key = "favsh") { RowTitle("Favoriten · Serien", null, null, onAll = null) }
-                                item(key = "favs") { CardGridRows(favS, if (General.cardArt == 1) CARD_LAND else CARD_POSTER, if (favLive.isEmpty() && favM.isEmpty()) ContentFocus.req else null, onOpen) }
+                                cardGridItems("favs", favS, if (General.cardArt == 1) CARD_LAND else CARD_POSTER, if (favLive.isEmpty() && favM.isEmpty()) ContentFocus.req else null, onOpen, reorder = favS)
                             }
                             val favCats = CatFavs.list.filter { it in liveP }
                             if (favCats.isNotEmpty()) favCats.forEach { g ->
@@ -580,15 +734,15 @@ fun HomeScreen(
                             }
                             if (wm.isNotEmpty()) {
                                 item(key = "mlmh") { RowTitle("Meine Liste · Filme", null, null, onAll = null) }
-                                item(key = "mlm") { CardGridRows(wm, CARD_POSTER, ContentFocus.req, onOpen) }
+                                cardGridItems("mlm", wm, CARD_POSTER, ContentFocus.req, onOpen)
                             }
                             if (ws.isNotEmpty()) {
                                 item(key = "mlsh") { RowTitle("Meine Liste · Serien", null, null, onAll = null) }
-                                item(key = "mls") { CardGridRows(ws, CARD_POSTER, if (wm.isEmpty()) ContentFocus.req else null, onOpen) }
+                                cardGridItems("mls", ws, CARD_POSTER, if (wm.isEmpty()) ContentFocus.req else null, onOpen)
                             }
                         }
                         MenuLogic.VERLAUF -> {
-                            // Zuletzt Angesehenes; bei Serien nur der Serientitel (der Verlauf speichert je Serie eine Zeile)
+                            // Recently watched; for series only the series title (the history stores one line per series)
                             item(key = "vltop") { header(Modifier) }
                             val vm = hist.filter { it.kind == Kind.MOVIE }
                             val vs = hist.filter { it.kind == Kind.SERIES }
@@ -603,11 +757,11 @@ fun HomeScreen(
                             }
                             if (vm.isNotEmpty()) {
                                 item(key = "vlmh") { RowTitle("Verlauf · Filme", null, null, onAll = null) }
-                                item(key = "vlm") { CardGridRows(vm, CARD_POSTER, ContentFocus.req, onOpen) }
+                                cardGridItems("vlm", vm, CARD_POSTER, ContentFocus.req, onOpen)
                             }
                             if (vs.isNotEmpty()) {
                                 item(key = "vlsh") { RowTitle("Verlauf · Serien", null, null, onAll = null) }
-                                item(key = "vls") { CardGridRows(vs, CARD_POSTER, if (vm.isEmpty()) ContentFocus.req else null, onOpen) }
+                                cardGridItems("vls", vs, CARD_POSTER, if (vm.isEmpty()) ContentFocus.req else null, onOpen)
                             }
                         }
                         else -> {
@@ -617,7 +771,7 @@ fun HomeScreen(
                     }
                 } }
             }
-            // Design-Einstellungen: Vorschau steht fest oben rechts, die Einstellungen scrollen darunter weg
+            // Design settings: the preview stays fixed at the top right, the settings scroll away below
             if (DesignPreview.visible) DesignPreviewPanel(Modifier.align(Alignment.TopEnd).padding(top = dpx(84), end = DS.PageX))
         }
         if (picker) {
@@ -632,9 +786,12 @@ fun HomeScreen(
     }
 }
 
+/** Shown when the playlist has no movies/series; most likely its content mode hides them. Args: kind of content, mode name. */
+private const val CONTENT_MODE_HINT = "There are no %s. If there should be some, check Settings > Playlists: the content mode of this playlist may be set to %s."
+
 @Composable
 private fun EmptyHint(text: String) {
-    // Runde 17: Hinweis mit Symbol, größer und ruhiger (statt kleiner grauer Zeile)
+    // Round 17: notice with icon, larger and calmer (instead of a small gray line)
     Row(Modifier.padding(horizontal = DS.PageX, vertical = dpx(20)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dpx(14))) {
         AppIcon(AIcon.Info, Accent2, size = dpx(26))
         Text(text, color = Tok.TextMid, fontSize = spx(19))
@@ -651,7 +808,7 @@ private fun ItemsRow(
     firstReq: FocusRequester? = null, style: Int = -1,
     upReq: FocusRequester? = null, leftReq: FocusRequester? = null, onAll: () -> Unit
 ) {
-    // Nach „Alle anzeigen“ und Zurück: Fokus wieder auf den Link dieser Reihe
+    // After "Show all" and back: focus the link of this row again
     val key = NavState.tab.toString() + "|" + title
     val headerReq = remember { FocusRequester() }
     val firstCard = firstReq ?: remember { FocusRequester() }
@@ -662,7 +819,7 @@ private fun ItemsRow(
             PillMemory.key = null
         }
     }
-    // Bildart aus „Ansicht“ (Standard: Cover); Top 10 immer Cover
+    // Picture type from "View" (default: cover); Top 10 always cover
     val st = if (style >= 0) style else if (General.cardArt == 1) CARD_LAND else CARD_POSTER
     CardRow(title, list, st, onOpen, { PillMemory.key = key; onAll() }, RowStates.get("${NavState.tab}|$title"), headerReq, firstCard,
         upReq = upReq, leftReq = leftReq)
@@ -706,7 +863,7 @@ private fun ResumeRow(list: List<Pair<Entry, Item>>, cardW: Int, onResume: (Entr
     }
 }
 
-/** Breite Karte im Querformat (Backdrop) mit Titel und Fortschrittsbalken, wie bei "Weiterschauen" in Netflix. */
+/** Wide landscape card (backdrop) with title and progress bar, like "Continue watching" in Netflix. */
 @Composable
 private fun WideCard(item: Item, sub: String?, progress: Float, modifier: Modifier, onClick: () -> Unit) {
     val m = rememberMeta(item)
@@ -720,7 +877,7 @@ private fun WideCard(item: Item, sub: String?, progress: Float, modifier: Modifi
                 .background(Brush.linearGradient(listOf(colorFor(item).copy(alpha = .75f), Surf2)))
                 .border(DS.FocusBorder, if (f) Accent2 else Color.Transparent, shape)
         ) {
-            if (img != null) AsyncImage(img, item.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            if (img != null) ArtImage(img, item.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color(0xDD000000))))
             AppIcon(AIcon.Play, Color.White, Modifier.align(Alignment.Center), 30.dp)
             Text(raw = true, text = item.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -733,10 +890,10 @@ private fun WideCard(item: Item, sub: String?, progress: Float, modifier: Modifi
     }
 }
 
-/** Zweiter Knopf im großen Bild („Mehr Infos“ / „Zur Liste“): Ziel für Links aus „Alle anzeigen“ der ersten Reihe. */
+/** Second button in the big picture ("More info" / "To list"): target for Left from "Show all" of the first row. */
 object HeroFocus { val second = FocusRequester() }
 
-/** Wie weit das große Bild nach oben geschoben ist (für den Parallax-Effekt); 0, wenn es nicht mehr oben steht. */
+/** How far the big picture is pushed up (for the parallax effect); 0 when it is no longer at the top. */
 private fun heroScroll(st: LazyListState): Int = if (st.firstVisibleItemIndex == 0) st.firstVisibleItemScrollOffset else 0
 
 @Composable
@@ -751,20 +908,20 @@ private fun Hero(
     }
     val item = featured[idx.coerceIn(0, featured.lastIndex)]
 
-    // Bild über die ganze Breite (auch hinter der Kopfzeile), links und unten in den Hintergrund ausgeblendet.
-    // Runde 14: ohne Pfeile; die Beschreibung hat mehr Breite (bis etwa zur Bildmitte) und wird nicht mehr abgeschnitten (max. 250 Zeichen).
-    // Runde 17c: Parallax beim Scrollen (der Dauer-Zoom wurde wegen der Leistung entfernt)
+    // Picture across the full width (also behind the header), faded into the background at the left and bottom.
+    // Round 14: without arrows; the description has more width (up to about the middle of the picture) and is no longer cut off (max. 250 characters).
+    // Round 17c: parallax while scrolling (the constant zoom was removed for performance)
     Box(Modifier.fillMaxWidth().height(heroH).background(Bg).clipToBounds().onFocusChanged { if (it.hasFocus) Billboard.cardFocus = false }) {
         Crossfade(item, animationSpec = tween(1100), label = "heroBg") { c ->
             val m = rememberMeta(c)
-            // 17c: ruhiges Bild (kein Dauer-Zoom mehr, der den Fire TV ständig neu zeichnen ließ); nur leichter Parallax beim Scrollen
+            // 17c: calm picture (no constant zoom any more, which made the Fire TV redraw constantly); only slight parallax while scrolling
             Box(Modifier.fillMaxSize().graphicsLayer {
                 translationY = if (Look.motion == 0) 0f else scrollY() * 0.4f
             }) {
-                m?.backdrop?.let { AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alignment = Alignment.TopEnd) }
+                m?.backdrop?.let { ArtImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alignment = Alignment.TopEnd) }
             }
         }
-        // Verläufe: links und unten in den Hintergrund, oben dezent hinter der Kopfzeile; zusätzlich eine weiche Vignette
+        // Gradients: left and bottom into the background, subtle at the top behind the header; plus a soft vignette
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Bg, 0.28f to Bg.copy(alpha = .9f), 0.5f to Bg.copy(alpha = .45f), 0.72f to Color.Transparent)))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Bg.copy(alpha = .55f), 0.22f to Color.Transparent, 0.62f to Color.Transparent, 0.88f to Bg.copy(alpha = .85f), 1f to Bg)))
         Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.Transparent, Bg.copy(alpha = .35f)), radius = 2200f)))
@@ -774,7 +931,7 @@ private fun Hero(
             verticalArrangement = Arrangement.spacedBy(dpx(10))
         ) {
             Crossfade(item, animationSpec = tween(500), label = "heroText") { c ->
-                // mit IMDb- und Rotten-Tomatoes-Wertung (wird beim ersten Mal nachgeladen, danach auf dem Gerät gemerkt)
+                // with IMDb and Rotten Tomatoes rating (fetched the first time, then remembered on the device)
                 val m = rememberFullMeta(c, rememberMeta(c))
                 Column(verticalArrangement = Arrangement.spacedBy(dpx(if (home) 10 else 8))) {
                     Kicker(Lang.tr(kindLabel(c.kind)) + (qualityOf(c)?.let { q -> "  ·  " + q.uppercase() } ?: ""))
@@ -805,13 +962,13 @@ private fun Hero(
             Modifier.align(Alignment.BottomEnd).padding(end = dpx(if (home) 33 else 42), bottom = dpx(if (home) 30 else 20)),
             horizontalArrangement = Arrangement.spacedBy(dpx(12)), verticalAlignment = Alignment.CenterVertically
         ) {
-            // Aktiver Punkt füllt sich bis zum nächsten Wechsel (zeigt, wann das Bild wechselt)
+            // Active dot fills up until the next change (shows when the picture changes)
             val prog = remember(idx) { androidx.compose.animation.core.Animatable(0f) }
             LaunchedEffect(idx, General.heroSec) {
                 if (General.heroSec > 0) prog.animateTo(1f, tween(General.heroSec * 1000, easing = androidx.compose.animation.core.LinearEasing))
             }
             featured.indices.forEach { i ->
-                // 17c: Fortschritt nur gezeichnet (kein Neuaufbau in jedem Bild)
+                // 17c: progress only drawn (no rebuild on every frame)
                 if (i == idx) Box(Modifier.width(dpx(40)).height(dpx(7)).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = .3f))) {
                     Box(Modifier.fillMaxSize().graphicsLayer {
                         scaleX = if (General.heroSec > 0) prog.value.coerceIn(0.08f, 1f) else 1f
@@ -835,4 +992,14 @@ private fun SkeletonHome() {
             repeat(5) { Box(Modifier.width(150.dp).height(225.dp).clip(RoundedCornerShape(DS.RadiusM)).background(col)) }
         }
     }
+}
+
+/** Background and info of the selected title. Reads the fade value only here and in layer lambdas, so fading does not recompose the home screen. */
+@Composable
+private fun BillboardLayer(fade: () -> Float, item: State<Item?>, infoMod: Modifier) {
+    val shown by remember { derivedStateOf { fade() > 0.01f } }
+    if (!shown) return
+    val bi = item.value
+    BillboardBackdrop(bi, Modifier.fillMaxSize().graphicsLayer { alpha = fade() })
+    bi?.let { BillboardInfo(it, infoMod.graphicsLayer { alpha = fade(); translationY = (1f - fade()) * 20.dp.toPx() }) }
 }

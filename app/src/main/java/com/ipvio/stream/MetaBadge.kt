@@ -25,12 +25,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
 
-/** Breite der Anzeige, damit Kopfzeilen rechts Platz lassen können. */
+/** Width of the display so headers can leave room on the right. */
 val MetaBadgeWidth = 250.dp
 
 /**
- * Dezente Fortschrittsanzeige oben rechts, solange Genres und Länder im Hintergrund erkannt werden.
- * Ruhig gehalten: dunkle Kapsel, kleiner Fortschrittsring, zwei Zeilen Text. Blendet weich ein und aus.
+ * Subtle progress indicator at the top right while genres and countries are detected in the background.
+ * Kept calm: dark capsule, small progress ring, two lines of text. Fades in and out softly.
  */
 @Composable
 fun MetaBadge(modifier: Modifier = Modifier) {

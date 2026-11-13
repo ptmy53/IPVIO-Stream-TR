@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class Person(val id: Int, val name: String, val role: String?, val photo: String?)
 data class Credits(val cast: List<Person>, val directors: List<Person>, val similar: List<Ref>)
-/** [from] = Titel, von dem aus die Person geöffnet wurde (steht auf ihrer Seite immer dabei, Runde 14). */
+/** [from] = title from which the person was opened (always included on their page, round 14). */
 data class PersonRef(val id: Int, val name: String, val photo: String?, val from: String? = null)
 data class PersonInfo(
     val id: Int, val name: String, val bio: String?, val photo: String?,
@@ -23,7 +23,7 @@ data class PersonInfo(
 
 private fun JSONObject.s(k: String): String? = if (!has(k) || isNull(k)) null else optString(k).ifBlank { null }
 
-/** Besetzung, Regie, ähnliche Titel und Personenseiten über TMDB (mit dem eigenen TMDB-Schlüssel der Nutzer). */
+/** Cast, director, similar titles and person pages via TMDB (with the user's own TMDB key). */
 object CreditsRepo {
     private const val IMG = "https://image.tmdb.org/t/p/"
     private const val TTL = 14L * 24 * 3600 * 1000
@@ -32,10 +32,10 @@ object CreditsRepo {
     private val persons = ConcurrentHashMap<String, PersonInfo>()
     var lastError by mutableStateOf<String?>(null)
 
-    /** Bei Speicherknappheit leeren (alles liegt auch als Datei vor). */
+    /** Clear on memory shortage (everything is also available as a file). */
     fun trim() { mem.clear(); persons.clear() }
 
-    /** Eine Person nur einmal (mehrere Rollen zusammengefasst) – doppelte IDs ließen die Besetzungsreihe abstürzen. */
+    /** A person only once (several roles merged) – duplicate IDs made the cast row crash. */
     private fun dedupe(list: List<Person>): List<Person> =
         CastLogic.mergeById(list, { it.id }) { a, b ->
             val roles = listOfNotNull(a.role, b.role).distinct()

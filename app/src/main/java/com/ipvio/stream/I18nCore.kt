@@ -1,9 +1,9 @@
 package com.ipvio.stream
 
 /**
- * Übersetzungskern (ohne Android, testbar). Quelltexte sind die deutschen Oberflächentexte.
- * Zeilenformat: de ¦ en ¦ tr ¦ bs ¦ hr ¦ sr ¦ es ¦ fr ¦ it ¦ nl   (hr/sr leer = wie bs; andere leer = wie en)
- * Platzhalter: {0} beliebiger Text, {#0} Zahl. Ein Zeilenumbruch wird als \n geschrieben.
+ * Translation core (without Android, testable). Source texts are the German UI texts.
+ * Line format: de ¦ en ¦ tr ¦ bs ¦ hr ¦ sr ¦ es ¦ fr ¦ it ¦ nl   (hr/sr empty = same as bs; others empty = same as en)
+ * Placeholders: {0} any text, {#0} number. A line break is written as \n.
  */
 object I18nCore {
     val CODES = listOf("de", "en", "tr", "bs", "hr", "sr", "es", "fr", "it", "nl")
@@ -16,7 +16,7 @@ object I18nCore {
     private val pats = ArrayList<Pat>()
     private val memo = Array(CODES.size) { java.util.concurrent.ConcurrentHashMap<String, String>() }
     private val PH = Regex("""\{(#?)(\d)\}""")
-    // Umrahmende Leerzeichen und Pfeilzeichen (‹ ›) gehören nicht zum Text, der übersetzt wird
+    // Surrounding spaces and arrow characters (‹ ›) are not part of the text that gets translated
     private val DECO = Regex("""(?s)^([‹›\s]*)(.*?)([\s‹›]*)$""")
     private val DOT = Regex("""\s*·\s*""")
 
@@ -48,7 +48,7 @@ object I18nCore {
                     last = m.range.last + 1
                 }
                 sb.append(Regex.escape(de.substring(last))).append("$")
-                // Platzhalter-Nummern in Reihenfolge des Auftretens (0,1,2 …)
+                // Placeholder numbers in order of appearance (0,1,2 …)
                 pats.removeAll { it.src == de }
                 pats.add(Pat(de, Regex(sb.toString(), RegexOption.DOT_MATCHES_ALL), row, numeric.toBooleanArray()))
             } else exact[de] = row
@@ -58,7 +58,7 @@ object I18nCore {
         for (m in memo) m.clear()
     }
 
-    /** Ergänzt eine einzelne Sprachspalte (Zeilen "Deutsch¦Übersetzung") zu bereits geladenen Zeilen. */
+    /** Adds a single language column (rows "German¦translation") to already loaded rows. */
     @Synchronized
     fun loadColumn(li: Int, vararg blocks: String) {
         for (b in blocks) for (line in b.lineSequence()) {
@@ -102,7 +102,7 @@ object I18nCore {
             }
             return out
         }
-        // Zusammengesetzte Texte: "A · B" und "Name: Wert"
+        // Composite texts: "A · B" and "Name: Value"
         val seps = DOT.findAll(s).toList()
         if (seps.isNotEmpty()) {
             val parts = ArrayList<String>()
@@ -126,7 +126,7 @@ object I18nCore {
         return null
     }
 
-    /** Sprachindex für einen Gerätesprach-Code (z. B. "tr"); unbekannt → Englisch. */
+    /** Language index for a device language code (e.g. "tr"); unknown → English. */
     fun indexForSystem(code: String): Int {
         val i = CODES.indexOf(code.lowercase())
         return if (i >= 0) i else 1

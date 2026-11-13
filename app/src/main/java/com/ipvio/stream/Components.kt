@@ -22,7 +22,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 
 private val palette = listOf(
     0xFF7C5CFF, 0xFF00B8AE, 0xFFE0566B, 0xFFE59A2F, 0xFF3F8EE8, 0xFFA855F7
@@ -44,9 +43,19 @@ fun rememberMetaState(item: Item): MetaState {
         mutableStateOf(m != null || !MetaRepo.enabled() || item.kind == Kind.LIVE || MetaRepo.missed(item))
     }
     LaunchedEffect(item.id) {
-        if (m == null && !done) { m = MetaRepo.basic(ctx, item); done = true }
-        // Aus dem schlanken Zwischenspeicher fehlt die Beschreibung: den vollständigen Eintrag (Speicher oder Gerät) nachladen
-        else m?.let { cur -> if (cur.overview == null && cur.tmdbId > 0) MetaRepo.basic(ctx, item)?.let { m = it } }
+        if (m == null && !done) {
+            // Short pause: cards that only fly past while scrolling start no TMDB search (the effect is cancelled)
+            kotlinx.coroutines.delay(250)
+            m = MetaRepo.basic(ctx, item); done = true
+        }
+        // The slim cache lacks the description: reload the full entry from the device, but only for cards that stay
+        // on screen. Before, every card read its file and recomposed while a grid was scrolled.
+        else m?.let { cur ->
+            if (cur.overview == null && cur.tmdbId > 0) {
+                kotlinx.coroutines.delay(700)
+                MetaRepo.basic(ctx, item)?.let { m = it }
+            }
+        }
     }
     return MetaState(m, done)
 }
@@ -106,7 +115,7 @@ fun Badge(text: String, bg: Color = Color(0x26FFFFFF), fg: Color = Color.White, 
     }
 }
 
-/** Bewertung als Abzeichen: Stern-Symbol + Zahl. */
+/** Rating as a badge: star symbol + number. */
 @Composable
 fun RatingBadge(r: Double, bg: Color = DS.Scrim) = Badge(String.format("%.1f", r), bg, DS.Gold, AIcon.Star)
 
@@ -125,17 +134,17 @@ fun SectionHeader(title: String) {
     }
 }
 
-/** Untertitel einer Serienkarte: „5 Staffeln · 62 Folgen“. */
+/** Subtitle of a series card, e.g. "5 Staffeln · 62 Folgen" (German key text). */
 fun seriesInfo(item: Item): String {
-    // Serie mit Platzhalter: Staffeln und Folgen sind noch nicht bekannt (werden beim Öffnen geladen)
-    if (XtreamLogic.isLazy(item)) return ""
+    // Series with a placeholder: seasons and episodes are not known yet (loaded on opening)
+    if (XtreamLogic.isLazy(item) || StalkerLogic.isLazy(item)) return ""
     val sc = seasonCount(item)
     val ec = item.episodes.size
     val a = if (sc == 1) "1 Staffel" else "$sc Staffeln"
     return if (ec <= 0) a else a + " · " + (if (ec == 1) "1 Folge" else "$ec Folgen")
 }
 
-/** Für Karten reicht die kleinere TMDB-Bildgröße (w342 statt w500): weniger Daten, schneller geladen, weniger Speicher. */
+/** For cards the smaller TMDB image size is enough (w342 instead of w500): less data, faster, less memory. */
 fun cardPoster(url: String): String = url.replace("/t/p/w500/", "/t/p/w342/")
 
 @Composable
@@ -163,8 +172,8 @@ fun PosterCard(
         modifier.graphicsLayer { scaleX = s; scaleY = s }
             .onFocusChanged { f = it.isFocused; if (it.isFocused) onFocus() }
             .clickable(onClick = onClick)
-            // Platz unter dem Untertitel gehört zur Karte: beim Scrollen zur markierten Karte bleibt so auch die
-            // vergrößerte Karte (Fokus) ganz im Bild, statt unten abgeschnitten zu werden
+            // The space below the subtitle belongs to the card: when scrolling to the focused card, the
+            // enlarged card (focus) also stays fully in view instead of being cut off at the bottom
             .padding(bottom = 14.dp)
     ) {
         Box(
@@ -173,15 +182,15 @@ fun PosterCard(
                 .border(DS.FocusBorder, border, shape),
             contentAlignment = Alignment.Center
         ) {
-            // Runde 17: Platzhalter (Verlauf, Initialen, Symbol, Titel) unter dem Bild, bleibt sichtbar wenn es fehlt oder nicht lädt
+            // Round 17: placeholder (gradient, initials, icon, title) below the image, stays visible if it is missing or does not load
             if ((!live && (st.done || img != null)) || (live && img == null && st.done)) ArtPlaceholder(item, Modifier.fillMaxSize())
-            if (img != null) AsyncImage(
+            if (img != null) ArtImage(
                 img, item.title,
                 if (live) Modifier.fillMaxSize().padding(20.dp) else Modifier.fillMaxSize(),
                 contentScale = if (live) ContentScale.Fit else ContentScale.Crop
             )
             Box(Modifier.align(Alignment.TopStart).padding(8.dp)) {
-                // Gestört (beim Abspielen „nicht mehr vorhanden“ bzw. mehrmals gescheitert): Warnsymbol statt Art
+                // Broken (on playback "no longer available" or failed several times): warning icon instead of artwork
                 if (item.kind != Kind.SERIES && DeadLinks.isDead(item.url)) Badge("Gestört", DS.Scrim, DS.Gold, AIcon.Warning) else Badge(kindLabel(item.kind), DS.Scrim)
             }
             qualityOf(item)?.let { Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { QualityBadge(it) } }
@@ -229,7 +238,7 @@ fun LiveCard(item: Item, onClick: () -> Unit, modifier: Modifier = Modifier) {
                 .background(Brush.linearGradient(listOf(colorFor(item).copy(alpha = .8f), Surf2))),
             contentAlignment = Alignment.Center
         ) {
-            if (item.logo != null) AsyncImage(item.logo, item.title, Modifier.fillMaxSize().padding(20.dp), contentScale = ContentScale.Fit)
+            if (item.logo != null) ArtImage(item.logo, item.title, Modifier.fillMaxSize().padding(20.dp), contentScale = ContentScale.Fit)
             else Text(raw = true, text = item.title.take(2).uppercase(), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
             Text("LIVE", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.TopStart).padding(10.dp).clip(RoundedCornerShape(DS.RadiusXs))

@@ -1,17 +1,32 @@
 package com.ipvio.stream
 
 /**
- * Erkennt die Sprache eines Eintrags aus den Kennzeichnungen des Anbieters (ohne Android, testbar).
+ * Detects the language of an entry from the provider's tags (without Android, testable).
  *
- * IPTV-Anbieter markieren die Tonspur fast immer in der Kategorie oder im Namen, z. B. "DE | Action",
- * "|TR| Filmler", "VOD - EN - Comedy", "Netflix [GER]", "TÜRK FILMLERI" oder "DE: Das Erste HD".
- * Das ist die Sprache der Tonspur (deutsch synchronisiert), nicht das Herkunftsland des Films.
- * Die echte Tonspur lässt sich erst beim Abspielen lesen – für 100.000+ Titel ist die Kennzeichnung der einzige Weg.
+ * IPTV providers almost always mark the audio track in the category or in the name, e.g. "DE | Action",
+ * "|TR| Filmler", "VOD - EN - Comedy", "Netflix [GER]", "TÜRK FILMLERI" or "DE: Das Erste HD".
+ * That is the language of the audio track (dubbed into German), not the country of origin of the movie.
+ * The real audio track can only be read when playing – for 100,000+ titles the tag is the only way.
  */
 object LangTagLogic {
     const val UNKNOWN = "?"
+    /** Own "language" for adult categories (Wishbox): they no longer land in a real language or in "untagged". */
+    const val ADULT = "xxx"
 
-    /** Kürzel → Sprache. Mehrdeutige Kürzel (IN, AL, NO, CA, SE, BE, MY) bewusst weggelassen: "beIN Sports", "Al Jazeera" … */
+    /**
+     * Content mode of a playlist (see PlaylistMode) travels with the hidden languages as two pseudo codes. That way it is
+     * applied while parsing and while reading the cache, and a changed mode makes the stored cache (which remembers its
+     * hidden set) invalid, so the list is parsed again from the stored file.
+     */
+    const val NO_LIVE = "~live"
+    const val NO_VOD = "~vod"
+    val PSEUDO = setOf(NO_LIVE, NO_VOD)
+
+    /** Is an entry of this language and kind left out? */
+    fun hides(hidden: Set<String>, lang: String, kind: Kind): Boolean =
+        lang in hidden || (if (kind == Kind.LIVE) NO_LIVE in hidden else NO_VOD in hidden)
+
+    /** Abbreviation → language. Ambiguous abbreviations (IN, AL, NO, CA, SE, BE, MY) deliberately left out: "beIN Sports", "Al Jazeera" … */
     private val CODES = mapOf(
         "DE" to "de", "GER" to "de", "DEU" to "de", "AT" to "de", "CH" to "de",
         "EN" to "en", "ENG" to "en", "UK" to "en", "GB" to "en", "US" to "en", "USA" to "en",
@@ -44,7 +59,7 @@ object LangTagLogic {
         "VN" to "vi", "TH" to "th", "PH" to "tl"
     )
 
-    /** Ganze Wörter → Sprache. */
+    /** Whole words → language. */
     private val WORDS = mapOf(
         "GERMAN" to "de", "GERMANY" to "de", "DEUTSCH" to "de", "DEUTSCHE" to "de", "DEUTSCHLAND" to "de", "ALLEMAGNE" to "de",
         "ENGLISH" to "en",
@@ -72,7 +87,7 @@ object LangTagLogic {
         "PAKISTAN" to "ur", "VIETNAM" to "vi", "THAILAND" to "th", "PHILIPPINES" to "tl"
     )
 
-    /** Anzeige-Namen in der jeweiligen Sprache selbst, so erkennt jeder seine Sprache sofort. */
+    /** Display names in the respective language itself, so everyone recognizes their language immediately. */
     val NAMES = linkedMapOf(
         "de" to "Deutsch", "en" to "English", "tr" to "Türkçe", "ar" to "العربية", "fr" to "Français",
         "es" to "Español", "it" to "Italiano", "nl" to "Nederlands", "pl" to "Polski", "pt" to "Português",
@@ -80,14 +95,14 @@ object LangTagLogic {
         "yu" to "Ex-YU / Balkan", "el" to "Ελληνικά", "ro" to "Română", "hu" to "Magyar", "cs" to "Čeština",
         "sv" to "Svenska", "da" to "Dansk", "nb" to "Norsk", "fi" to "Suomi", "fa" to "فارسی", "ku" to "Kurdî",
         "he" to "עברית", "uk" to "Українська", "bg" to "Български", "ur" to "اردو", "vi" to "Tiếng Việt",
-        "th" to "ไทย", "tl" to "Filipino"
+        "th" to "ไทย", "tl" to "Filipino", ADULT to "18+"
     )
 
     fun name(code: String): String = NAMES[code] ?: code.uppercase()
 
     private val SPLIT = Regex("""[^\p{L}0-9]+""")
 
-    /** Sprache aus einem Text oder null. Prüft die ersten zwei Wörter, das letzte Wort und bekannte Sprachwörter. */
+    /** Language from a text or null. Checks the first two words, the last word and known language words. */
     fun detect(text: String): String? {
         if (text.isBlank()) return null
         val t = text.uppercase().split(SPLIT).filter { it.isNotEmpty() }
@@ -98,22 +113,22 @@ object LangTagLogic {
         return null
     }
 
-    // Kennung am Anfang ("DE | Titel", "[DE] Titel", "DE: Titel", "DE - Titel") oder am Ende ("Titel [DE]", "Titel (GER)")
+    // Tag at the start ("DE | Title", "[DE] Title", "DE: Title", "DE - Title") or at the end ("Title [DE]", "Title (GER)")
     private val TAG_START = Regex("""^\W*([A-Za-z]{2,4})\s*([|:\]]|[-–]\s)""")
     private val TAG_END = Regex("""[\[(|]\s*([A-Za-z]{2,4})\s*[\])|]?\s*$""")
-    /** Kürzel, die auch englische Wörter sind ("IT – Welcome to Derry", "Us - …"): nur mit | : oder Klammer gültig. */
+    /** Abbreviations that are also English words ("IT – Welcome to Derry", "Us - …"): valid only with | : or brackets. */
     private val WORDLIKE = setOf("IT", "US", "AT", "UK", "DE", "ES")
 
     private val DASH_TAG = Regex("""^\s*([A-Za-z]{2,4})\s*[-–]\s+""")
 
-    /** Entfernt eine Sprachkennung mit Bindestrich am Anfang ("EN - Titel" → "Titel"), damit Titel und TMDB-Suche sauber sind. */
+    /** Removes a language tag with a dash at the start ("EN - Title" → "Title") so title and TMDB search are clean. */
     fun stripDashTag(name: String): String {
         val m = DASH_TAG.find(name) ?: return name
         val code = m.groupValues[1].uppercase()
         return if (code in CODES && code !in WORDLIKE) name.substring(m.range.last + 1) else name
     }
 
-    /** Sprache aus einer ausdrücklichen Kennung im (unbereinigten) Film- oder Serientitel, sonst null. */
+    /** Language from an explicit tag in the (uncleaned) movie or series title, otherwise null. */
     fun detectTagged(name: String): String? {
         TAG_START.find(name)?.let { m ->
             val code = m.groupValues[1].uppercase()
@@ -125,13 +140,14 @@ object LangTagLogic {
     }
 
     /**
-     * Sprache eines Eintrags: zuerst aus der Kategorie (zuverlässig), bei Live-Sendern sonst aus dem Sendernamen,
-     * bei Filmen und Serien nur aus einer ausdrücklichen Kennung im Originalnamen der Playlist ("DE | …", "… [GER]").
+     * Language of an entry: first from the category (reliable), for live channels otherwise from the channel name,
+     * for movies and series only from an explicit tag in the playlist's original name ("DE | …", "… [GER]").
      */
     fun of(group: String, title: String, live: Boolean): String =
-        detect(group) ?: (if (live) detect(title) else detectTagged(title)) ?: UNKNOWN
+        if (ParentalLogic.isAdult(group, "")) ADULT
+        else detect(group) ?: (if (live) detect(title) else detectTagged(title)) ?: UNKNOWN
 
-    /** Verborgene Sprachen als Text speichern und wieder lesen. */
+    /** Store hidden languages as text and read them again. */
     fun encode(hidden: Set<String>): String = hidden.sorted().joinToString(",")
     fun decode(s: String?): Set<String> = (s ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 }

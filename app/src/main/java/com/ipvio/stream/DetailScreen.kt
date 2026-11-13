@@ -68,16 +68,16 @@ fun openExternal(ctx: Context, url: String, title: String) {
 
 private val QORDER = listOf("4K", "FHD", "HD")
 
-/** Position der ersten Folge in der Liste der Detailseite (0 = Kopf, 1 = Staffeln/Abschnitte). */
-/** Position des Folgen-Bereichs (Staffeln links, Folgen rechts) in der Seitenliste: 0 = Kopf, 1 = Folgen */
+/** Position of the first episode in the detail page list (0 = header, 1 = seasons/sections). */
+/** Position of the episodes area (seasons left, episodes right) in the page list: 0 = header, 1 = episodes */
 private const val EP_PANE = 1
 
-/** Bis zu dieser Länge wird die Beschreibung immer ganz angezeigt (kein „Mehr lesen“). */
+/** Up to this length the description is always shown completely (no "Read more"). */
 private const val FULL_TEXT_CHARS = 800
 
 /**
- * Detailseite. Serien mit Platzhalter (Folgen werden erst beim Öffnen geladen, siehe [LazySeries]) holen ihre Folgen zuerst;
- * solange das läuft, zeigt die Seite einen Spinner, bei einem Fehler „Erneut versuchen“.
+ * Detail page. Series with a placeholder (episodes are only loaded on opening, see [LazySeries]) fetch their episodes first;
+ * while that runs, the page shows a spinner, on an error "Try again".
  */
 @Composable
 fun DetailScreen(
@@ -88,7 +88,7 @@ fun DetailScreen(
 ) {
     val ctx = LocalContext.current
     var tryNo by remember(item.id) { mutableIntStateOf(0) }
-    // Kino-Vorschau ohne Knöpfe (nur Infos) braucht die Folgen nicht
+    // Cinema preview without buttons (info only) does not need the episodes
     val need = LazySeries.isStub(item) && showActions
     var full by remember(item.id) { mutableStateOf(LazySeries.full(item).takeIf { it !== item }) }
     var failed by remember(item.id) { mutableStateOf(false) }
@@ -109,6 +109,11 @@ fun DetailScreen(
                 } else {
                     Text(item.title, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                     Text("Die Folgen konnten nicht geladen werden. Verbindung oder Zugang prüfen.", color = Muted, fontSize = 17.sp)
+                    // Stalker portal: what the portal answered (masked), so the cause can be found
+                    if (StalkerLogic.isLazy(item) && StalkerApi.lastSeriesDetail.isNotEmpty()) {
+                        Text(StalkerApi.lastSeriesDetail, color = Muted, fontSize = 12.sp, raw = true, maxLines = 6,
+                            modifier = Modifier.widthIn(max = 760.dp))
+                    }
                     PillButton("Erneut versuchen", Modifier.focusRequester(retry)) { tryNo++ }
                     if (!embedded) PillButton("Zurück", light = true) { onBack() }
                 }
@@ -127,9 +132,9 @@ fun DetailScreen(
 private fun DetailScreenFull(
     item: Item, all: List<Item>, onPlay: (String, String, Long) -> Unit,
     onPerson: (PersonRef) -> Unit, onOpenItem: (Item) -> Unit, onBack: () -> Unit,
-    // Kino-Ansicht: eingebettet unter der Titelreihe (kein eigener Zurück-Knopf, kein automatischer Fokus, Hoch am Kopf gibt weiter)
+    // Cinema view: embedded below the title row (no own back button, no automatic focus, Up at the header passes on)
     embedded: Boolean = false, autoFocus: Boolean = true, onTopUp: (() -> Unit)? = null,
-    // false = nur Infos (Kino-Vorschau): keine Knöpfe, keine Staffel-Leiste
+    // false = info only (cinema preview): no buttons, no season bar
     showActions: Boolean = true
 ) {
     val ctx = LocalContext.current
@@ -150,22 +155,24 @@ private fun DetailScreenFull(
         val m = meta
         value = if (m != null && m.tmdbId > 0) CreditsRepo.credits(ctx, m) else null
     }
-    // Abgleich mit der ganzen Playlist im Hintergrund (beim ersten Mal wird dafür ein Index aufgebaut)
+    // Match against the whole playlist in the background (an index is built the first time)
     val similar by produceState(emptyList<Item>(), credits, all) {
         val c = credits ?: return@produceState
         value = withContext(Dispatchers.Default) { LibMatch.matches(all, c.similar, 30).filter { s -> s.id != item.id } }
     }
 
     val seasons = remember(item) { item.episodes.map { it.season }.distinct().sorted() }
-    // Fortsetzen-Punkt: die Seite öffnet bei dieser Staffel und dem Abschnitt mit dieser Folge
+    // Resume point: the page opens at this season and the section with this episode
     val resume = WatchStore.entries.firstOrNull { it.itemId == item.id }
     val resumeSE = remember(resume) { resume?.let { r -> if (r.season > 0 || r.ep > 0) r.season to r.ep else ResumeLogic.seasonEp(r.title) } }
-    // Zurück aus dem Player: bei genau der Folge öffnen, die zuletzt lief (einmalig), sonst beim Fortsetzen-Punkt
+    // Back from the player: open at exactly the episode that played last (once), otherwise at the resume point
     val retSE = remember(item.id) { DetailReturn.take(item.id)?.takeIf { it.first > 0 || it.second > 0 } }
     val startSE = retSE ?: resumeSE
     var season by remember(item.id) { mutableIntStateOf(startSE?.first?.takeIf { it in seasons } ?: seasons.firstOrNull() ?: 1) }
     val eps = remember(item, season) { item.episodes.filter { it.season == season } }
-    val progress = remember(item.id) { EpProgress.of(ctx, item.id) }
+    // Counter: raised after marking by hand so that checkmarks and buttons redraw
+    var progVer by remember(item.id) { mutableIntStateOf(0) }
+    val progress = remember(item.id, progVer) { EpProgress.of(ctx, item.id).toMap() }
 
     val saved = remember(item.id) { VariantPref.get(ctx, item.id) }
     var prefQ by remember(item.id) { mutableStateOf(saved.first) }
@@ -176,12 +183,12 @@ private fun DetailScreenFull(
     val langs = remember(item) { allVars.mapNotNull { it.lang }.distinct().sorted() }
     val labels = remember(item) { allVars.map { it.label }.filter { it.isNotBlank() }.distinct() }
     val multi = item.kind == Kind.SERIES && item.episodes.any { it.variants.size > 1 }
-    // Filme: derselbe Film in anderen Qualitäten (eigene Einträge des Anbieters)
+    // Movies: the same movie in other qualities (own entries of the provider)
     val movieAlts by produceState(listOf(item), item, all) {
         if (item.kind == Kind.MOVIE) value = withContext(Dispatchers.Default) { Sources.alternatives(item, all) }
     }
     val movieQs = remember(movieAlts) { QORDER.filter { q -> movieAlts.any { it.quality == q } } }
-    // Runde 14: Quelle eines Films fest wählen (gleicher Film mehrfach in der Playlist, z. B. HD und 4K)
+    // Round 14: choose the source of a movie explicitly (same movie several times in the playlist, e.g. HD and 4K)
     val movieVars: List<Variant> = remember(movieAlts) { Sources.asVariants(movieAlts) }
 
     fun save() = VariantPref.set(ctx, item.id, prefQ, prefLang, prefLabel)
@@ -193,7 +200,7 @@ private fun DetailScreenFull(
     val tmdbId = meta?.tmdbId
     val imdbId = meta?.imdbId
     val isTv = meta?.isTv == true
-    // Lange Staffeln (One Piece & Co.): TMDB-Staffeln holen, um sie als Abschnitte zu nutzen
+    // Long seasons (One Piece & co.): fetch TMDB seasons to use them as sections
     val needTmdbSeasons = remember(item) {
         item.kind == Kind.SERIES && item.episodes.groupBy { it.season }.values.any { it.size > EpisodeLogic.LONG || it.first().num > 1 }
     }
@@ -202,12 +209,12 @@ private fun DetailScreenFull(
         if (needTmdbSeasons && isTv && id != null && id > 0) value = MetaRepo.tvSeasons(ctx, id)
     }
     val groups = remember(eps, season, tmdbSeasons) { EpisodeLogic.groups(eps, season, seasons.size, tmdbSeasons) }
-    // Beim Staffelwechsel nach links: im letzten Abschnitt landen; „Gehe zu Folge“ in einer anderen Staffel: dort hinspringen
+    // On season change to the left: land in the last section; "Go to episode" in another season: jump there
     val enterAtEnd = remember { booleanArrayOf(false) }
     val pendingNum = remember { intArrayOf(-1) }
-    // Staffelwechsel mit Rechts: bei Folge 1 der neuen Staffel beginnen (nicht bei der zuletzt gesehenen)
+    // Season change with Right: start at episode 1 of the new season (not at the last watched)
     val startFirst = remember { booleanArrayOf(false) }
-    // Position in der Staffel, bei der die Liste steht – der angezeigte Abschnitt ergibt sich daraus
+    // Position in the season where the list stands – the shown section follows from it
     var anchor by remember(item.id, season) {
         mutableIntStateOf(
             when {
@@ -222,15 +229,15 @@ private fun DetailScreenFull(
     val gi = EpisodeLogic.groupOf(groups, anchor)
     val group = groups.getOrNull(gi)
     val shown = remember(eps, group) { if (group == null) emptyList() else eps.subList(group.from, group.to + 1) }
-    // Infos aus der passenden TMDB-Staffel (bei fortlaufender Nummer nicht Staffel 1 der Playlist)
+    // Info from the matching TMDB season (with continuous numbering not season 1 of the playlist)
     val metaSeason = group?.tmdbSeason ?: season
-    // Neu bei anderem TMDB-Treffer (die Detailseite kann einen falschen gespeicherten Treffer beim Öffnen korrigieren)
+    // New with a different TMDB match (the detail page can correct a wrongly stored match on opening)
     var epCache by remember(item.id, tmdbId) { mutableStateOf<Map<Int, List<EpMeta>>>(emptyMap()) }
     var epLoading by remember(item.id, tmdbId) { mutableStateOf(false) }
     LaunchedEffect(tmdbId, imdbId, metaSeason) {
         if (item.kind == Kind.SERIES && isTv && tmdbId != null && tmdbId > 0 && metaSeason >= 0 && epCache[metaSeason] == null) {
             epLoading = true
-            // IMDb-Bewertungen je Folge nur bei gleicher Zählung (IMDb teilt lange Anime anders auf)
+            // IMDb ratings per episode only with the same count (IMDb splits long anime differently)
             val sameCount = group == null || (group.offset == 0 && metaSeason == season)
             val res = MetaRepo.season(tmdbId, metaSeason, if (sameCount) imdbId else null)
             epCache = epCache + (metaSeason to res)
@@ -246,7 +253,7 @@ private fun DetailScreenFull(
     }
 
     val playFocus = remember { FocusRequester() }
-    // Zurück von einer Person oder einem ähnlichen Titel: dorthin zurück, nicht zu „Fortsetzen“
+    // Back from a person or a similar title: go back there, not to "Resume"
     var topMoreFocused by remember { mutableStateOf(false) }
     var topRowFocused by remember { mutableStateOf(false) }
     val memKey = remember(item.id) { DetailFocus.last.remove(item.id) }
@@ -269,30 +276,30 @@ private fun DetailScreenFull(
             restored = true
         }
     }
-    // Findet sich das Ziel nicht (Liste hat sich geändert), nach kurzer Zeit normal auf „Abspielen“
+    // If the target is not found (list changed), go to "Play" normally after a short time
     LaunchedEffect(memKey) {
         if (memKey == null) return@LaunchedEffect
         delay(5000)
         if (!restored) { restored = true; if (autoFocus) runCatching { playFocus.requestFocus() } }
     }
 
-    // Beschreibung: standardmäßig 4 Zeilen, mit "Mehr lesen" aufklappbar
+    // Description: 4 lines by default, expandable with "Read more"
     var descExpanded by remember(item.id) { mutableStateOf(false) }
     var descOverflow by remember(item.id) { mutableStateOf(false) }
 
-    // Staffel-, Abschnitts- und Episoden-Fokus (Index = Position in der Staffel)
+    // Season, section and episode focus (index = position in the season)
     val seasonReq = remember { FocusRequester() }
     val seasonRowState = rememberLazyListState()
     val groupReq = remember { FocusRequester() }
     val groupRowState = rememberLazyListState()
     val epReqs = remember(item.id) { HashMap<Int, FocusRequester>() }
     val epFocusIdx = remember(item.id) { intArrayOf(0) }
-    // Ziel für den nächsten Fokuswechsel (-1 = erste Folge des Abschnitts). Getrennt von epFocusIdx, weil beim
-    // Staffelwechsel die alte Zeile verschwindet und Compose den Fokus kurz auf irgendeine neue Zeile setzt.
+    // Target for the next focus change (-1 = first episode of the section). Separate from epFocusIdx because on
+    // season change the old row disappears and Compose briefly puts focus on some new row.
     val targetIdx = remember(item.id) { intArrayOf(-1) }
     var focusedIdx by remember(item.id) { mutableIntStateOf(-1) }
     var refocusEp by remember { mutableStateOf(false) }
-    // Folgenliste (rechts im Folgen-Bereich); der Bereich selbst ist so hoch wie das Bild, die Folgen scrollen darin
+    // Episode list (right in the episodes area); the area itself is as tall as the picture, the episodes scroll inside
     val epListState = rememberLazyListState()
     val paneH = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp - 72).dp.coerceAtLeast(360.dp)
     var focusTick by remember { mutableIntStateOf(0) }
@@ -308,13 +315,13 @@ private fun DetailScreenFull(
             enterAtEnd[0] = delta < 0
             startFirst[0] = delta > 0
             season = seasons[ni]
-            // immer bei der ersten Folge (des Abschnitts) landen, nicht an der alten Position
+            // always land on the first episode (of the section), not on the old position
             targetIdx[0] = -1
             refocusEp = true
         }
     }
 
-    /** Links/Rechts in der Folgenliste: nächster Abschnitt (bei dessen erster Folge); am Ende der Staffel weiter zur nächsten Staffel. */
+    /** Left/Right in the episode list: next section (at its first episode); at the end of the season on to the next season. */
     fun switchGroup(delta: Int) {
         val ni = gi + delta
         if (ni in groups.indices) {
@@ -343,12 +350,12 @@ private fun DetailScreenFull(
         }
     }
 
-    /** „Gehe zu Folge“: Abschnitt wechseln und die Folge fokussieren (auch in einer anderen Staffel). */
+    /** "Go to episode": switch section and focus the episode (also in another season). */
     fun doJump() {
         val n0 = jumpText.trim().toIntOrNull() ?: return
         jumpOpen = false
         jumpText = ""
-        // Nummer in der Staffel, in einer anderen Staffel oder als Gesamtnummer über alle Staffeln (z. B. 100)
+        // Number in the season, in another season or as total number across all seasons (e.g. 100)
         val tgt = EpisodeLogic.locate(item.episodes, season, n0)
         if (tgt == null) {
             Toast.makeText(ctx, Lang.tr("Es gibt nur ${item.episodes.size} Folgen"), Toast.LENGTH_SHORT).show()
@@ -373,7 +380,7 @@ private fun DetailScreenFull(
 
     LaunchedEffect(jumpOpen) { if (jumpOpen) { delay(80); runCatching { jumpReq.requestFocus() } } }
 
-    // Zurück aus dem Player: Folge markieren, die zuletzt lief (Liste und Abschnitt stehen schon dort)
+    // Back from the player: highlight the episode that played last (list and section already stand there)
     LaunchedEffect(retSE) {
         if (retSE == null) return@LaunchedEffect
         delay(120)
@@ -395,10 +402,10 @@ private fun DetailScreenFull(
             epFocusIdx[0] = idx
             val row = idx - g.from
             withFrameNanos { }
-            // Folgen-Bereich ans Bildschirmende der Seite stellen und die Zielfolge in der Folgenliste sichtbar machen
+            // Put the episodes area at the end of the page and make the target episode visible in the episode list
             listState.scrollToItem(EP_PANE)
             epListState.scrollToItem((row - 1).coerceAtLeast(0))
-            // Mehrmals versuchen: die neue Zeile ist evtl. erst nach ein, zwei Bildern da
+            // Try several times: the new row may only be there after a frame or two
             focusedIdx = -1
             for (k in 0 until 10) {
                 withFrameNanos { }
@@ -410,8 +417,8 @@ private fun DetailScreenFull(
     }
 
     Box(Modifier.fillMaxSize().background(Bg)) {
-        // Runde 15: Aufbau wie das große Bild der Startseite (Bild rechts, links und unten in den Hintergrund ausgeblendet)
-        // 17c: ruhiges Hintergrundbild (der Dauer-Zoom kostete auf dem Fire TV zu viel Rechenzeit)
+        // Round 15: layout like the big picture of the home screen (image on the right, faded into the background at the left and bottom)
+        // 17c: calm background image (the constant zoom cost too much computing time on the Fire TV)
         meta?.backdrop?.let { AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alignment = Alignment.TopEnd) }
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Bg, 0.3f to Bg.copy(alpha = .92f), 0.55f to Bg.copy(alpha = .5f), 0.8f to Color.Transparent)))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Bg.copy(alpha = .5f), 0.2f to Color.Transparent, 0.55f to Bg.copy(alpha = .78f), 0.8f to Bg)))
@@ -422,9 +429,9 @@ private fun DetailScreenFull(
                         .onPreviewKeyEvent { ev ->
                             if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionUp) {
                                 if (onTopUp != null) {
-                                    // Oberstes Bedienelement im Kopf („Mehr lesen“, sonst die erste Knopfreihe): Titelreihe wieder
-                                    // herunterschieben. Das wird hier selbst entschieden, nicht über die Fokus-Suche (die fand
-                                    // unsichtbare Ziele in der verschobenen Titelreihe).
+                                    // Topmost control in the header ("Read more", otherwise the first button row): push the title row
+                                    // down again. This is decided here itself, not via the focus search (which found
+                                    // invisible targets in the shifted title row).
                                     val moreShown = showActions && (descOverflow || descExpanded) && (descExpanded || (meta?.overview?.length ?: 0) > FULL_TEXT_CHARS)
                                     if (topMoreFocused || (!moreShown && topRowFocused)) { onTopUp(); return@onPreviewKeyEvent true }
                                     return@onPreviewKeyEvent false
@@ -436,7 +443,7 @@ private fun DetailScreenFull(
                         .onFocusChanged { heroFocused = it.hasFocus }
                 ) {
                     Column(Modifier.align(if (embedded && !showActions) Alignment.TopStart else Alignment.BottomStart).widthIn(max = dpx(980)).padding(bottom = dpx(18)), verticalArrangement = Arrangement.spacedBy(dpx(12))) {
-                        // Runde 17b: Überzeile mit Leuchtbalken, riesiger Titel (Entwurf „Cinematic Remake“, Bild 2)
+                        // Round 17b: overline with glow bar, huge title (design "Cinematic Remake", picture 2)
                         Row(horizontalArrangement = Arrangement.spacedBy(dpx(14)), verticalAlignment = Alignment.CenterVertically) {
                             Kicker(kindLabel(item.kind), raw = false)
                             qualityOf(item)?.let { PreviewQualityBadge(it) }
@@ -444,7 +451,7 @@ private fun DetailScreenFull(
                         Text(raw = true, text = item.title, color = Tok.TextHi, fontSize = spx(84), lineHeight = spx(84), fontWeight = FontWeight.ExtraBold,
                             letterSpacing = (-1.5).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         HeroMetaLine(item, meta, dots = false)
-                        // Film angefangen: kleiner Fortschrittsbalken mit Restzeit
+                        // Movie started: small progress bar with remaining time
                         if (item.kind != Kind.SERIES && resume != null && resume.dur > 0 && !ResumeLogic.finished(resume.pos, resume.dur)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dpx(10))) {
                                 Box(Modifier.width(dpx(180)).height(dpx(4)).clip(RoundedCornerShape(50)).background(Color(0x40FFFFFF))) {
@@ -454,7 +461,7 @@ private fun DetailScreenFull(
                             }
                         }
                         if (meta?.overview == null && !metaDone) {
-                            // Lade-Skelett statt kurzzeitig "Keine Beschreibung gefunden."
+                            // Loading skeleton instead of briefly "No description found."
                             val sk = shimmerColor()
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 SkeletonBox(Modifier.fillMaxWidth(0.92f).height(16.dp), sk)
@@ -465,8 +472,8 @@ private fun DetailScreenFull(
                             raw = meta?.overview != null,
                             text = meta?.overview ?: if (MetaRepo.usable(item)) "Keine Beschreibung gefunden." else "Tipp: Unter Einstellungen > API-Schlüssel einen eigenen TMDB-Schlüssel eintragen, dann erscheinen hier Beschreibung, Cover und Bewertungen.",
                             color = Tok.TextMid, fontSize = spx(17), lineHeight = spx(25),
-                            // Kurze und mittlere Beschreibungen (bis ca. 800 Zeichen) werden ganz gezeigt, ohne „Mehr lesen“.
-                            // In der Kino-Vorschau (ohne Knöpfe) sind es höchstens 6 Zeilen.
+                            // Short and medium descriptions (up to about 800 characters) are shown completely, without "Read more".
+                            // In the cinema preview (without buttons) it is at most 6 lines.
                             maxLines = if (descExpanded || (showActions && (meta?.overview?.length ?: 0) <= FULL_TEXT_CHARS)) Int.MAX_VALUE
                                 else if (!showActions) 8 else 4,
                             overflow = TextOverflow.Ellipsis,
@@ -477,9 +484,9 @@ private fun DetailScreenFull(
                         }
                         if (showActions) {
                         Spacer(Modifier.height(4.dp))
-                        // Knöpfe im Stil des großen Bildes, kleiner (Runde 15). Innenabstand: der vergrößerte Knopf wird sonst abgeschnitten.
-                        // Zwei Reihen: oben Abspielen/Fortsetzen/Von vorn, darunter Liste, Favorit, Trailer, Extern. So wird nichts mehr
-                        // am rechten Rand abgeschnitten. Innenabstand: der vergrößerte Knopf wird sonst angeschnitten.
+                        // Buttons in the style of the big picture, smaller (round 15). Padding: the enlarged button would otherwise be cut off.
+                        // Two rows: Play/Resume/From start on top, below List, Favorite, Trailer, External. So nothing is
+                        // cut off at the right edge any more. Padding: the enlarged button would otherwise be cropped.
                         Column(
                             Modifier.offset(x = (-8).dp).padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalArrangement = Arrangement.spacedBy(dpx(12))
@@ -495,14 +502,14 @@ private fun DetailScreenFull(
                                         else -> "Fortsetzen · " + (if (oneSeason) "Folge ${resumeSE.second}" else "S${resumeSE.first} · Folge ${resumeSE.second}")
                                     }
                                     HeroButton(label, AIcon.Play, true, Modifier.focusRequester(playFocus), bh) {
-                                        // aktuelle Adresse aus der Playlist (die gespeicherte kann nach einer Aktualisierung veraltet sein)
+                                        // current address from the playlist (the stored one can be outdated after a refresh)
                                         val t = WatchStore.target(ctx, item, resume)
                                         onPlay(t.second, t.first, resume.pos)
                                     }
                                     HeroButton("Von vorn", AIcon.Rewind, false, Modifier, bh) { playUrl?.let { onPlay(it, item.title + (if (item.kind == Kind.SERIES) " S" + season + "E" + (eps.firstOrNull()?.num ?: 1) else ""), 0L) } }
                                 } else {
-                                    // Gesehener Film: „Erneut abspielen“ statt „Abspielen“
-                                    val seenMovie = item.kind == Kind.MOVIE && EpProgress.of(ctx, item.id)[ResumeLogic.key(0, 0)]?.done == true
+                                    // Watched movie: "Play again" instead of "Play"
+                                    val seenMovie = item.kind == Kind.MOVIE && progress[ResumeLogic.key(0, 0)]?.done == true
                                     HeroButton(if (seenMovie) "Erneut abspielen" else "Abspielen", if (seenMovie) AIcon.Rewind else AIcon.Play, true, Modifier.focusRequester(playFocus), bh) {
                                         playUrl?.let { onPlay(it, item.title + (if (item.kind == Kind.SERIES) " S" + season + "E" + (eps.firstOrNull()?.num ?: 1) else ""), 0L) }
                                     }
@@ -511,15 +518,53 @@ private fun DetailScreenFull(
                             Row(horizontalArrangement = Arrangement.spacedBy(dpx(12))) {
                                 val inList = Library.isWatch(item.id)
                                 HeroButton(if (inList) "In Meiner Liste" else "Meine Liste", if (inList) AIcon.Check else AIcon.Plus, false, Modifier, bh) { Library.toggleWatch(ctx, item.id) }
-                                // Runde 14: Filme und Serien als Favorit (erscheinen unter „Favoriten“)
+                                // Round 14: movies and series as favorites (appear under "Favorites")
                                 val fav = Library.isFav(item.id)
                                 HeroButton(if (fav) "Favorit" else "Zu Favoriten", if (fav) AIcon.HeartFilled else AIcon.Heart, false, Modifier, bh) { Library.toggleFav(ctx, item.id) }
                                 HeroButton("Trailer", AIcon.Play, false, Modifier, bh) { openTrailer(ctx, meta?.trailerKey, item.title) }
                                 HeroButton("Extern", AIcon.External, false, Modifier, bh) { playUrl?.let { openExternal(ctx, it, item.title) } }
                             }
+                            // Watched by hand: movie, season, whole series (also reachable per episode: long OK / menu key on the row)
+                            Row(horizontalArrangement = Arrangement.spacedBy(dpx(12))) {
+                                // A finished resume point would otherwise keep offering "Continue"
+                                fun dropResume(keys: Collection<Long>) {
+                                    if (resume == null) return
+                                    val rk = resumeSE?.let { ResumeLogic.key(it.first, it.second) }
+                                    if (item.kind != Kind.SERIES || rk in keys) WatchStore.remove(ctx, item.id)
+                                }
+                                if (item.kind == Kind.SERIES) {
+                                    val seasonKeys = eps.map { ResumeLogic.key(it.season, it.num) }
+                                    val seasonSeen = seasonKeys.isNotEmpty() && seasonKeys.all { progress[it]?.done == true }
+                                    HeroButton(if (seasonSeen) "Staffel zurücksetzen" else "Staffel gesehen", if (seasonSeen) AIcon.Rewind else AIcon.Check, false, Modifier, bh) {
+                                        EpProgress.mark(ctx, item.id, seasonKeys, !seasonSeen)
+                                        if (!seasonSeen) dropResume(seasonKeys)
+                                        progVer++
+                                    }
+                                    if (seasons.size > 1) {
+                                        val allKeys = item.episodes.map { ResumeLogic.key(it.season, it.num) }
+                                        val allSeen = allKeys.isNotEmpty() && allKeys.all { progress[it]?.done == true }
+                                        HeroButton(if (allSeen) "Serie zurücksetzen" else "Serie gesehen", if (allSeen) AIcon.Rewind else AIcon.Check, false, Modifier, bh) {
+                                            EpProgress.mark(ctx, item.id, allKeys, !allSeen)
+                                            if (!allSeen) dropResume(allKeys)
+                                            progVer++
+                                        }
+                                    }
+                                } else if (item.kind == Kind.MOVIE) {
+                                    val k = ResumeLogic.key(0, 0)
+                                    val seen = progress[k]?.done == true
+                                    HeroButton(if (seen) "Als ungesehen markieren" else "Als gesehen markieren", if (seen) AIcon.Rewind else AIcon.Check, false, Modifier, bh) {
+                                        EpProgress.mark(ctx, item.id, listOf(k), !seen)
+                                        if (!seen) dropResume(listOf(k))
+                                        progVer++
+                                    }
+                                }
+                                if (item.id in History.ids) {
+                                    HeroButton("Aus „Zuletzt geschaut“ entfernen", AIcon.Close, false, Modifier, bh) { History.remove(ctx, item.id) }
+                                }
+                            }
                         }
                         if (item.kind == Kind.MOVIE && movieAlts.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            // Quelle fest wählen (Vorrang vor der Qualität) oder automatisch passend zum Gerät
+                            // Choose the source explicitly (takes precedence over quality) or automatically to suit the device
                             val so = listOf("Automatisch") + movieVars.map { it.label }
                             DropdownPill("Quelle", prefLabel ?: "Automatisch", so, so.indexOf(prefLabel).coerceAtLeast(0), active = prefLabel != null) {
                                 prefLabel = if (it == 0) null else so[it]; save()
@@ -570,8 +615,8 @@ private fun DetailScreenFull(
                 }
             }
             if (item.kind == Kind.SERIES) item(key = "eppane") {
-                // Folgen-Bereich (Runde 16): links die Staffeln mit Markierung der gezeigten Staffel, rechts die Folgen.
-                // Rechts in der Folgenliste = nächste Staffel, Links = zur Staffelauswahl.
+                // Episodes area (round 16): seasons on the left with the shown season marked, episodes on the right.
+                // Right in the episode list = next season, Left = to the season selection.
                 Row(
                     Modifier.fillMaxWidth().height(paneH).padding(top = dpx(12))
                         .onFocusChanged { if (it.hasFocus) scope.launch { listState.animateScrollToItem(EP_PANE) } }
@@ -591,7 +636,7 @@ private fun DetailScreenFull(
                                 sn, cnt, sn == season,
                                 if (sn == season) Modifier.focusRequester(seasonReq) else Modifier,
                                 onRight = {
-                                    // Rechts oder OK: Staffel zeigen und zur ersten Folge springen (gleiche Staffel: zur letzten Position)
+                                    // Right or OK: show the season and jump to the first episode (same season: to the last position)
                                     if (sn != season) { enterAtEnd[0] = false; startFirst[0] = true; season = sn; targetIdx[0] = -1 }
                                     else targetIdx[0] = epFocusIdx[0]
                                     refocusEp = true
@@ -611,7 +656,7 @@ private fun DetailScreenFull(
                             )
                             if (item.episodes.size > EpisodeLogic.LONG) DetailPill("Zu Folge springen", icon = AIcon.Down) { jumpOpen = !jumpOpen }
                         }
-                        // Lange Staffel: Abschnitte (TMDB-Staffeln oder Blöcke zu 50 Folgen) statt einer endlosen Liste
+                        // Long season: sections (TMDB seasons or blocks of 50 episodes) instead of an endless list
                         if (groups.size > 1) {
                             LazyRow(
                                 Modifier.offset(x = (-10).dp),
@@ -652,14 +697,21 @@ private fun DetailScreenFull(
                                         .onPreviewKeyEvent { ev ->
                                             if (ev.type != KeyEventType.KeyDown) false
                                             else when (ev.key) {
-                                                // Links: zur Staffelauswahl; Rechts: nächster Abschnitt, am Ende der Staffel die nächste Staffel
+                                                // Left: to the season selection; Right: next section, at the end of the season the next season
                                                 Key.DirectionLeft -> { if (ev.nativeKeyEvent.repeatCount == 0) { if (groups.size > 1 && gi > 0) switchGroup(-1) else focusActiveSeason() }; true }
                                                 Key.DirectionRight -> { if (ev.nativeKeyEvent.repeatCount == 0) switchGroup(1); true }
                                                 Key.DirectionUp -> if (j == 0 && groups.size > 1) { focusActiveGroup(); true } else false
                                                 else -> false
                                             }
                                         },
-                                    onFocus = { epFocusIdx[0] = i; focusedIdx = i }
+                                    onFocus = { epFocusIdx[0] = i; focusedIdx = i },
+                                    onToggleSeen = {
+                                        val k = ResumeLogic.key(ep.season, ep.num)
+                                        val seen = progress[k]?.done == true
+                                        EpProgress.mark(ctx, item.id, listOf(k), !seen)
+                                        if (!seen && resumeSE?.let { ResumeLogic.key(it.first, it.second) } == k) WatchStore.remove(ctx, item.id)
+                                        progVer++
+                                    }
                                 ) { onPlay(v.url, item.title + " S" + ep.season + "E" + ep.num, 0L) }
                             }
                         }
@@ -682,10 +734,10 @@ private fun DetailScreenFull(
 }
 
 @Composable
-private fun EpisodeRow(ep: Episode, em: EpMeta?, v: Variant, prog: ResumeLogic.EpPos?, modifier: Modifier, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun EpisodeRow(ep: Episode, em: EpMeta?, v: Variant, prog: ResumeLogic.EpPos?, modifier: Modifier, onFocus: () -> Unit, onToggleSeen: () -> Unit, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(dpx(16))
-    // Runde 17b: markierte Folge schwebt hervor (Glas, Schatten, etwas größer) statt weißem Rahmen; die anderen bleiben ruhig
+    // Round 17b: the selected episode floats forward (glass, shadow, slightly larger) instead of a white frame; the others stay calm
     val sc by androidx.compose.animation.core.animateFloatAsState(if (f) focusScale(1.02f) else 1f, label = "ep")
     Row(
         modifier.fillMaxWidth().padding(vertical = dpx(6))
@@ -694,6 +746,7 @@ private fun EpisodeRow(ep: Episode, em: EpMeta?, v: Variant, prog: ResumeLogic.E
             .clip(shape).background(if (f) Color(0x1FFFFFFF) else Color(0x08FFFFFF))
             .border(1.dp, if (f) Color(0x33FFFFFF) else Color.Transparent, shape)
             .onFocusChanged { f = it.isFocused; if (it.isFocused) onFocus() }
+            .favKeys(onToggleSeen)
             .clickable(onClick = onClick)
             .padding(dpx(14)),
         horizontalArrangement = Arrangement.spacedBy(dpx(22)), verticalAlignment = Alignment.CenterVertically
@@ -705,11 +758,11 @@ private fun EpisodeRow(ep: Episode, em: EpMeta?, v: Variant, prog: ResumeLogic.E
         ) {
             if (em?.still != null) AsyncImage(em.still, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             else Text("E${ep.num}", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
-            // Markiert: runder Abspielknopf in der Mitte
+            // Selected: round play button in the middle
             if (f) Box(Modifier.align(Alignment.Center).size(dpx(58)).clip(RoundedCornerShape(50)).background(Color(0xEBF4F6FB)), contentAlignment = Alignment.Center) {
                 AppIcon(AIcon.Play, Color(0xFF05070D), size = dpx(26))
             }
-            // Fortschritt: Balken unten, gesehen = Haken oben rechts
+            // Progress: bar at the bottom, watched = check mark top right
             if (prog != null && prog.done) Box(Modifier.align(Alignment.TopEnd).padding(6.dp)) { Badge("Gesehen", DS.Scrim, Accent2, AIcon.Check) }
             else if (prog != null && prog.fraction > 0.02f) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color(0x66FFFFFF))) {
                 Box(Modifier.fillMaxWidth(prog.fraction).fillMaxHeight().background(Accent2))
@@ -726,18 +779,19 @@ private fun EpisodeRow(ep: Episode, em: EpMeta?, v: Variant, prog: ResumeLogic.E
             }
             em?.air?.let { Text(raw = true, text = it, color = Muted, fontSize = spx(16)) }
             em?.overview?.let { Text(raw = true, text = it, color = if (f) Tok.TextMid else Tok.TextLow, fontSize = spx(18), lineHeight = spx(25), maxLines = 3, overflow = TextOverflow.Ellipsis) }
+            if (f) Text(if (prog?.done == true) "OK lange drücken = als ungesehen markieren" else "OK lange drücken = als gesehen markieren", color = Muted, fontSize = spx(14))
         }
     }
 }
 
-/** Eintrag der Staffelliste: Balken links und Folgenzahl bei der gezeigten Staffel, heller Rahmen bei Fokus. */
+/** Season list entry: bar at the left and episode count for the shown season, light frame on focus. */
 @Composable
 private fun SeasonEntry(season: Int, count: Int, selected: Boolean, modifier: Modifier, onRight: () -> Unit) {
     var f by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(dpx(12))
     Row(
         modifier.fillMaxWidth().clip(shape)
-            // Runde 17b: gezeigte Staffel mit grünem Schimmer, markierte als helles Glas (kein weißer Rahmen)
+            // Round 17b: shown season with a green shimmer, selected one as light glass (no white frame)
             .background(
                 if (f) Brush.horizontalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF)))
                 else if (selected) Brush.horizontalGradient(listOf(Accent1.copy(alpha = 0.18f), Color.Transparent))

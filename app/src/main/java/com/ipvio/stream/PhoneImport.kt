@@ -10,14 +10,14 @@ import java.net.URLDecoder
 import java.security.SecureRandom
 import kotlin.concurrent.thread
 
-/** Eine vom Handy gesendete Playlist: entweder ein M3U-Link oder Xtream-Zugangsdaten. */
+/** A playlist sent from the phone: either an M3U link or Xtream login data. */
 class PhoneInput(val url: String, val host: String, val user: String, val pass: String) {
     val isXtream get() = url.isBlank()
 }
 
-/** Reine Hilfsfunktionen (testbar, ohne Android). */
+/** Pure helper functions (testable, without Android). */
 object PhoneImportLogic {
-    /** Zerlegt "a=1&b=x%20y" in eine Map. */
+    /** Splits "a=1&b=x%20y" into a map. */
     fun parseForm(body: String): Map<String, String> =
         body.split('&').filter { it.contains('=') }.associate {
             val k = it.substringBefore('=')
@@ -25,7 +25,7 @@ object PhoneImportLogic {
             URLDecoder.decode(k, "UTF-8") to URLDecoder.decode(v, "UTF-8")
         }
 
-    /** Prüft Eingaben; null = ungültig. */
+    /** Validates input; null = invalid. */
     fun toInput(f: Map<String, String>): PhoneInput? {
         val url = f["url"].orEmpty().trim()
         if (url.isNotEmpty()) return if (url.startsWith("http://") || url.startsWith("https://")) PhoneInput(url, "", "", "") else null
@@ -37,7 +37,7 @@ object PhoneImportLogic {
 
     fun newCode(rnd: java.util.Random): String = (1000 + rnd.nextInt(9000)).toString()
 
-    /** Sprache der Handy-Seite aus „Accept-Language“: erste der App-Sprachen (de, en, tr, bs, hr, sr, es, fr, it), sonst Englisch. */
+    /** Language of the phone page from "Accept-Language": the first of the app languages (de, en, tr, bs, hr, sr, es, fr, it), otherwise English. */
     fun langIndex(accept: String): Int {
         for (part in accept.split(',')) {
             val i = I18nCore.CODES.indexOf(part.substringBefore(';').trim().substringBefore('-').lowercase())
@@ -46,7 +46,7 @@ object PhoneImportLogic {
         return 1
     }
 
-    /** Deutscher Text, sonst Übersetzung aus den Wörterbüchern der App; fehlt sie, der englische Text. */
+    /** German text, otherwise translation from the app's dictionaries; if missing, the English text. */
     private fun tr(li: Int, de: String, en: String): String = when (li) {
         0 -> de
         1 -> en
@@ -56,8 +56,8 @@ object PhoneImportLogic {
     fun page(de: Boolean): String = page(if (de) 0 else 1)
     fun message(de: Boolean, kind: String): String = message(if (de) 0 else 1, kind)
 
-    /** Was die Seite zusätzlich anbietet (Runde 20). */
-    class Features(val upload: Boolean = false, val transfer: Boolean = false, val crash: Boolean = false)
+    /** What the page additionally offers (round 20). */
+    class Features(val upload: Boolean = false, val transfer: Boolean = false, val crash: Boolean = false, val epg: Boolean = false, val list: Boolean = false)
 
     private const val CSS = """body{font-family:system-ui,sans-serif;background:#0B0F19;color:#fff;margin:0;padding:20px;max-width:560px}
 h1{font-size:22px}h2{font-size:16px;color:#9aa;margin-top:28px}a{color:#86EFAC}pre{white-space:pre-wrap;background:#171a26;padding:12px;border-radius:10px;font-size:13px}
@@ -65,7 +65,7 @@ input,textarea{width:100%;box-sizing:border-box;padding:14px;margin:6px 0;border
 input[type=checkbox]{width:auto}label{display:block;margin:8px 0}
 button{width:100%;padding:14px;margin-top:10px;border:0;border-radius:10px;background:#4ADE80;color:#0B0F19;font-size:17px;font-weight:700}"""
 
-    /** Kleines Skript: Datei als Body senden und die Antwort zeigen. */
+    /** Small script: send a file as the body and show the response. */
     private fun sendFileJs(fn: String, path: String, codeId: String, fileId: String, statusId: String): String =
         """<script>function $fn(){var f=document.getElementById('$fileId').files[0];var c=document.getElementById('$codeId').value;if(!f){return}
 document.getElementById('$statusId').textContent='…';fetch('$path?code='+encodeURIComponent(c)+'&name='+encodeURIComponent(f.name),{method:'POST',body:f})
@@ -97,12 +97,21 @@ button{width:100%;padding:14px;margin-top:10px;border:0;border-radius:10px;backg
 <input id="uc" inputmode="numeric" maxlength="4" placeholder="${t("Code vom Fernseher", "Code from the TV")}">
 <input id="uf" type="file" accept=".m3u,.m3u8,.txt,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain">
 <button onclick="up()">${t("Datei hochladen", "Upload file")}</button><p id="us"></p>""" + sendFileJs("up", "/upload", "uc", "uf", "us") else "") +
+            (if (feats.epg) """<form method="post" action="/epg"><h2>${t("TV-Guide-Adresse (EPG, XMLTV)", "TV guide address (EPG, XMLTV)")}</h2>
+<input name="code" inputmode="numeric" maxlength="4" placeholder="${t("Code vom Fernseher", "Code from the TV")}" required>
+<textarea name="epg" rows="3" placeholder="http://…/xmltv.php?username=…&amp;password=…"></textarea>
+<button type="submit">${t("An den Fernseher senden", "Send to TV")}</button></form>""" else "") +
+            (if (feats.list) """<h2>${t("Listen importieren (Letterboxd, MyAnimeList, Trakt)", "Import lists (Letterboxd, MyAnimeList, Trakt)")}</h2>
+<p>${t("Exportdatei wählen: Letterboxd ZIP oder CSV, MyAnimeList XML, Trakt JSON. Titel, die in deiner Playlist vorkommen, kommen in Merkliste bzw. Verlauf.", "Choose the export file: Letterboxd ZIP or CSV, MyAnimeList XML, Trakt JSON. Titles found in your playlist go to the watchlist or history.")}</p>
+<input id="lc" inputmode="numeric" maxlength="4" placeholder="${t("Code vom Fernseher", "Code from the TV")}">
+<input id="lf" type="file">
+<button onclick="lu()">${t("Liste hochladen", "Upload list")}</button><p id="ls"></p>""" + sendFileJs("lu", "/listimport", "lc", "lf", "ls") else "") +
             (if (feats.transfer) """<h2><a href="/transfer">${t("Einstellungen auf ein anderes Gerät übertragen", "Transfer settings to another device")}</a></h2>""" else "") +
             (if (feats.crash) """<h2><a href="/crash">${t("Letzten Absturzbericht anzeigen", "Show the last crash report")}</a></h2>""" else "") +
             "</body></html>"
     }
 
-    /** Übertragung: Sicherung herunterladen (optional mit Playlists) oder eine Sicherung einspielen. */
+    /** Transfer: download a backup (optionally with playlists) or restore a backup. */
     fun transferPage(li: Int): String {
         fun t(a: String, b: String) = tr(li, a, b)
         return """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IPVIO Stream</title><style>$CSS</style></head><body>
@@ -119,7 +128,7 @@ button{width:100%;padding:14px;margin-top:10px;border:0;border-radius:10px;backg
             """<p>${t("Die Datei mit Playlists enthält deine Zugangsdaten. Gib sie nicht weiter.", "The file with playlists contains your logins. Do not share it.")}</p></body></html>"""
     }
 
-    /** Absturzbericht: erst Code abfragen, dann den Text zeigen (zum Kopieren auf dem Handy). */
+    /** Crash report: first ask for the code, then show the text (to copy on the phone). */
     fun crashPage(li: Int, text: String?): String {
         fun t(a: String, b: String) = tr(li, a, b)
         val esc = text?.replace("&", "&amp;")?.replace("<", "&lt;")?.replace(">", "&gt;")
@@ -148,31 +157,38 @@ button{width:100%;padding:14px;margin-top:10px;border:0;border-radius:10px;backg
 }
 
 /**
- * Kleiner Server im lokalen Netz: Das Handy öffnet die angezeigte Adresse und sendet die Playlist,
- * damit auf dem Fernseher nichts getippt werden muss. Läuft nur, solange der Bildschirm dafür offen ist.
- * Geschützt durch einen vierstelligen Code und eine Sperre nach 5 Fehlversuchen.
+ * Small server in the local network: the phone opens the displayed address and sends the playlist,
+ * so nothing has to be typed on the TV. Runs only while the screen for it is open.
+ * Protected by a four-digit code and a lock after 5 failed attempts.
  *
- * Runde 20: zusätzlich Playlist-Datei hochladen ([saveUpload]), Sicherung herunterladen/einspielen ([backup]/[restore],
- * für die Übertragung auf ein anderes Gerät) und den letzten Absturzbericht lesen ([crash]). Was nicht gesetzt ist,
- * erscheint auf der Seite nicht.
+ * Round 20: additionally upload a playlist file ([saveUpload]), download/restore a backup ([backup]/[restore],
+ * for transfer to another device) and read the last crash report ([crash]). What is not set
+ * does not appear on the page.
  */
 class PhoneImport(private val onReceive: (PhoneInput) -> Unit) {
     @Volatile private var server: ServerSocket? = null
-    @Volatile private var fails = 0
+    private val fails = java.util.concurrent.atomic.AtomicInteger(0)
+    @Volatile private var lockedAt = 0L
     val code: String = PhoneImportLogic.newCode(SecureRandom())
     @Volatile var port: Int = 0
         private set
 
-    /** Hochgeladene Playlist-Datei speichern: (Dateiname, Inhalt) → Adresse „file://…“ oder null. */
+    /** Store an uploaded playlist file: (file name, content) → address "file://…" or null. */
     var saveUpload: ((String, java.io.File) -> String?)? = null
-    /** Ordner für Uploads (temporär), gesetzt zusammen mit [saveUpload]. */
+    /** Folder for uploads (temporary), set together with [saveUpload]. */
     var uploadDir: java.io.File? = null
-    /** Sicherung als Text erzeugen; Parameter = mit Playlists. */
+    /** Create the backup as text; parameter = with playlists. */
     var backup: ((Boolean) -> String?)? = null
-    /** Sicherung einspielen; true = erfolgreich. */
+    /** Restore a backup; true = success. */
     var restore: ((String) -> Boolean)? = null
-    /** Letzter Absturzbericht als Text, null = keiner. */
+    /** Receives a TV guide (XMLTV) address typed on the phone; set = the field appears on the page. */
+    var onEpg: ((String) -> Unit)? = null
+    /** Last crash report as text, null = none. */
     var crash: (() -> String?)? = null
+    /** Phone search: answer a request under /api/<name> (JSON) or null = unknown. Set = the /r page is active. */
+    var api: ((String, Map<String, String>) -> String?)? = null
+    /** Import of an exported list file (file name, content); runs on the server thread, so the callback must post to the main thread itself. */
+    var onList: ((String, ByteArray) -> Unit)? = null
 
     fun start(): Boolean {
         if (server != null) return true
@@ -221,7 +237,7 @@ class PhoneImport(private val onReceive: (PhoneInput) -> Unit) {
         return String(body, 0, n, Charsets.UTF_8)
     }
 
-    /** Body direkt in eine Datei (große Playlists liegen nie ganz im Speicher). */
+    /** Body directly into a file (large playlists never sit completely in memory). */
     private fun readToFile(ins: InputStream, len: Long, f: java.io.File): Boolean {
         java.io.FileOutputStream(f).use { out ->
             val buf = ByteArray(64 * 1024)
@@ -235,10 +251,37 @@ class PhoneImport(private val onReceive: (PhoneInput) -> Unit) {
         return true
     }
 
+    /**
+     * Reads up to [len] bytes into memory without reserving [len] bytes up front: memory grows only with the data
+     * that actually arrives. If the sender stops early, the bytes received so far are returned.
+     */
+    private fun readBody(ins: InputStream, len: Long): ByteArray {
+        val chunks = ArrayList<ByteArray>()
+        var total = 0
+        while (total < len) {
+            val chunk = ByteArray(minOf(64L * 1024, len - total).toInt())
+            var n = 0
+            while (n < chunk.size) { val k = ins.read(chunk, n, chunk.size - n); if (k < 0) break; n += k }
+            if (n == 0) break
+            chunks.add(if (n == chunk.size) chunk else chunk.copyOf(n))
+            total += n
+            if (n < chunk.size) break
+        }
+        val out = ByteArray(total)
+        var pos = 0
+        for (c in chunks) { c.copyInto(out, pos); pos += c.size }
+        return out
+    }
+
     private fun codeOk(given: String?): Int = when {
-        fails >= 5 -> 429
-        given.orEmpty().trim() != code -> { fails++; 403 }
-        else -> 200
+        fails.get() >= 5 && System.currentTimeMillis() - lockedAt < 60_000 -> 429
+        given.orEmpty().trim() != code -> {
+            // thread-safe counter; the lock ends after one minute without new attempts
+            if (fails.get() >= 5) fails.set(0)
+            if (fails.incrementAndGet() >= 5) lockedAt = System.currentTimeMillis()
+            403
+        }
+        else -> { fails.set(0); 200 }
     }
 
     private class Reply(val status: Int, val body: ByteArray, val type: String = "text/html; charset=utf-8", val extra: String = "")
@@ -250,7 +293,7 @@ class PhoneImport(private val onReceive: (PhoneInput) -> Unit) {
         val ins = s.getInputStream()
         val h = readHead(ins) ?: return
         val li = PhoneImportLogic.langIndex(h.lang)
-        val feats = PhoneImportLogic.Features(saveUpload != null, backup != null, crash != null)
+        val feats = PhoneImportLogic.Features(saveUpload != null, backup != null, crash != null, onEpg != null, onList != null)
         val r: Reply = when (h.method + " " + h.path) {
             "GET /" -> html(200, PhoneImportLogic.page(li, feats))
             "POST /send" -> {
@@ -265,7 +308,34 @@ class PhoneImport(private val onReceive: (PhoneInput) -> Unit) {
                     else -> html(c, PhoneImportLogic.message(li, "lock"))
                 }
             }
-            // Playlist-Datei: der Browser schickt die Datei als Body (kleines Skript auf der Seite)
+            // TV guide (XMLTV) address typed on the phone
+            "POST /epg" -> {
+                val f = PhoneImportLogic.parseForm(readSmall(ins, h.len) ?: "")
+                val cb = onEpg
+                when (val c = codeOk(f["code"])) {
+                    200 -> {
+                        val u = f["epg"].orEmpty().trim()
+                        if (cb == null || !(u.startsWith("http://") || u.startsWith("https://"))) html(400, PhoneImportLogic.message(li, "bad"))
+                        else { cb(u); html(200, PhoneImportLogic.message(li, "ok")) }
+                    }
+                    403 -> html(403, PhoneImportLogic.message(li, "code"))
+                    else -> html(c, PhoneImportLogic.message(li, "lock"))
+                }
+            }
+            // Exported lists from other services (parsed on the TV)
+            "POST /listimport" -> {
+                val cb = onList
+                val c = codeOk(h.query["code"])
+                if (cb == null) html(404, PhoneImportLogic.message(li, "bad"))
+                else if (c != 200) html(c, PhoneImportLogic.message(li, if (c == 403) "code" else "lock"))
+                else if (h.len <= 0) html(400, PhoneImportLogic.message(li, "bad"))
+                else if (h.len > MAX_LIST_UPLOAD) html(413, PhoneImportLogic.message(li, "file"))
+                else {
+                    cb(h.query["name"].orEmpty(), readBody(ins, h.len))
+                    html(200, PhoneImportLogic.message(li, "ok"))
+                }
+            }
+            // Playlist file: the browser sends the file as the body (small script on the page)
             "POST /upload" -> {
                 val save = saveUpload; val dir = uploadDir
                 val c = codeOk(h.query["code"])
@@ -319,22 +389,37 @@ class PhoneImport(private val onReceive: (PhoneInput) -> Unit) {
                     else -> html(c, PhoneImportLogic.message(li, "lock"))
                 }
             }
-            else -> html(404, PhoneImportLogic.message(li, "bad"))
+            "GET /r" -> if (api != null) html(200, RemoteLogic.page(li)) else html(404, PhoneImportLogic.message(li, "bad"))
+            else -> {
+                val a = api
+                if (h.method == "GET" && a != null && h.path.startsWith("/api/")) {
+                    val c = codeOk(h.query["code"])
+                    if (c != 200) Reply(c, "{}".toByteArray(), "application/json; charset=utf-8")
+                    else {
+                        val j = a(h.path.removePrefix("/api/"), h.query)
+                        if (j == null) Reply(404, "{}".toByteArray(), "application/json; charset=utf-8")
+                        else Reply(200, j.toByteArray(Charsets.UTF_8), "application/json; charset=utf-8")
+                    }
+                } else html(404, PhoneImportLogic.message(li, "bad"))
+            }
         }
         val out = s.getOutputStream()
-        val reason = when (r.status) { 200 -> "OK"; 400 -> "Bad Request"; 403 -> "Forbidden"; 404 -> "Not Found"; 429 -> "Too Many Requests"; else -> "Error" }
+        val reason = when (r.status) { 200 -> "OK"; 400 -> "Bad Request"; 403 -> "Forbidden"; 404 -> "Not Found"; 413 -> "Payload Too Large"; 429 -> "Too Many Requests"; else -> "Error" }
         out.write(("HTTP/1.1 ${r.status} $reason\r\nContent-Type: ${r.type}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n" +
-            "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'\r\n" +
+            "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; img-src data:; frame-ancestors 'none'\r\n" +
             r.extra + "Content-Length: ${r.body.size}\r\nConnection: close\r\n\r\n").toByteArray())
         out.write(r.body)
         out.flush()
     }
 
     companion object {
-        /** Größte hochladbare Playlist-Datei. */
+        /** Largest uploadable playlist file. */
         const val MAX_UPLOAD = 400L * 1024 * 1024
 
-        /** Lokale IPv4-Adresse des Geräts im WLAN/LAN (oder null). */
+        /** Largest uploadable list export (Letterboxd, MyAnimeList, Trakt); same limit as the file picker on the TV (ListImportUi). */
+        const val MAX_LIST_UPLOAD = 16L * 1024 * 1024
+
+        /** Local IPv4 address of the device in the Wi-Fi/LAN (or null). */
         fun localIp(): String? = runCatching {
             NetworkInterface.getNetworkInterfaces().toList()
                 .filter { it.isUp && !it.isLoopback }

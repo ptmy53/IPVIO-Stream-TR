@@ -32,7 +32,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 
-/** Einfache Auswahlliste für Menüs (Tempo, Bildformat, Qualität ...). */
+/** Simple selection list for menus (speed, aspect ratio, quality ...). */
 @Composable
 fun PChoiceList(options: List<String>, selected: Int, focus: FocusRequester, onPick: (Int) -> Unit) {
     val st = rememberLazyListState(maxOf(selected - 3, 0))
@@ -44,14 +44,14 @@ fun PChoiceList(options: List<String>, selected: Int, focus: FocusRequester, onP
 }
 
 /**
- * Audio & Untertitel in einem Menü mit zwei Spalten.
- * Rechts-Taste in der Audio-Spalte wechselt zu den Untertiteln, Links wieder zurück bzw. schließt das Menü.
+ * Audio & subtitles in one menu with two columns.
+ * Right key in the audio column switches to the subtitles, Left goes back or closes the menu.
  */
 @Composable
 fun BoxScope.TracksPanel(
     player: Player, ver: Int, onChanged: () -> Unit,
     audioFocus: FocusRequester, subsFocus: FocusRequester,
-    onClose: () -> Unit, onStyle: () -> Unit
+    onClose: () -> Unit, onStyle: () -> Unit, onSearch: (() -> Unit)? = null
 ) {
     val audio = remember(ver) { collectTracks(player, C.TRACK_TYPE_AUDIO) }
     val subs = remember(ver) { collectTracks(player, C.TRACK_TYPE_TEXT) }
@@ -60,7 +60,7 @@ fun BoxScope.TracksPanel(
     val audioState = rememberLazyListState(0)
     val subsState = rememberLazyListState(maxOf(subsSel - 3, 0))
 
-    // Der Fokus beginnt immer beim ersten Punkt der Audio-Spalte; gibt es keine Tonauswahl, beim ersten Punkt der Untertitel
+    // Focus always starts at the first item of the audio column; if there is no audio choice, at the first item of the subtitles
     LaunchedEffect(Unit) {
         delay(200)
         repeat(8) {
@@ -138,6 +138,18 @@ fun BoxScope.TracksPanel(
             }
         }
         Spacer(Modifier.height(12.dp))
+        if (onSearch != null) {
+            PPanelRow(
+                "Untertitel online suchen", false,
+                Modifier.onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { onClose(); true }
+                    else if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onSearch(); true }
+                    else false
+                },
+                chevron = true, tinted = true, onClick = onSearch
+            )
+            Spacer(Modifier.height(PT.RowGap))
+        }
         PPanelRow(
             "Aussehen der Untertitel", false,
             Modifier.onPreviewKeyEvent { e ->
@@ -153,8 +165,8 @@ fun BoxScope.TracksPanel(
 private class EpRow(val header: String?, val ep: Episode?)
 
 /**
- * Folgenliste der Serie. Die laufende Folge ist markiert und wird beim Öffnen fokussiert.
- * Lange Staffeln (One Piece & Co.) sind in Blöcke zu 50 Folgen geteilt; Rechts / Vorspulen springt 50 weiter, Zurückspulen zurück.
+ * Episode list of the series. The running episode is highlighted and focused on opening.
+ * Long seasons (One Piece & Co.) are split into blocks of 50 episodes; Right / fast-forward jumps 50 further, rewind back.
  */
 @Composable
 fun BoxScope.EpisodesPanel(
@@ -178,7 +190,7 @@ fun BoxScope.EpisodesPanel(
         out
     }
     val long = episodes.size > EpisodeLogic.LONG
-    // erste Folge nach jeder Überschrift = Sprungziele
+    // first episode after each heading = jump targets
     val starts = remember(rows) { rows.indices.filter { rows[it].ep != null && (it == 0 || rows[it - 1].ep == null) } }
     val curIdx = rows.indexOfFirst { r -> r.ep != null && r.ep.season == curSeason && r.ep.num == curNum }
     val focusIdx = if (curIdx >= 0) curIdx else rows.indexOfFirst { it.ep != null }

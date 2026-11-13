@@ -37,16 +37,16 @@ private fun fmt(pattern: String): SimpleDateFormat {
     return f
 }
 
-/** Zeitzone für alle Uhrzeiten (Einstellung "Zeitzone" unter Sprache & Region; Standard: Systemzeit des Geräts). */
+/** Time zone for all clock times (setting "Time zone" under Language & Region; default: system time of the device). */
 fun epgZone(): TimeZone = General.zone()
 
-/** Uhrzeit im gewählten Format (24 h / 12 h) und in der gewählten Zeitzone. Die Formatter werden pro Thread wiederverwendet. */
+/** Clock time in the chosen format (24 h / 12 h) and in the chosen time zone. The formatters are reused per thread. */
 fun hhmm(sec: Long): String = fmt(SettingsLogic.timePattern(General.timeFmt, General.sys24)).format(Date(sec * 1000))
 
-/** Tag "Mo 19.10." in der gewählten Zeitzone und Sprache. */
+/** Day "Mo 19.10." in the chosen time zone and language. */
 fun dayLabel(sec: Long): String = fmt("EE dd.MM.").format(Date(sec * 1000))
 
-/** Gemeinsamer Netzwerkzugang für Programminfos: ein Client (Verbindungen werden wiederverwendet) und höchstens 6 Abfragen gleichzeitig. */
+/** Shared network access for program info: one client (connections are reused) and at most 6 requests at the same time. */
 object EpgNet {
     val client = Net.withTimeouts(8, 12)
     val gate = Semaphore(6)
@@ -60,16 +60,6 @@ object EpgNet {
             }
         }
     }
-}
-
-/** Prüft, ob eine Sendung plausible Zeiten hat (Schutz gegen kaputte EPG-Daten). */
-fun epgSane(start: Long, end: Long): Boolean {
-    if (end <= start) return false
-    if (end - start > 12 * 3600L) return false
-    val now = System.currentTimeMillis() / 1000
-    if (start > now + 7 * 86400L) return false
-    if (end > now + 8 * 86400L) return false
-    return true
 }
 
 object Xmltv {
@@ -88,22 +78,24 @@ object Xmltv {
     fun forChannel(id: String?): List<EpgEntry> = if (id == null) emptyList() else progs[id.lowercase()] ?: emptyList()
 
     /**
-     * Lädt das XMLTV-Programm für die sichtbaren Sender (ausgeblendete Sprachen kommen gar nicht erst an).
-     * Gespeichert wird nur das Nötige: Fenster −1 h bis +36 h, höchstens 80 Sendungen je Sender, Beschreibung gekürzt,
-     * gleiche Titel nur einmal. Wird der Speicher knapp, hört das Einlesen auf und behält das bis dahin Gelesene.
+     * Loads the XMLTV program for the visible channels (hidden languages do not even arrive).
+     * Only what is needed is stored: window −1 h to +36 h, at most 80 shows per channel, description shortened,
+     * equal titles only once. If memory gets tight, parsing stops and keeps what has been read so far.
      */
-    fun start(c: Context, urls: List<String>, items: List<Item>) {
+    /** [delayMs]: at app start the guide waits a little so the home screen and the playlist get the CPU first. */
+    fun start(c: Context, urls: List<String>, items: List<Item>, delayMs: Long = 0L) {
         val all = (urls + listOf(customUrl(c))).filter { it.startsWith("http") }.distinct()
         if (all.isEmpty()) { status = "Keine EPG-Adresse gefunden"; return }
         val wanted = items.filter { it.kind == Kind.LIVE }.mapNotNull { it.tvgId?.lowercase() }.toSet()
         if (wanted.isEmpty()) { status = "Playlist enthält keine Sender-IDs (tvg-id)"; return }
         job?.cancel()
         job = scope.launch {
+            if (delayMs > 0) kotlinx.coroutines.delay(delayMs)
             status = "Wird geladen …"
             val map = HashMap<String, MutableList<EpgEntry>>()
             var err: String? = null
             truncated = false
-            // Sender mit Archiv (Catchup): auch vergangene Sendungen behalten (höchstens 7 Tage, Speicher)
+            // Channels with archive (catchup): also keep past shows (at most 7 days, memory)
             val past = HashMap<String, Int>()
             for (it in items) {
                 val id = it.tvgId ?: continue
@@ -169,7 +161,7 @@ object Xmltv {
                         val l = out.getOrPut(ch) { ArrayList() }
                         if (l.size < MAX_PER_CHANNEL + pd * 48) l.add(EpgEntry(pool.of(title), shortDesc(desc), s, e))
                     }
-                    // Speicher wird knapp: aufhören und das bisher Gelesene behalten (lieber Lücken im Programm als ein Absturz)
+                    // Memory is getting tight: stop and keep what has been read so far (better gaps in the program than a crash)
                     if (++seen % 5000 == 0 && Mem.heapTight(0.70)) { truncated = true; return }
                 }
                 ev = p.next()
@@ -178,7 +170,7 @@ object Xmltv {
     }
 }
 
-/** Kleiner Zwischenspeicher mit Obergrenze: die zuletzt benutzten Einträge bleiben, die ältesten fallen heraus. */
+/** Small cache with an upper limit: the most recently used entries stay, the oldest drop out. */
 class LruCache<K, V>(private val max: Int) {
     private val map = object : LinkedHashMap<K, V>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?) = size > max
@@ -195,13 +187,13 @@ object Epg {
 
     fun supported(item: Item): Boolean = LIVE_RE.matches(item.url) || Xmltv.has(item.tvgId)
 
-    /** Adresse der Xtream-Programmabfrage [action] für einen Sender oder null, wenn der Sender keine Xtream-Adresse hat. */
+    /** Address of the Xtream program query [action] for a channel or null if the channel has no Xtream address. */
     internal fun xtreamApi(item: Item, action: String): String? {
         val p = LIVE_RE.find(item.url)?.groupValues ?: return null
         return "${p[1]}/player_api.php?username=${p[2]}&password=${p[3]}&action=$action&stream_id=${p[4]}"
     }
 
-    /** Xtream liefert Titel und Beschreibung Base64-kodiert, manche Anbieter aber im Klartext. */
+    /** Xtream delivers title and description Base64-encoded, but some providers in plain text. */
     private fun decode(s: String): String {
         if (s.isBlank()) return ""
         return try {
@@ -212,7 +204,7 @@ object Epg {
         }
     }
 
-    /** Liest "epg_listings" einer Xtream-Antwort; kaputte Einträge werden übersprungen. Ergebnis nach Startzeit sortiert. */
+    /** Reads "epg_listings" of an Xtream response; broken entries are skipped. Result sorted by start time. */
     internal fun parseListings(body: String, keep: (start: Long, end: Long) -> Boolean = { _, _ -> true }): List<EpgEntry> {
         val out = ArrayList<EpgEntry>()
         try {
@@ -230,13 +222,18 @@ object Epg {
         return out
     }
 
-    /** Laufende und kommende Sendungen eines Senders. Reihenfolge: Zwischenspeicher, geladenes XMLTV (sofort), dann Xtream-Abfrage. */
+    /** Running and upcoming shows of a channel. Order: cache, loaded XMLTV (immediately), then Xtream query. */
     suspend fun now(item: Item): List<EpgEntry> {
         val nowMs = System.currentTimeMillis()
         val nowSec = nowMs / 1000
         cache[item.id]?.let { if (nowMs - it.first < 120_000) return it.second }
+        // Everything below (XMLTV filter, JSON parsing, Base64) runs off the main thread, whoever calls this
+        return withContext(Dispatchers.Default) { nowFresh(item, nowMs, nowSec) }
+    }
+
+    private suspend fun nowFresh(item: Item, nowMs: Long, nowSec: Long): List<EpgEntry> {
         val local = Xmltv.forChannel(item.tvgId).filter { it.end > nowSec }
-        if (local.isNotEmpty() && current(local) != null) return local.take(8)
+        if (local.isNotEmpty() && current(local) != null) return local.take(8).also { cache[item.id] = nowMs to it }
         val url = xtreamApi(item, "get_short_epg")
         if (url != null) {
             val body = EpgNet.fetch("$url&limit=8")
@@ -246,6 +243,12 @@ object Epg {
             }
         }
         return local.take(8)
+    }
+
+    /** Cached result of [now] if it is still fresh, without any lookup or network (cheap enough for composition). */
+    fun peek(item: Item): List<EpgEntry>? {
+        val c = cache[item.id] ?: return null
+        return if (System.currentTimeMillis() - c.first < 120_000) c.second else null
     }
 
     fun current(list: List<EpgEntry>): EpgEntry? {
@@ -274,8 +277,8 @@ object IntroDb {
         val out = ArrayList<Seg>()
         try {
             val o = JSONObject(body)
-            // Nur plausible Abschnitte (siehe SegLogic): fehlende Endzeiten bei Intro/Rückblick oder ein „Intro“ mitten in der Folge
-            // führten sonst zu Knöpfen, die nicht passen
+            // Only plausible sections (see SegLogic): missing end times for intro/recap or an "intro" in the middle of the episode
+            // would otherwise lead to buttons that do not fit
             fun read(key: String, kind: Int, label: String) {
                 val a = o.optJSONArray(key) ?: return
                 for (x in 0 until a.length()) {

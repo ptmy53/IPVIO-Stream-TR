@@ -15,18 +15,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import java.util.Locale
 
-/** Sprache der Oberfläche. "" in den Einstellungen = Sprache des Geräts (nicht unterstützt → Englisch). */
+/** UI language. "" in the settings = device language (not supported → English). */
 object Lang {
     private var loaded = false
 
     private fun ensureLoaded() {
         if (loaded) return
         loaded = true
-        I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI, DictJ)
-        I18nCore.loadColumn(I18nCore.CODES.indexOf("nl"), DictNl1, DictNl2, DictNl3, DictNl4, DictNl5)
+        I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI, DictJ, DictK, DictL, DictM)
+        I18nCore.loadColumn(I18nCore.CODES.indexOf("nl"), DictNl1, DictNl2, DictNl3, DictNl4, DictNl5, DictNl6)
     }
 
-    /** Index in I18nCore.CODES. Liest den Zustand, damit Texte beim Umstellen neu gezeichnet werden. */
+    /** Index in I18nCore.CODES. Reads the state so texts are redrawn on switching. */
     val index: Int
         get() {
             ensureLoaded()
@@ -43,7 +43,7 @@ object Lang {
         else -> Locale.forLanguageTag(code())
     }
 
-    /** Sprachcode für TMDB-Abfragen, z. B. "de-DE". */
+    /** Language code for TMDB requests, e.g. "de-DE". */
     fun tmdb(): String = when (code()) {
         "en" -> "en-US"; "tr" -> "tr-TR"; "bs" -> "bs-BA"; "hr" -> "hr-HR"; "sr" -> "sr-RS"
         "es" -> "es-ES"; "fr" -> "fr-FR"; "it" -> "it-IT"; "nl" -> "nl-NL"; else -> "de-DE"
@@ -56,10 +56,10 @@ object Lang {
 }
 
 /**
- * Text für die ganze App (ersetzt material3.Text, die Bibliothek wird dadurch nicht mehr gebraucht):
- * übersetzt Oberflächentexte in die gewählte Sprache und wendet die gewählte Schriftart an.
- * [raw] = true für Inhalte (Filmtitel, Sendernamen, Beschreibungen, TV-Programm): die werden nie übersetzt –
- * sonst würde z. B. die Serie „Familie“ in der englischen Oberfläche zu „Family“, und jeder neue Titel kostete Wörterbuch-Suchen.
+ * Text for the whole app (replaces material3.Text, so the library is no longer needed):
+ * translates UI texts into the chosen language and applies the chosen font.
+ * [raw] = true for content (movie titles, channel names, descriptions, TV guide): these are never translated –
+ * otherwise e.g. the series "Familie" would become "Family" in the English UI, and every new title would cost dictionary lookups.
  */
 @Composable
 fun Text(

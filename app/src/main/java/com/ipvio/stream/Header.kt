@@ -38,20 +38,20 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
 
-/** Ziele in der Kopfzeile, die andere Teile direkt ansteuern (z. B. „Alle anzeigen“ der ersten Reihe: Hoch = Profil). */
+/** Targets in the header that other parts address directly (e.g. "Show all" of the first row: Up = profile). */
 object HeaderFocus {
     val profile = FocusRequester()
     val firstTab = FocusRequester()
-    /** Reiter, der nach dem Zurückkommen (z. B. aus „Alle Filme“) wieder markiert wird. */
+    /** Tab that is highlighted again after coming back (e.g. from "All movies"). */
     var returnTo: String? = null
 }
 
-/** Reiter oben neben der Suche (Filme/Serien: Alle, Neu hinzugefügt, Top bewertet, Kategorien). */
+/** Tabs at the top next to the search (movies/series: All, Newly added, Top rated, Categories). */
 class HeaderTab(val label: String, val icon: AIcon, val id: String, val onClick: () -> Unit)
 
 /**
- * Kopfzeile (Runde 14): Suchfeld, auf Filme/Serien die Reiter, rechts „Ansicht“ (Kartengröße/Bilder), Glocke (Erinnerungen)
- * und der Profil-Kreis. Die Funktionen dahinter gab es schon; neu sind nur Reiter und Ansicht.
+ * Header (round 14): search field, on movies/series the tabs, on the right "View" (card size/images), bell (reminders)
+ * and the profile circle. The functions behind it already existed; only tabs and View are new.
  */
 @Composable
 fun HeaderBar(
@@ -62,7 +62,9 @@ fun HeaderBar(
     onNewEpisode: (String) -> Unit = {},
     tabs: List<HeaderTab> = emptyList(),
     showView: Boolean = false,
-    firstIsContent: Boolean = false
+    firstIsContent: Boolean = false,
+    /** Area for the playlist selection: 1 movies, 2 series, otherwise the general switch. */
+    areaTab: Int = -1
 ) {
     Row(
         modifier.fillMaxWidth().padding(start = dpx(38), end = dpx(36), top = dpx(14)).height(dpx(52)),
@@ -80,6 +82,15 @@ fun HeaderBar(
         Spacer(Modifier.weight(1f))
         if (showView) {
             ViewButton()
+            Spacer(Modifier.width(dpx(14)))
+        }
+        if (PlaylistStore.lists.size > 1) {
+            if (areaTab in 1..2) AreaPlaylistPill(areaTab) else PlaylistSwitchButton()
+            Spacer(Modifier.width(dpx(14)))
+        }
+        // Time and date right next to the notification bell (the only clock on screen)
+        if (General.showClock) {
+            ClockPill()
             Spacer(Modifier.width(dpx(14)))
         }
         BellButton(onReminder, onNewEpisode)
@@ -108,14 +119,14 @@ private fun SearchPill(w: Int, onClick: () -> Unit) {
     }
 }
 
-/** Reiter: ruhig (Text und Symbol auf leichter Fläche), markiert: weiße Fläche mit dunkler Schrift. */
+/** Tab: calm (text and icon on a light surface), selected: white surface with dark text. */
 @Composable
 private fun NavTab(t: HeaderTab, fixedReq: FocusRequester?) {
     var f by remember { mutableStateOf(false) }
     val s by animateFloatAsState(if (f) focusScale(1.05f) else 1f, label = "navtab")
     val shape = RoundedCornerShape(50)
-    // Zurück aus „Alle …“, „Neu hinzugefügt“, „Top bewertet“ oder „Kategorien“: denselben Reiter wieder markieren
-    // Nur EIN focusRequester pro Element (zwei auf einem Element: der Rückkehr-Fokus griff beim ersten Reiter nicht)
+    // Back from "All …", "Newly added", "Top rated" or "Categories": highlight the same tab again
+    // Only ONE focusRequester per element (two on one element: the return focus did not work for the first tab)
     val own = remember { FocusRequester() }
     val back = fixedReq ?: own
     LaunchedEffect(Unit) {
@@ -125,10 +136,10 @@ private fun NavTab(t: HeaderTab, fixedReq: FocusRequester?) {
         }
     }
     Row(
-        Modifier.focusRequester(back).graphicsLayer { scaleX = s; scaleY = s }.height(dpx(44)).clip(shape)
+        Modifier.graphicsLayer { scaleX = s; scaleY = s }.height(dpx(44)).clip(shape)
             .background(if (f) DS.FocusFill else Color(0x14FFFFFF))
             .onFocusChanged { f = it.isFocused }
-            .trackFocus()
+            .trackFocus(back)
             .clickable { HeaderFocus.returnTo = t.id; t.onClick() }
             .padding(horizontal = dpx(18)),
         verticalAlignment = Alignment.CenterVertically,
@@ -156,7 +167,7 @@ private fun RoundHeaderButton(icon: AIcon, modifier: Modifier = Modifier, onClic
     }
 }
 
-/** „Ansicht“: Kartengröße und Bildart der Reihen (gilt sofort, wird gemerkt). */
+/** "View": card size and image type of the rows (applies immediately, is remembered). */
 @Composable
 private fun ViewButton() {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -238,13 +249,13 @@ private fun BellButton(onReminder: (Reminder) -> Unit, onNewEpisode: (String) ->
     val upd = AppUpdate.available
     Box {
         RoundHeaderButton(AIcon.Bell, onClick = { open = true }) {
-            // Punkt: rot bei neuen Folgen oder einem App-Update, sonst in der Designfarbe, sobald Erinnerungen gesetzt sind
+            // Dot: red for new episodes or an app update, otherwise in the design color once reminders are set
             if (list.isNotEmpty() || news.isNotEmpty() || upd != null) Box(Modifier.padding(start = dpx(22), bottom = dpx(22)).size(dpx(9)).clip(CircleShape).background(if (news.isNotEmpty() || upd != null) Color(0xFFFF5A5F) else Accent1))
         }
         if (open) {
             if (list.isEmpty() && news.isEmpty() && upd == null) OptionPopup(listOf("Keine Benachrichtigungen"), -1, { open = false }, listOf(AIcon.BellOff)) { open = false }
             else {
-                // Zuerst ein App-Update, dann neue Folgen von Favoriten-Serien, dann die Erinnerungen an Sendungen
+                // First an app update, then new episodes of favorite series, then the reminders for shows
                 val up = if (upd != null) listOf(Lang.tr("Update verfügbar: Version {0}").replace("{0}", upd.name) + (if (upStatus.isNotEmpty()) "  ·  " + Lang.tr(upStatus) else "")) else emptyList()
                 val labels = up + news.map { it.title + "  ·  " + Lang.tr(NewEpisodeLogic.text(it)) } +
                     list.map { dayLabel(it.start) + "  " + hhmm(it.start) + "  ·  " + it.title + "  ·  " + it.chTitle }
@@ -269,7 +280,72 @@ private fun BellButton(onReminder: (Reminder) -> Unit, onNewEpisode: (String) ->
     }
 }
 
-/** Profil: nur ein Kreis mit Personen-Symbol (Runde 14, ohne „Hallo, Name“). */
+/** Clock next to the profile (setting "Show clock", default on). Follows the time zone and time format from the settings. */
+@Composable
+private fun ClockPill() {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(60_000L - now % 60_000L + 50L)
+        }
+    }
+    val h24 = when (General.timeFmt) { 1 -> true; 2 -> false; else -> General.sys24 }
+    val fmt = java.text.SimpleDateFormat(if (h24) "HH:mm" else "h:mm a", java.util.Locale.getDefault())
+    fmt.timeZone = General.zone()
+    val dfmt = java.text.SimpleDateFormat("EEE, d. MMM", java.util.Locale.getDefault())
+    dfmt.timeZone = General.zone()
+    Column(horizontalAlignment = Alignment.End) {
+        Text(fmt.format(java.util.Date(now)), color = Color.White, fontSize = spx(20), fontWeight = FontWeight.SemiBold, maxLines = 1, raw = true)
+        Text(dfmt.format(java.util.Date(now)), color = Tok.TextLow, fontSize = spx(12), maxLines = 1, raw = true)
+    }
+}
+
+/**
+ * Playlist selection for movies and series (separate per area): "All playlists" or one of the shown playlists.
+ * A playlist that is not shown is activated and loaded (as in Live TV).
+ */
+@Composable
+private fun AreaPlaylistPill(tab: Int) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val pls = PlaylistStore.lists.toList()
+    val multiView = PlaylistStore.sourceNames.size > 1
+    val k = if (multiView) AreaSource.get(tab) else -1
+    val opts = (if (multiView) listOf(Lang.tr("Alle Playlists")) else emptyList()) + pls.map { it.name }
+    val off = if (multiView) 1 else 0
+    val cur = if (multiView && k < 0) 0 else {
+        val si = if (multiView) k else 0
+        (pls.indices.firstOrNull { PlaylistStore.shownIndex(it) == si } ?: PlaylistStore.active) + off
+    }
+    DropdownPill("Playlist", opts.getOrElse(cur) { "" }, opts, cur, active = multiView && k >= 0, icon = FIcon.Grid) { pick ->
+        if (multiView && pick == 0) AreaSource.set(tab, -1)
+        else {
+            val pi = pick - off
+            val si = PlaylistStore.shownIndex(pi)
+            if (si >= 0) { if (multiView) AreaSource.set(tab, si) }
+            else { AreaSource.set(tab, -1); scope.launch { PlaylistStore.switchTo(ctx, pi) } }
+        }
+    }
+}
+
+/** Switch playlist (only with several playlists): applies to movies, series, Live TV and the home screen. */
+@Composable
+private fun PlaylistSwitchButton() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var open by remember { mutableStateOf(false) }
+    val pls = PlaylistStore.lists.toList()
+    Box {
+        RoundHeaderButton(AIcon.Download, onClick = { open = true })
+        if (open) OptionPopup(pls.map { it.name }, PlaylistStore.active, { open = false }) { i ->
+            open = false
+            if (i != PlaylistStore.active) scope.launch { PlaylistStore.switchTo(ctx, i) }
+        }
+    }
+}
+
+/** Profile: only a circle with a person icon (round 14, without "Hello, name"). */
 @Composable
 private fun ProfileCircle(onClick: () -> Unit) {
     RoundHeaderButton(AIcon.Person, Modifier.focusRequester(HeaderFocus.profile), onClick = onClick)

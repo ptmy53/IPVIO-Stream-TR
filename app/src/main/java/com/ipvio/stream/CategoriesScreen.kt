@@ -44,7 +44,9 @@ data class CatReq(
     val provider: Map<String, List<Item>>,
     val sort: Int,
     val recent: List<Item> = emptyList(),
-    val watch: List<Item> = emptyList()
+    val watch: List<Item> = emptyList(),
+    /** [CatOrder.MOVIE] / [CatOrder.SERIES]: provider categories use the saved sorting and can be moved. null = only Standard/A–Z. */
+    val area: String? = null
 )
 
 const val CAT_RECENT = "Zuletzt geschaut"
@@ -82,6 +84,10 @@ fun CategoriesScreen(
     CatPrefs.init(ctx)
     var mode by remember { mutableIntStateOf(if (AppSettings.ipvioFilter && req.ipvio.isNotEmpty()) 0 else 1) }
     var az by remember { mutableStateOf(false) }
+    val area = req.area
+    if (area != null) CatOrder.init(ctx)
+    // Saved sorting (Standard / A–Z / own order) only for provider categories; auto genres keep the simple A–Z switch
+    val saved = area != null && mode == 1
     val sideFocus = remember { FocusRequester() }
     val pillFocus = remember { FocusRequester() }
     val firstFocus = ContentFocus.req
@@ -91,9 +97,10 @@ fun CategoriesScreen(
     BackHandler(enabled = inPills) { onBack() }
 
     val map = if (mode == 0) req.ipvio else req.provider
-    val entries = remember(map, az, req.recent, req.watch) {
+    val entries = remember(map, az, saved, CatOrder.version, req.recent, req.watch) {
         val l = map.entries.map { it.key to it.value }
-        val base = if (az) l.sortedBy { it.first.lowercase() } else l
+        val base = if (saved && area != null) CatOrder.sorted(area, map.keys.toList()).mapNotNull { k -> map[k]?.let { k to it } }
+            else if (az) l.sortedBy { it.first.lowercase() } else l
         val top = ArrayList<Pair<String, List<Item>>>()
         if (req.recent.isNotEmpty()) top.add(CAT_RECENT to req.recent)
         if (req.watch.isNotEmpty()) top.add(CAT_WATCH to req.watch)
@@ -115,15 +122,21 @@ fun CategoriesScreen(
             Spacer(Modifier.height(10.dp))
             Box(Modifier.onFocusChanged { inPills = it.hasFocus }) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // Anbieter-Kategorien zuerst; die Wahl wird gespeichert (gleiche Einstellung wie „Automatische Genres“)
+                    // Provider categories first; the choice is saved (same setting as "Automatic genres")
                     val modes = listOf("Anbieter-Kategorien", "Auto-Genres")
                     val sel = if (mode == 0) 1 else 0
                     DropdownPill("Filter", modes[sel], modes, sel, modifier = Modifier.focusRequester(pillFocus), icon = FIcon.Genre) {
                         mode = if (it == 1) 0 else 1
                         AppSettings.set(ctx, mode == 0)
                     }
-                    val sorts = listOf("Standard", "A–Z")
-                    DropdownPill("Sortierung", sorts[if (az) 1 else 0], sorts, if (az) 1 else 0, icon = FIcon.Sort) { az = it == 1 }
+                    if (saved && area != null) {
+                        val sorts = listOf("Standard", "A–Z", "Eigene Reihenfolge")
+                        val si = CatOrder.mode(area).coerceIn(0, 2)
+                        DropdownPill("Sortierung", sorts[si], sorts, si, icon = FIcon.Sort) { CatOrder.setMode(ctx, area, it) }
+                    } else {
+                        val sorts = listOf("Standard", "A–Z")
+                        DropdownPill("Sortierung", sorts[if (az) 1 else 0], sorts, if (az) 1 else 0, icon = FIcon.Sort) { az = it == 1 }
+                    }
                     val views = listOf("Liste", "Kacheln")
                     DropdownPill("Ansicht", views[if (CatPrefs.listView) 0 else 1], views, if (CatPrefs.listView) 0 else 1, icon = FIcon.View) { CatPrefs.set(ctx, it == 0) }
                     if (CatPrefs.listView) {
@@ -139,9 +152,14 @@ fun CategoriesScreen(
             if (mode == 0 && req.ipvio.isEmpty()) AutoGenresOff()
             else {
                 if (mode == 0 && Classifier.running) Text("Genres werden gerade im Hintergrund erkannt. Die Kategorien erscheinen nach und nach.", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
-                // Auto-Genres: Titel gleich nach Bewertung sortiert (beste zuerst); Kategorien des Anbieters behalten ihre Sortierung
+                // Auto genres: titles sorted by rating (best first); provider categories keep their sorting
                 val catSort = if (mode == 0) 2 else req.sort
-                if (CatPrefs.listView) ListMode(req.title, entries, catSort, firstFocus, pillFocus, onPick, onOpen) { bgItem = it }
+                // Menu key / long OK on a provider category: move it (switches to the own order)
+                val onMove: ((String, Int) -> Unit)? = if (saved && area != null) { name, how ->
+                    val names = map.keys.toList()
+                    if (how == 0) CatOrder.toTop(ctx, area, names, name) else CatOrder.move(ctx, area, names, name, how)
+                } else null
+                if (CatPrefs.listView) ListMode(req.title, entries, catSort, firstFocus, pillFocus, onPick, onOpen, onMove) { bgItem = it }
                 else TileMode(entries, catSort, firstFocus, onPick)
             }
         }
@@ -164,7 +182,8 @@ object CatMemory {
 @Composable
 private fun ListMode(
     title: String, entries: List<Pair<String, List<Item>>>, sort: Int, firstFocus: FocusRequester, pillFocus: FocusRequester,
-    onPick: (String, List<Item>, Int) -> Unit, onOpen: (Item) -> Unit, onFocusItem: (Item) -> Unit
+    onPick: (String, List<Item>, Int) -> Unit, onOpen: (Item) -> Unit,
+    onMove: ((String, Int) -> Unit)?, onFocusItem: (Item) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var sel by remember { mutableIntStateOf((CatMemory.sel[title] ?: 0).coerceIn(0, maxOf(entries.lastIndex, 0))) }
@@ -179,13 +198,33 @@ private fun ListMode(
     }
     val catState = rememberLazyListState(maxOf(sel - 3, 0))
     val previewState = remember(cur?.first) { androidx.compose.foundation.lazy.grid.LazyGridState() }
-    val prev = remember(cur?.first, cur?.second) {
+    // Stalker portal: titles of the category loaded on demand belong to it (see [StalkerMore])
+    val more = cur?.let { StalkerMore.added[it.first] }
+    val prev = remember(cur?.first, cur?.second, more) {
         val c = cur
         if (c == null) emptyList<Item>()
         else if (isTopEntry(c.first)) c.second.take(40)
-        else c.second.takeLast(40).reversed()
+        else StalkerMore.withAdded(c.first, c.second).takeLast(40).reversed()
+    }
+    val ctx = LocalContext.current
+    // Stayed on the category briefly: fetch the next portion from the portal (not while scrolling quickly)
+    LaunchedEffect(cur?.first) {
+        val c = cur ?: return@LaunchedEffect
+        if (isTopEntry(c.first)) return@LaunchedEffect
+        kotlinx.coroutines.delay(600)
+        StalkerMore.prefetch(ctx, c.first, c.second.mapTo(HashSet()) { it.kind })
     }
     SideEffect { CatMemory.sel[title] = sel }
+    // Unique row keys (a provider category could be called like a top entry)
+    val rowKeys = remember(entries) { val seen = HashSet<String>(); entries.mapIndexed { i, e -> if (seen.add(e.first)) e.first else e.first + "#" + i } }
+    // After moving a category the selection follows it to its new place
+    var movedName by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(entries) {
+        val m = movedName ?: return@LaunchedEffect
+        movedName = null
+        val j = entries.indexOfFirst { it.first == m }
+        if (j >= 0) sel = j
+    }
     BackHandler(enabled = inPreview) { runCatching { firstFocus.requestFocus() } }
     LaunchedEffect(cur?.first) {
         focusedItem = prev.firstOrNull()
@@ -217,16 +256,26 @@ private fun ListMode(
     }
     Row(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.width(250.dp).fillMaxHeight(), state = catState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            itemsIndexed(entries) { i, e ->
-                CatListRow(
-                    e.first, e.second.size, i == sel,
-                    if (i == sel) Modifier.focusRequester(firstFocus) else Modifier,
-                    onFocus = { sel = i }, onRight = { focusPreview() }
-                ) { onPick(e.first, e.second, sortFor(e.first, sort)) }
+            itemsIndexed(entries, key = { i, e -> rowKeys.getOrElse(i) { e.first + "#" + i } }) { i, e ->
+                var moveMenu by remember { mutableStateOf(false) }
+                val all = if (isTopEntry(e.first)) e.second else StalkerMore.withAdded(e.first, e.second)
+                Box {
+                    CatListRow(
+                        e.first, StalkerMore.total(ctx, e.first, setOfNotNull(e.second.firstOrNull()?.kind)) ?: all.size, i == sel,
+                        if (i == sel) Modifier.focusRequester(firstFocus) else Modifier,
+                        onFocus = { sel = i }, onRight = { focusPreview() },
+                        onMenu = if (onMove != null && !isTopEntry(e.first)) ({ moveMenu = true }) else null
+                    ) { onPick(e.first, all, sortFor(e.first, sort)) }
+                    if (moveMenu && onMove != null) OptionPopup(listOf("Nach oben verschieben", "Nach unten verschieben", "An den Anfang verschieben"), -1, { moveMenu = false }) { k ->
+                        moveMenu = false
+                        movedName = e.first
+                        onMove(e.first, when (k) { 0 -> -1; 1 -> 1; else -> 0 })
+                    }
+                }
             }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().padding(start = 24.dp).onFocusChanged { inPreview = it.hasFocus }) {
-            // Raster: 2 Zeilen mit großen Covern (Standard 5 Spalten = 10 Titel), Spalten einstellbar im Knopf "Ansicht"
+            // Grid: 2 rows with large covers (default 5 columns = 10 titles), columns adjustable in the "View" button
             val cols = if (General.perRow > 0) General.perRow.coerceIn(3, 7) else 5
             val gap = 14.dp
             val byWidth = (maxWidth - gap * (cols - 1)) / cols
@@ -267,12 +316,13 @@ private fun ListMode(
 @Composable
 private fun CatListRow(
     name: String, count: Int, selected: Boolean, modifier: Modifier,
-    onFocus: () -> Unit, onRight: () -> Unit, onClick: () -> Unit
+    onFocus: () -> Unit, onRight: () -> Unit, onMenu: (() -> Unit)? = null, onClick: () -> Unit
 ) {
     var f by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(DS.RadiusS)
     Row(
         modifier.fillMaxWidth().clip(shape)
+            .then(if (onMenu != null) Modifier.favKeys(onMenu) else Modifier)
             .background(if (f) DS.Overlay4 else if (selected) DS.Overlay2 else Color.Transparent)
             .border(DS.Border, if (f) Accent2 else Color.Transparent, shape)
             .onFocusChanged { f = it.isFocused; if (it.isFocused) onFocus() }
@@ -305,8 +355,8 @@ private fun TileMode(entries: List<Pair<String, List<Item>>>, sort: Int, firstFo
 }
 
 /**
- * Rubrik-Kachel: Hintergrundbild vom neuesten Titel, davor ein kleiner Fächer aus bis zu drei Covern,
- * links Name und Anzahl. Ohne Bilder bleibt ein ruhiger Farbverlauf in der Akzentfarbe.
+ * Category tile: background image from the newest title, in front a small fan of up to three covers,
+ * name and count on the left. Without images a calm gradient in the accent color remains.
  */
 @Composable
 private fun CatTile(name: String, items: List<Item>, modifier: Modifier, onClick: () -> Unit) {
@@ -349,7 +399,7 @@ private fun CatTile(name: String, items: List<Item>, modifier: Modifier, onClick
     }
 }
 
-/** Erklärt, warum die automatischen Genres leer sind (Bibliothek zu groß), und was man tun kann. */
+/** Explains why the automatic genres are empty (library too large) and what you can do. */
 @Composable
 private fun AutoGenresOff() {
     val all = PlaylistStore.channels

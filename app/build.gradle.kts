@@ -36,8 +36,10 @@ android {
         minSdk = 24
         targetSdk = 37
         // Raise both for every release; the GitHub release tag must match versionName (e.g. tag "v1.1").
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 6
+        versionName = "1.4.1"
+        // Name under the icon; the debug build overrides it (see buildTypes)
+        manifestPlaceholders["appLabel"] = "IPVIO Stream"
 
         buildConfigField("String", "TMDB_KEY", "\"${secret("TMDB_KEY")}\"")
         buildConfigField("String", "OMDB_KEY", "\"${secret("OMDB_KEY")}\"")
@@ -55,11 +57,24 @@ android {
     }
 
     buildTypes {
+        // Test build (Run in Android Studio / debug APK): own app ID, so the private IPVIO app on the TV
+        // is not overwritten. Both apps can be installed side by side (own data, own name).
+        debug {
+            applicationIdSuffix = ".test"
+            manifestPlaceholders["appLabel"] = "IPVIO Stream"
+        }
         release {
             if (hasKeystore) signingConfig = signingConfigs.getByName("release")
             optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+                // R8 runs over the whole app in the classic way, without packageScope (T-024, ADR 0005). The libraries (Compose,
+                // Media3, OkHttp, Kotlin) are shrunk and optimized; without that Compose runs unoptimized and the UI is noticeably
+                // slower. The app's own code (com.ipvio.**) is kept unchanged by a keep rule, and renaming and repackaging of
+                // classes are switched off. Rules: src/main/keepRules/reflection.keep. This also turns on resource shrinking.
+                // History: the library-only packageScope crashed the release at start with AGP 9.x (IllegalAccessError: renamed
+                // kotlin.text class, in androidx.startup.InitializationProvider); during 1.2 a build with com.ipvio.** in the
+                // scope (12.7 MB) did not start either (cause unknown, see ADR 0001).
+                // Rollback: set enable = false (this one line).
+                enable = false
             }
         }
     }
@@ -97,4 +112,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Real JSON implementation for JVM unit tests (the Android android.jar only has stubs that throw).
+    // Needed by ListImportLogic.parseTrakt, which swallows the stub exception and returns an empty list.
+    testImplementation("org.json:json:20250517")
 }

@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Nederlandse vertalingen (deel 4/5): rijen Duits-Nederlands, aanvulling op de 9 talen in DictA–J
+// Dutch translations (part 4/5): German-Dutch rows, in addition to the 9 languages in DictA–J
 val DictNl4 = """
 Keine¦Geen
 Zweite Tonspur¦Tweede geluidsspoor

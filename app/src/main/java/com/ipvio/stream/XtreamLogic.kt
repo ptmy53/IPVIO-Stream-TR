@@ -4,16 +4,16 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 /**
- * Xtream-Zugang über die Schnittstelle des Anbieters (player_api.php) statt über die fertige Liste (get.php).
- * Ohne Android, testbar.
+ * Xtream access via the provider's API (player_api.php) instead of via the finished list (get.php).
+ * Without Android, testable.
  *
- * Manche Anbieter schalten get.php ab, begrenzen es oder antworten mit eigenen Fehlercodes (z. B. 884), während die
- * Schnittstelle funktioniert (so arbeitet auch TiviMate). Die App baut aus den Antworten der Schnittstelle eine Liste
- * im selben Format wie get.php (type=m3u_plus, output=ts). So bleiben Einlesen, Sprachfilter, Zwischenspeicher und
- * Titel-IDs gleich.
+ * Some providers switch get.php off, limit it or answer with their own error codes (e.g. 884) while the
+ * API works (this is how TiviMate works too). The app builds a list from the API's answers
+ * in the same format as get.php (type=m3u_plus, output=ts). So parsing, language filter, cache and
+ * title IDs stay the same.
  */
 object XtreamLogic {
-    /** Zugang mit Klartext-Benutzer und -Passwort; [base] = Adresse vor „/get.php“ bzw. „/player_api.php“. */
+    /** Login with plain-text user and password; [base] = address before "/get.php" or "/player_api.php". */
     data class Acct(val base: String, val user: String, val pass: String)
 
     private val GET = Regex("""^(https?://[^?#]+?)/(?:get|player_api)\.php\?(.*)$""", RegexOption.IGNORE_CASE)
@@ -22,7 +22,7 @@ object XtreamLogic {
     private val YEAR_IN_NAME = Regex("""[\(\[](?:19|20)\d{2}[\)\]]""")
     private val YEAR = Regex("""^(?:19|20)\d{2}""")
 
-    /** Zugang aus einer get.php-Adresse, sonst null. */
+    /** Login from a get.php address, otherwise null. */
     fun fromUrl(url: String): Acct? {
         val m = GET.find(url.trim()) ?: return null
         val q = HashMap<String, String>()
@@ -38,7 +38,7 @@ object XtreamLogic {
 
     private fun qEnc(s: String) = URLEncoder.encode(s, "UTF-8")
 
-    /** Teil eines Pfads: wie beim Anbieter üblich unverändert, nur Sonderzeichen werden kodiert. */
+    /** Part of a path: as usual with providers unchanged, only special characters are encoded. */
     fun pathPart(s: String): String = if (SAFE.matches(s)) s else URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 
     fun api(a: Acct, action: String? = null, extra: String = ""): String =
@@ -50,12 +50,12 @@ object XtreamLogic {
     fun movieUrl(a: Acct, id: String, ext: String?): String = "${a.base}/movie/${pathPart(a.user)}/${pathPart(a.pass)}/$id.${ext(ext, "mp4")}"
     fun episodeUrl(a: Acct, id: String, ext: String?): String = "${a.base}/series/${pathPart(a.user)}/${pathPart(a.pass)}/$id.${ext(ext, "mp4")}"
 
-    /** Wert für ein Attribut der #EXTINF-Zeile (ohne Anführungszeichen und Zeilenumbrüche). */
+    /** Value for an attribute of the #EXTINF line (without quotes and line breaks). */
     fun attr(s: String?): String = (s ?: "").replace('"', '\'').replace('\r', ' ').replace('\n', ' ').trim()
 
     /**
-     * Name am Ende der #EXTINF-Zeile. Das Einlesen nimmt alles nach dem letzten Komma; ein Komma im Namen wird deshalb
-     * durch das gleich aussehende „‚“ ersetzt („Tiger‚ Dragon“ statt nur „Dragon“).
+     * Name at the end of the #EXTINF line. Parsing takes everything after the last comma; a comma in the name is therefore
+     * replaced by the similar-looking "‚" ("Tiger‚ Dragon" instead of just "Dragon").
      */
     fun name(s: String?): String = (s ?: "").replace(',', '‚').replace('\r', ' ').replace('\n', ' ').trim()
 
@@ -64,10 +64,10 @@ object XtreamLogic {
     private fun group(f: Map<String, String>, cats: Map<String, String>): String =
         f["category_id"]?.let { cats[it.trim()] }?.takeIf { it.isNotBlank() } ?: "Sonstige"
 
-    /** Kopfzeile der erzeugten Liste (mit EPG-Adresse des Anbieters). */
+    /** Header line of the generated list (with the provider's EPG address). */
     fun header(a: Acct): String = "#EXTM3U url-tvg=\"${a.base}/xmltv.php?username=${qEnc(a.user)}&password=${qEnc(a.pass)}\""
 
-    /** Ein Sender aus get_live_streams als zwei Zeilen (#EXTINF + Adresse), null = unbrauchbar. */
+    /** A channel from get_live_streams as two lines (#EXTINF + address), null = unusable. */
     fun liveEntry(a: Acct, f: Map<String, String>, cats: Map<String, String>): String? {
         val id = idOf(f, "stream_id") ?: return null
         val n = name(f["name"]).ifEmpty { return null }
@@ -83,7 +83,7 @@ object XtreamLogic {
         return sb.append(',').append(n).append('\n').append(liveUrl(a, id)).toString()
     }
 
-    /** Ein Film aus get_vod_streams; fehlt das Jahr im Namen, wird es aus „year“ bzw. „releaseDate“ ergänzt. */
+    /** A movie from get_vod_streams; if the year is missing in the name, it is added from "year" or "releaseDate". */
     fun movieEntry(a: Acct, f: Map<String, String>, cats: Map<String, String>): String? {
         val id = idOf(f, "stream_id") ?: return null
         var n = name(f["name"]).ifEmpty { return null }
@@ -97,7 +97,7 @@ object XtreamLogic {
         return sb.append(',').append(n).append('\n').append(movieUrl(a, id, f["container_extension"])).toString()
     }
 
-    /** Eine Serie aus get_series (nur was für die Folgenliste nötig ist). */
+    /** A series from get_series (only what is needed for the episode list). */
     data class Series(val id: String, val name: String, val cover: String?, val group: String)
 
     fun seriesOf(f: Map<String, String>, cats: Map<String, String>): Series? {
@@ -106,13 +106,13 @@ object XtreamLogic {
         return Series(id, n, attr(f["cover"]).takeIf { it.startsWith("http") }, group(f, cats))
     }
 
-    /** Endung der Platzhalter-Adresse einer Serie, deren Folgen erst beim Öffnen geladen werden. */
+    /** Ending of the placeholder address of a series whose episodes are only loaded on opening. */
     const val LAZY_EXT = "xtser"
 
     /**
-     * Platzhalter für eine Serie: ein Eintrag statt aller Folgen. Das Einlesen sieht eine Serie mit einer Folge (S01E01);
-     * die echten Folgen holt die App erst, wenn die Serie geöffnet wird (siehe [LazySeries]). Bei 50.000 Serien spart das
-     * 50.000 Abfragen beim Laden der Playlist.
+     * Placeholder for a series: one entry instead of all episodes. Parsing sees a series with one episode (S01E01);
+     * the app fetches the real episodes only when the series is opened (see [LazySeries]). With 50,000 series this saves
+     * 50,000 requests when loading the playlist.
      */
     fun lazyEntry(a: Acct, s: Series): String {
         val sb = StringBuilder(160).append("#EXTINF:-1")
@@ -124,7 +124,7 @@ object XtreamLogic {
 
     private val LAZY_URL = Regex("""^(https?://.+?)/series/([^/]+)/([^/]+)/(\d+)\.$LAZY_EXT$""")
 
-    /** Zugang und Serien-ID aus einer Platzhalter-Adresse; null = keine. Benutzer und Passwort kommen unkodiert zurück. */
+    /** Login and series ID from a placeholder address; null = none. User and password come back unencoded. */
     fun parseLazy(url: String): Pair<Acct, String>? {
         val m = LAZY_URL.find(url) ?: return null
         val g = m.groupValues
@@ -133,8 +133,8 @@ object XtreamLogic {
     }
 
     /**
-     * Platzhalter-Adressen einer Serie (eine je Quelle bei mehreren Playlists, Beschriftung = Name der Quelle, leer bei der ersten).
-     * Leer, wenn die Serie echte Folgen hat.
+     * Placeholder addresses of a series (one per source with several playlists, label = name of the source, empty for the first).
+     * Empty if the series has real episodes.
      */
     fun lazyUrls(i: Item): List<Pair<String, String>> {
         if (i.kind != Kind.SERIES || i.episodes.size != 1) return emptyList()
@@ -146,7 +146,7 @@ object XtreamLogic {
 
     fun isLazy(i: Item): Boolean = lazyUrls(i).isNotEmpty()
 
-    /** Staffel, Folge und Adresse einer Folge aus get_series_info; null = unbrauchbar. [seasonKey] = Staffel aus dem Schlüssel der Antwort. */
+    /** Season, episode and address of an episode from get_series_info; null = unusable. [seasonKey] = season from the key of the response. */
     fun episodeParts(a: Acct, f: Map<String, String>, seasonKey: Int?): Triple<Int, Int, String>? {
         val id = idOf(f, "id") ?: return null
         val season = f["season"]?.trim()?.toIntOrNull() ?: seasonKey ?: 1
@@ -155,7 +155,7 @@ object XtreamLogic {
         return Triple(season, num, episodeUrl(a, id, f["container_extension"]))
     }
 
-    /** Eine Folge aus get_series_info; [seasonKey] = Staffel aus dem Schlüssel der Antwort, falls die Folge keine nennt. */
+    /** An episode from get_series_info; [seasonKey] = season from the key of the response in case the episode names none. */
     fun episodeEntry(a: Acct, s: Series, f: Map<String, String>, seasonKey: Int?): String? {
         val id = idOf(f, "id") ?: return null
         val season = f["season"]?.trim()?.toIntOrNull() ?: seasonKey ?: 1
@@ -169,7 +169,7 @@ object XtreamLogic {
         return sb.append('\n').append(episodeUrl(a, id, f["container_extension"])).toString()
     }
 
-    /** Antwort ohne Aktion: Zugang gültig? null = unbekannt (Antwort nicht lesbar), sonst true/false. */
+    /** Response without action: login valid? null = unknown (response not readable), otherwise true/false. */
     fun authOk(auth: String?, status: String?): Boolean? {
         val a = auth?.trim()
         if (a == "0") return false
@@ -178,7 +178,7 @@ object XtreamLogic {
         return null
     }
 
-    /** Sieht der Anfang einer heruntergeladenen Datei wie eine M3U-Liste aus? */
+    /** Does the beginning of a downloaded file look like an M3U list? */
     fun looksLikeM3u(head: String): Boolean {
         val t = head.trimStart('﻿', ' ', '\r', '\n', '\t')
         return t.startsWith("#EXTM3U") || t.startsWith("#EXTINF")

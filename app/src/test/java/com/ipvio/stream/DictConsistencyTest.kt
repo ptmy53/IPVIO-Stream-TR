@@ -10,7 +10,7 @@ class DictConsistencyTest {
 
     @Test fun placeholders_eindeutig_und_in_allen_sprachen() {
         val problems = ArrayList<String>()
-        for (block in listOf(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI, DictJ, DictNl1, DictNl2, DictNl3, DictNl4, DictNl5)) {
+        for (block in listOf(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI, DictJ, DictK, DictL, DictM, DictNl1, DictNl2, DictNl3, DictNl4, DictNl5, DictNl6)) {
             for (line in block.lineSequence()) {
                 if (line.isBlank() || line.startsWith("#") || !line.contains('¦')) continue
                 val cols = line.split('¦')
@@ -27,7 +27,7 @@ class DictConsistencyTest {
     }
 
     @Test fun niederlaendisch_deckt_alle_zeilen_ab() {
-        I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI, DictJ)
+        I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI, DictJ, DictK, DictL, DictM)
         val nl = I18nCore.CODES.indexOf("nl")
         assertEquals(9, nl)
         I18nCore.loadColumn(nl, DictNl1, DictNl2, DictNl3, DictNl4, DictNl5)
@@ -62,7 +62,7 @@ class DictConsistencyTest {
     }
 
     @Test fun zahlen_werden_richtig_eingesetzt() {
-        I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI, DictJ)
+        I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI, DictJ, DictK, DictL, DictM)
         assertEquals("loading 5/10", I18nCore.translate("lädt 5/10", 1))
         assertEquals("8 episodes", I18nCore.translate("8 Folgen", 1))
         assertEquals("No connection: SocketException", I18nCore.translate("Keine Verbindung: SocketException", 1))

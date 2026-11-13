@@ -11,25 +11,25 @@ import androidx.compose.runtime.setValue
 import java.lang.ref.WeakReference
 
 /**
- * Hält den Bildschirm wach (FLAG_KEEP_SCREEN_ON am Fenster der Activity), solange mindestens ein Grund aktiv ist.
- * Wird ausschließlich im Hauptthread benutzt (Compose-Effekte, Lebenszyklus der Activity).
- * Die CPU- und WLAN-Sperre während der Wiedergabe übernimmt der Player selbst (WAKE_MODE_NETWORK).
+ * Keeps the screen awake (FLAG_KEEP_SCREEN_ON on the activity's window) as long as at least one reason is active.
+ * Used exclusively on the main thread (Compose effects, activity lifecycle).
+ * The CPU and Wi-Fi lock during playback is handled by the player itself (WAKE_MODE_NETWORK).
  */
 object ScreenAwake {
     private val tags = AwakeTags()
     private var window: WeakReference<Window>? = null
 
-    /** true, wenn der Bildschirm gerade wach gehalten wird. */
+    /** true if the screen is currently kept awake. */
     var isOn by mutableStateOf(false)
         private set
-    /** true, wenn wach gehalten werden müsste, es aber nicht geht (kein Fenster, Fehler des Systems). */
+    /** true if it should be kept awake but cannot be (no window, system error). */
     var unavailable by mutableStateOf(false)
         private set
-    /** Gründe, die gerade aktiv sind (für die Diagnose). */
+    /** Reasons that are currently active (for diagnostics). */
     var reasons by mutableStateOf("")
         private set
 
-    /** Die letzten Wechsel (an/aus mit Uhrzeit und Grund) – in Einstellungen → Diagnose sichtbar, zum Nachprüfen. */
+    /** The last changes (on/off with time and reason) – visible in Settings → Diagnostics, for checking. */
     val history = ArrayDeque<Pair<Long, String>>()
 
     private fun note(on: Boolean) {
@@ -49,7 +49,7 @@ object ScreenAwake {
 
     fun set(tag: String, on: Boolean) { tags.set(tag, on); apply() }
 
-    /** Setzt das Fenster-Flag passend zum Zustand. Auch nach Rückkehr aus dem Standby aufrufen (falls das System es verworfen hat). */
+    /** Sets the window flag to match the state. Also call after returning from standby (in case the system dropped it). */
     fun apply() {
         reasons = tags.names().joinToString(", ")
         val want = tags.active
@@ -69,7 +69,7 @@ object ScreenAwake {
     }
 }
 
-/** Hält den Bildschirm wach, solange [active] gilt und die Stelle angezeigt wird. Beim Verlassen wird sicher freigegeben. */
+/** Keeps the screen awake as long as [active] holds and the spot is displayed. It is released safely on leaving. */
 @Composable
 fun KeepScreenOn(tag: String, active: Boolean) {
     DisposableEffect(tag, active) {

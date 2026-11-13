@@ -56,7 +56,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Runder Steuerknopf. Fokus = weiße Fläche mit dunklem Symbol (gut aus 3 m erkennbar). */
+/** Round control button. Focus = white surface with a dark icon (easily recognizable from 3 m). */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun PRoundButton(
@@ -85,7 +85,7 @@ fun PRoundButton(
     }
 }
 
-/** Kleine Info-Marke, z. B. "4K", "HEVC", "Staffel 2". */
+/** Small info badge, e.g. "4K", "HEVC", "Staffel 2". */
 @Composable
 fun PChip(text: String, modifier: Modifier = Modifier, filled: Boolean = false, icon: AIcon? = null, raw: Boolean = false) {
     Box(
@@ -112,7 +112,7 @@ fun PLiveChip(modifier: Modifier = Modifier, behindSec: Long = 0L) {
     }
 }
 
-/** Dezenter Überspringen-Knopf (Intro, Rückblick, Abspann → nächste Folge): klein, durchsichtig, im Stil der App. */
+/** Subtle skip button (intro, recap, credits → next episode): small, translucent, in the style of the app. */
 @Composable
 fun PSkipPill(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
@@ -136,8 +136,8 @@ fun PSkipPill(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) 
 }
 
 /**
- * Zeichnet die Zeitleiste. Alle Werte kommen als Lambdas und werden erst beim ZEICHNEN gelesen –
- * dadurch muss bei jedem Positions-Tick nur gezeichnet, nicht neu zusammengesetzt werden.
+ * Draws the timeline. All values arrive as lambdas and are read only when DRAWING –
+ * so on every position tick it only has to draw, not recompose.
  */
 @Composable
 fun PSeekTrack(
@@ -158,7 +158,7 @@ fun PSeekTrack(
         if (bw > 0f) drawRoundRect(PT.Buffered, Offset(0f, top), Size(bw, th), rad)
         val frac = (pos().toFloat() / d).coerceIn(0f, 1f)
         val pw = frac * w
-        // Runde 17b: grüner Schein unter dem gespielten Teil (cinematisch, nur gezeichnet, kein Effekt aufs Video)
+        // Round 17b: green glow under the played part (cinematic, only drawn, no effect on the video)
         if (pw > 0f) drawRoundRect(Accent1.copy(alpha = 0.22f), Offset(0f, top - th * 0.7f), Size(pw, th * 2.4f), CornerRadius(th * 1.2f))
         if (pw > 0f) drawRoundRect(Accent1, Offset(0f, top), Size(pw, th), rad)
         for (s in segs()) {
@@ -173,7 +173,7 @@ fun PSeekTrack(
     }
 }
 
-/** Zeit-Blase über dem Regler (folgt der Position). */
+/** Time bubble above the slider (follows the position). */
 @Composable
 private fun PTimeBubble(pos: () -> Long, dur: () -> Long) {
     val shape = RoundedCornerShape(DS.RadiusXs)
@@ -195,7 +195,7 @@ private fun PTimeBubble(pos: () -> Long, dur: () -> Long) {
     }
 }
 
-/** Fokussierbare Zeitleiste: Links/Rechts springen, Halten springt weiter, Runter geht zu den Knöpfen. */
+/** Focusable timeline: Left/Right jump, holding jumps further, Down goes to the buttons. */
 @Composable
 fun PSeekBar(
     modifier: Modifier,
@@ -225,7 +225,7 @@ fun PSeekBar(
     }
 }
 
-/** Nicht fokussierbare Zeitleiste für den Spul-Moment, wenn die Steuerleiste ausgeblendet ist. */
+/** Non-focusable timeline for the seeking moment when the control bar is hidden. */
 @Composable
 fun PMiniSeek(
     pos: () -> Long, dur: () -> Long, buffered: () -> Long, segs: () -> List<Seg>,
@@ -240,7 +240,7 @@ fun PMiniSeek(
     }
 }
 
-/** Zeile unter der Zeitleiste: links vergangene Zeit, rechts Restzeit. */
+/** Row under the timeline: elapsed time on the left, remaining time on the right. */
 @Composable
 fun PTimeRow(pos: () -> Long, dur: () -> Long) {
     Row(
@@ -252,7 +252,7 @@ fun PTimeRow(pos: () -> Long, dur: () -> Long) {
     }
 }
 
-/** Die Uhr selbst (Größe und Deckkraft aus den Einstellungen). */
+/** The clock itself (size and opacity from the settings). */
 @Composable
 private fun ClockText(modifier: Modifier = Modifier) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -266,14 +266,14 @@ private fun ClockText(modifier: Modifier = Modifier) {
     )
 }
 
-/** Uhrzeit im Bild: ganz in der gewählten Ecke (schmaler Rand). */
+/** Clock on screen: fully in the chosen corner (narrow margin). */
 @Composable
 fun BoxScope.PClock() {
     val al = when (AppSettings.clockPos) { 0 -> Alignment.TopEnd; 1 -> Alignment.TopStart; 2 -> Alignment.BottomEnd; else -> Alignment.BottomStart }
     ClockText(Modifier.align(al).padding(12.dp))
 }
 
-/** Vorschau der Uhr in den Einstellungen: nur die Uhr in echter Größe und Deckkraft vor einem Bildhintergrund (ohne Ecken-Muster). */
+/** Preview of the clock in the settings: only the clock in real size and opacity in front of a picture background (without corner pattern). */
 @Composable
 fun ClockSample(modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(10.dp)
@@ -295,7 +295,7 @@ fun PEndsAt(pos: () -> Long, dur: () -> Long, speed: () -> Float) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Menüs (rechts oben)
+// Menus (top right)
 // ---------------------------------------------------------------------------------------------
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
@@ -312,8 +312,8 @@ fun BoxScope.PPanelFrame(
         Modifier.align(Alignment.TopEnd).padding(top = PT.MarginY, end = PT.MarginY)
             .width(width).heightIn(max = maxH)
             .clip(shape).background(PT.PanelBg).border(1.dp, PT.PanelBorder, shape)
-            // Runter am Ende der Liste: Menü schließen, der Fokus geht zurück auf das Symbol in der Steuerleiste.
-            // "exit" wird nur aufgerufen, wenn der Fokus das Menü nach unten verlassen würde (also nichts mehr darunter im Menü liegt).
+            // Down at the end of the list: close the menu, the focus goes back to the icon in the control bar.
+            // "exit" is called only when the focus would leave the menu downward (i.e. nothing below in the menu).
             .focusProperties {
                 exitTo { dir ->
                     if (dir == FocusDirection.Down && onEdgeDown != null) { onEdgeDown(); FocusRequester.Cancel }
@@ -330,7 +330,7 @@ fun BoxScope.PPanelFrame(
     }
 }
 
-/** Menü mit Standard-Tasten: Links schließt, Rechts bleibt im Menü. */
+/** Menu with standard keys: Left closes, Right stays in the menu. */
 @Composable
 fun BoxScope.PSimplePanel(
     width: Dp, title: String, hint: String, onClose: () -> Unit,
@@ -340,14 +340,14 @@ fun BoxScope.PSimplePanel(
         width, title, hint,
         Modifier
             .onPreviewKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { onClose(); true } else false }
-            // Rechts erst nach den Zeilen schlucken: Zeilen mit Pfeil öffnen damit ihr Untermenü, sonst bleibt der Fokus im Menü
+            // Swallow Right only after the rows: rows with an arrow open their submenu with it, otherwise the focus stays in the menu
             .onKeyEvent { e -> e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight },
         onEdgeDown = onClose,
         content = content
     )
 }
 
-/** Eine Menüzeile: 52 dp hoch, 17 sp. Gewählt = fett + türkiser Haken, Fokus = weiß mit dunkler Schrift. */
+/** A menu row: 52 dp high, 17 sp. Chosen = bold + turquoise check mark, focus = white with dark text. */
 @Composable
 fun PPanelRow(
     text: String, selected: Boolean, modifier: Modifier = Modifier,
@@ -384,7 +384,7 @@ fun PPanelRow(
     }
 }
 
-/** Spaltenüberschrift im Menü (z. B. "Audio", "Untertitel"). */
+/** Column heading in the menu (e.g. "Audio", "Subtitles"). */
 @Composable
 fun PColumnHeader(text: String) {
     Text(

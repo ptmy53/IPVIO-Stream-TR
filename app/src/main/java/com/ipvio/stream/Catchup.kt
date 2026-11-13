@@ -17,9 +17,9 @@ import java.io.File
 import java.util.TimeZone
 
 /**
- * Archiv (Catchup) der aktiven Playlist: welche Sender vergangene Sendungen anbieten und wie weit zurück.
- * Quellen: Angaben in der M3U (catchup, catchup-days, …) und bei Xtream-Servern die API (tv_archive), einmal am Tag abgefragt.
- * Gespeichert je Playlist in pl_*.cu, damit der Start aus dem Zwischenspeicher ohne Netz auskommt. Logik in [CatchupLogic].
+ * Archive (catchup) of the active playlist: which channels offer past shows and how far back.
+ * Sources: details in the M3U (catchup, catchup-days, …) and for Xtream servers the API (tv_archive), queried once a day.
+ * Stored per playlist in pl_*.cu so the start from the cache works without network. Logic in [CatchupLogic].
  */
 object Catchup {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -31,10 +31,10 @@ object Catchup {
         private set
     private var job: Job? = null
 
-    /** Ändert sich, sobald neue Archiv-Angaben da sind (Oberfläche zeichnet neu). */
+    /** Changes as soon as new archive details are there (UI redraws). */
     var version by mutableIntStateOf(0)
         private set
-    /** Anzahl Sender mit Archiv (für die Einstellungen). */
+    /** Number of channels with archive (for the settings). */
     var count by mutableIntStateOf(0)
         private set
 
@@ -44,7 +44,7 @@ object Catchup {
 
     fun has(item: Item?): Boolean = of(item) != null
 
-    /** Längstes Archiv unter den Sendern (für den TV-Guide: so weit lässt er zurückblättern). */
+    /** Longest archive among the channels (for the TV guide: it allows scrolling back this far). */
     fun maxDays(list: List<Item>): Int {
         if (map.isEmpty()) return 0
         var d = 0
@@ -55,7 +55,7 @@ object Catchup {
     fun canPlay(item: Item?, e: EpgEntry, now: Long = System.currentTimeMillis() / 1000): Boolean =
         CatchupLogic.canPlay(of(item), e.start, e.end, now)
 
-    /** Adresse der Sendung im Archiv, null = nicht möglich. */
+    /** Address of the show in the archive, null = not possible. */
     fun urlFor(item: Item, e: EpgEntry, now: Long = System.currentTimeMillis() / 1000): String? {
         val i = of(item) ?: return null
         if (!CatchupLogic.canPlay(i, e.start, e.end, now)) return null
@@ -104,7 +104,7 @@ object Catchup {
         }
     }
 
-    /** Nach dem Einlesen der Playlist: Angaben aus der M3U merken (Xtream-Stand bleibt erhalten). */
+    /** After parsing the playlist: remember details from the M3U (Xtream state is preserved). */
     fun saveParsed(c: Context, url: String, m3u: Map<String, CatchupInfo>) {
         val old = read(c, url)
         write(c, url, Saved(m3u, old.xt, old.tz, old.xtAt))
@@ -112,12 +112,12 @@ object Catchup {
 
     fun delete(c: Context, url: String) { runCatching { file(c, url).delete() } }
 
-    /** Die Playlist wird angezeigt: Archiv-Angaben übernehmen; bei Xtream-Servern höchstens einmal am Tag nachfragen. */
+    /** The playlist is displayed: adopt archive details; for Xtream servers ask at most once a day. */
     fun start(c: Context, url: String, items: List<Item>) = startAll(c, listOf(url to items))
 
     /**
-     * Mehrere Playlists gleichzeitig (Runde 20): Angaben aller Quellen zusammen. Jede Quelle behält ihre Zeitzone
-     * (Archiv-Links rechnen in der Zeit des jeweiligen Servers).
+     * Several playlists at once (round 20): details of all sources together. Each source keeps its time zone
+     * (archive links are calculated in the time of the respective server).
      */
     fun startAll(c: Context, sources: List<Pair<String, List<Item>>>) {
         val app = c.applicationContext
@@ -149,7 +149,7 @@ object Catchup {
                 val tz = fetchZone(api) ?: s.saved.tz
                 val xt = fetchArchive("$api&action=get_live_streams")
                 if (xt == null) {
-                    // Kein Xtream-Server oder gerade nicht erreichbar: in 6 Stunden noch einmal fragen, nicht bei jedem Start
+                    // Not an Xtream server or currently unreachable: ask again in 6 hours, not at every start
                     write(app, s.url, Saved(s.saved.m3u, s.saved.xt, s.saved.tz, System.currentTimeMillis() - REFRESH_MS + 6 * 3600_000L))
                     continue
                 }
@@ -161,10 +161,10 @@ object Catchup {
         }
     }
 
-    /** Zeitzone je Server (Host), bei mehreren Playlists. */
+    /** Time zone per server (host), with several playlists. */
     @Volatile private var zones: Map<String, TimeZone> = emptyMap()
 
-    /** Zeitzone für die Archiv-Adresse dieses Senders. */
+    /** Time zone for the archive address of this channel. */
     private fun zoneFor(url: String): TimeZone {
         if (zones.isEmpty()) return zone
         val host = CatchupLogic.xtreamLive(url)?.host ?: return zone
@@ -178,7 +178,7 @@ object Catchup {
         version++
     }
 
-    /** Zeitzone des Xtream-Servers (die Startzeit im Archiv-Link gilt in dieser Zone). */
+    /** Time zone of the Xtream server (the start time in the archive link applies in this zone). */
     private fun fetchZone(api: String): String? = try {
         client.newCall(Request.Builder().url(api).build()).execute().use { r ->
             if (!r.isSuccessful) null
@@ -188,7 +188,7 @@ object Catchup {
         null
     }
 
-    /** Liste aller Live-Sender des Servers (oft mehrere MB) Stück für Stück lesen: Sender-Nummer → Archiv-Tage. */
+    /** Read the list of all live channels of the server (often several MB) piece by piece: channel number → archive days. */
     private fun fetchArchive(url: String): Map<String, Int>? {
         try {
             client.newCall(Request.Builder().url(url).build()).execute().use { r ->
@@ -231,5 +231,5 @@ object Catchup {
     }
 }
 
-/** Laufende Archiv-Sendung im Player: Sender und Sendung. */
+/** Running archive show in the player: channel and show. */
 data class ArchiveRef(val chId: String, val chTitle: String, val prog: EpgEntry)

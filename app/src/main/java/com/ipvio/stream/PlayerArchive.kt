@@ -51,9 +51,9 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 
 /**
- * Archiv im Player, aufgebaut wie die Senderliste: links die Sender mit Archiv, in der Mitte die Tage des gewählten Senders,
- * rechts die Sendungen dieses Tages. Oben steht immer, welcher Sender und welcher Tag gerade gezeigt wird.
- * Links in der linken Spalte bzw. Zurück schließt.
+ * Archive in the player, built like the channel list: on the left the channels with archive, in the middle the days of the chosen channel,
+ * on the right the shows of that day. At the top it always shows which channel and which day is displayed.
+ * Left in the left column or Back closes.
  */
 @Composable
 fun BoxScope.ArchivePanel(
@@ -70,7 +70,7 @@ fun BoxScope.ArchivePanel(
     val nowSec = System.currentTimeMillis() / 1000
     val today = dayLabel(nowSec)
     val yesterday = dayLabel(nowSec - 86400)
-    // Tage (neueste zuerst) und Sendungen je Tag (zeitlich sortiert)
+    // Days (newest first) and shows per day (sorted by time)
     val days = remember(progs) { progs.orEmpty().map { dayLabel(it.start) }.distinct() }
     var selDay by remember(ch?.id) { mutableStateOf<String?>(null) }
     val day = selDay?.takeIf { it in days } ?: (playingStart?.takeIf { ch?.id == current?.id }?.let { dayLabel(it) }?.takeIf { it in days }) ?: days.firstOrNull()
@@ -80,7 +80,7 @@ fun BoxScope.ArchivePanel(
     val chSel = remember { FocusRequester() }
     val daySel = remember { FocusRequester() }
     val progFirst = remember { FocusRequester() }
-    // Beim Öffnen: zur laufenden Archiv-Sendung bzw. zur neuesten Sendung des heutigen Tages springen (nur einmal)
+    // On opening: jump to the running archive show or to the newest show of today (only once)
     var autoDone by remember { mutableStateOf(false) }
     LaunchedEffect(dayProgs) {
         if (!autoDone && dayProgs.isNotEmpty() && ch?.id == current?.id) {
@@ -97,7 +97,7 @@ fun BoxScope.ArchivePanel(
         Modifier.align(Alignment.TopEnd).padding(top = PT.MarginY, end = PT.MarginY).width(w).heightIn(max = maxH)
             .clip(shape).background(PT.PanelBg).border(1.dp, PT.PanelBorder, shape).padding(22.dp)
     ) {
-        // Kopf: welcher Sender, welcher Tag
+        // Header: which channel, which day
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(Modifier.size(46.dp).clip(RoundedCornerShape(DS.RadiusS)).background(DS.Overlay2), contentAlignment = Alignment.Center) {
                 val lg = ch?.logo
@@ -115,7 +115,7 @@ fun BoxScope.ArchivePanel(
             Text("Links/Rechts = Spalte  ·  Zurück schließt", color = Muted, fontSize = 13.sp, maxLines = 1)
         }
         Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            // 1) Sender mit Archiv
+            // 1) Channels with archive
             ArchiveColumn("Sender", Modifier.width(290.dp)) {
                 LazyColumn(
                     state = rememberLazyListState(maxOf(list.indexOfFirst { it.id == ch?.id } - 2, 0)),
@@ -148,7 +148,7 @@ fun BoxScope.ArchivePanel(
                     }
                 }
             }
-            // 2) Tage des Senders
+            // 2) Days of the channel
             ArchiveColumn("Tag", Modifier.width(210.dp)) {
                 if (progs == null) Text("lädt …", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(12.dp))
                 else if (days.isEmpty()) Text("Keine vergangenen Sendungen im Programm.", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(12.dp).focusRequester(daySel).focusable())
@@ -173,11 +173,11 @@ fun BoxScope.ArchivePanel(
                     }
                 }
             }
-            // 3) Sendungen des Tages
+            // 3) Programs of the day
             ArchiveColumn("Sendungen", Modifier.weight(1f)) {
                 if (dayProgs.isEmpty()) Text(if (progs == null) "lädt …" else "", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(12.dp))
                 else {
-                    // Fokus beim Öffnen: laufende Archiv-Sendung, sonst die neueste des Tages
+                    // Focus on opening: running archive show, otherwise the newest of the day
                     val target = dayProgs.indexOfFirst { it.start == playingStart }.takeIf { it >= 0 } ?: dayProgs.lastIndex
                     LazyColumn(
                         state = rememberLazyListState(maxOf(target - 3, 0)),

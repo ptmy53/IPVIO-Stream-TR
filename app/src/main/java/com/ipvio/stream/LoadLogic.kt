@@ -4,35 +4,35 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 /**
- * Regeln für das Laden großer Playlists (ohne Android, testbar):
- * Speicher-Schätzung, Sprach-Vorauswahl, Fortsetzen eines abgebrochenen Downloads und der gemerkte Ladeauftrag.
+ * Rules for loading large playlists (without Android, testable):
+ * memory estimate, language preselection, resuming an interrupted download and the remembered load job.
  */
 object LoadLogic {
-    /** Anteil des Java-Speichers, den die Playlist höchstens belegen soll (Rest: Oberfläche, Bilder, Player, Metadaten). */
+    /** Share of the Java memory the playlist may use at most (rest: UI, images, player, metadata). */
     const val SHARE = 0.40
 
     /**
-     * Speicher je Byte der Liste. Gemessen (283.000 Titel, 230 MB): früher 0,92, seit die Folgen kompakt gespeichert werden
-     * ([EpisodeTable]) 0,61 – gerechnet wird mit 0,65 (Reserve).
+     * Memory per byte of the list. Measured (283,000 titles, 230 MB): formerly 0.92, since episodes are stored compactly
+     * ([EpisodeTable]) 0.61 – calculated with 0.65 (reserve).
      */
     const val FACTOR = 0.65
 
-    /** Wie viele Byte Playlist in den Speicher passen (Speicheranteil [SHARE] geteilt durch [FACTOR]). */
+    /** How many bytes of playlist fit in memory (memory share [SHARE] divided by [FACTOR]). */
     fun budget(maxHeap: Long): Long = (maxHeap * SHARE / FACTOR).toLong()
 
     /**
-     * Datenmenge der gezeigten Sprachen in Byte der Liste (verglichen mit [budget], das schon umgerechnet ist).
+     * Amount of data of the shown languages in bytes of the list (compared with [budget], which is already converted).
      */
     fun estimate(bytes: Map<String, Long>, hidden: Set<String>): Long =
         bytes.entries.sumOf { if (it.key in hidden) 0L else it.value }
 
-    /** Passt die Auswahl? Ohne Daten (alte Zwischenspeicher) gilt: ja. */
+    /** Does the selection fit? Without data (old caches) the answer is: yes. */
     fun fits(bytes: Map<String, Long>, hidden: Set<String>, budget: Long): Boolean =
         bytes.isEmpty() || estimate(bytes, hidden) <= budget
 
     /**
-     * Vorauswahl für die Rückfrage bei sehr großen Listen: die Sprache der App, dazu „ohne Kennung“, wenn beides zusammen passt.
-     * Gibt es die App-Sprache nicht, die größte Sprache, die allein passt. Ergebnis = gezeigte Sprachen.
+     * Preselection for the question on very large lists: the app's language, plus "no tag" if both fit together.
+     * If the app language does not exist, the largest language that fits alone. Result = shown languages.
      */
     fun preselect(counts: Map<String, Int>, bytes: Map<String, Long>, appLang: String, budget: Long): Set<String> {
         val all = counts.keys
@@ -45,7 +45,7 @@ object LoadLogic {
         return if (best != null) setOf(best.key) else emptySet()
     }
 
-    /** Gerätesprache (ISO, z. B. "de", "sr", "nb", "iw") → Kürzel der Sprachfilter ([LangTagLogic]). */
+    /** Device language (ISO, e.g. "de", "sr", "nb", "iw") → abbreviation of the language filters ([LangTagLogic]). */
     fun langCodeOf(system: String): String = when (val l = system.lowercase()) {
         "bs", "hr", "sr", "sl", "mk", "sh", "cnr" -> "yu"
         "no", "nn", "nb" -> "nb"
@@ -56,8 +56,8 @@ object LoadLogic {
     }
 
     /**
-     * Vorauswahl der Sprachfrage: die Sprache des Geräts, wenn die Playlist Titel in ihr hat, sonst Englisch.
-     * Gibt es beides nicht, ist nichts vorausgewählt. Ergebnis = gezeigte Sprachen.
+     * Preselection of the language question: the device's language if the playlist has titles in it, otherwise English.
+     * If neither exists, nothing is preselected. Result = shown languages.
      */
     fun systemPreselect(counts: Map<String, Int>, systemLang: String): Set<String> {
         val code = langCodeOf(systemLang)
@@ -68,13 +68,13 @@ object LoadLogic {
         }
     }
 
-    // ------------------------------------------------------------------ Fortsetzen (HTTP Range)
+    // ------------------------------------------------------------------ Resuming (HTTP range)
 
     const val APPEND = 0
     const val RESTART = 1
     const val ERROR = 2
 
-    /** Starker Validator für „If-Range“: nur ein starkes ETag (ohne W/) oder Last-Modified. Ohne Validator kein Fortsetzen. */
+    /** Strong validator for "If-Range": only a strong ETag (without W/) or Last-Modified. Without a validator no resuming. */
     fun validator(etag: String?, lastModified: String?): String? = when {
         !etag.isNullOrBlank() && !etag.startsWith("W/") -> etag
         !lastModified.isNullOrBlank() -> lastModified
@@ -82,8 +82,8 @@ object LoadLogic {
     }
 
     /**
-     * Kopfzeilen, um einen Download ab [offset] fortzusetzen, oder leer (dann von vorn).
-     * „If-Range“ sorgt dafür, dass ein geänderter Inhalt ganz neu geschickt wird statt falsch zusammengesetzt.
+     * Headers to resume a download from [offset], or empty (then from the start).
+     * "If-Range" ensures that changed content is sent completely anew instead of being assembled wrongly.
      */
     fun resumeHeaders(offset: Long, etag: String?, lastModified: String?): Map<String, String> {
         val v = validator(etag, lastModified) ?: return emptyMap()
@@ -91,25 +91,25 @@ object LoadLogic {
         return mapOf("Range" to "bytes=$offset-", "If-Range" to v)
     }
 
-    /** Was mit der Antwort zu tun ist: an die Teildatei anhängen, von vorn schreiben oder Fehler. */
+    /** What to do with the response: append to the partial file, write from the start or error. */
     fun resumeAction(code: Int, contentRange: String?, offset: Long): Int = when {
         code == 206 && offset > 0 && rangeStart(contentRange) == offset -> APPEND
-        code == 206 -> ERROR           // Teil-Antwort, die nicht passt: lieber neu versuchen als eine kaputte Liste
+        code == 206 -> ERROR           // partial response that does not fit: better to retry than keep a broken list
         code in 200..299 -> RESTART
         else -> ERROR
     }
 
-    /** Startbyte aus „Content-Range: bytes 1000-1999/5000“, sonst -1. */
+    /** Start byte from "Content-Range: bytes 1000-1999/5000", otherwise -1. */
     fun rangeStart(contentRange: String?): Long {
         val m = Regex("""bytes\s+(\d+)-""").find(contentRange ?: return -1) ?: return -1
         return m.groupValues[1].toLongOrNull() ?: -1
     }
 
-    /** Gesamtgröße aus „Content-Range: bytes 1000-1999/5000“, sonst -1. */
+    /** Total size from "Content-Range: bytes 1000-1999/5000", otherwise -1. */
     fun rangeTotal(contentRange: String?): Long =
         contentRange?.substringAfterLast('/', "")?.trim()?.toLongOrNull() ?: -1
 
-    /** Angaben zur Teildatei eines unterbrochenen Downloads. */
+    /** Details about the partial file of an interrupted download. */
     data class PartInfo(val urlHash: Int, val etag: String?, val lastModified: String?, val charset: String) {
         fun encode(): String = kv("u" to urlHash.toString(), "e" to etag, "m" to lastModified, "c" to charset)
 
@@ -122,19 +122,19 @@ object LoadLogic {
         }
     }
 
-    // ------------------------------------------------------------------ gemerkter Ladeauftrag
+    // ------------------------------------------------------------------ remembered load job
 
     const val RUNNING = "run"
     const val FAILED = "fail"
-    /** Ab so vielen unterbrochenen Versuchen wird nicht mehr automatisch weitergeladen. */
+    /** From this many interrupted attempts on, downloading is no longer continued automatically. */
     const val MAX_AUTO = 3
 
     /**
-     * Eine Playlist, die gerade hinzugefügt wird. Wird VOR dem Download gespeichert:
-     * stürzt die App ab, fällt der Strom aus oder wird sie geschlossen, geht beim nächsten Start nichts verloren.
+     * A playlist that is currently being added. Stored BEFORE the download:
+     * if the app crashes, power fails or it is closed, nothing is lost on the next start.
      */
     data class Pending(val url: String, val state: String, val attempts: Int, val msg: String?) {
-        /** Beim letzten Mal mitten im Laden beendet (Absturz, Stromausfall, App geschlossen). */
+        /** Ended in the middle of loading last time (crash, power loss, app closed). */
         val interrupted: Boolean get() = state == RUNNING
         val autoResume: Boolean get() = interrupted && attempts < MAX_AUTO
 
@@ -149,11 +149,11 @@ object LoadLogic {
         }
     }
 
-    /** Neuer Versuch: von Hand gestartet zählt neu ab 1, automatisch fortgesetzt zählt weiter. */
+    /** New attempt: started by hand counts anew from 1, continued automatically keeps counting. */
     fun started(prev: Pending?, url: String, resumed: Boolean): Pending =
         Pending(url, RUNNING, if (resumed && prev?.url == url) prev.attempts + 1 else 1, null)
 
-    /** Einfache Textform „schlüssel=wert“ je Zeile (Werte kodiert); ohne org.json, damit es in JVM-Tests läuft. */
+    /** Simple text form "key=value" per line (values encoded); without org.json so it runs in JVM tests. */
     private fun kv(vararg p: Pair<String, String?>): String =
         p.filter { it.second != null }.joinToString("\n") { it.first + "=" + URLEncoder.encode(it.second, "UTF-8") }
 
@@ -167,7 +167,7 @@ object LoadLogic {
         } catch (e: Exception) { null }
     }
 
-    /** Xtream-Zugang aus einer get.php-Adresse (für das Vorausfüllen des Formulars), sonst null. */
+    /** Xtream access from a get.php address (for prefilling the form), otherwise null. */
     fun xtreamParts(url: String): Triple<String, String, String>? {
         val m = Regex("""^(https?://[^/?#]+)/get\.php\?(.*)$""").find(url.trim()) ?: return null
         val q = m.groupValues[2].split('&').mapNotNull { p ->
@@ -181,14 +181,14 @@ object LoadLogic {
 }
 
 /**
- * Unterhaltung bei sehr langem Laden (Wunsch des Nutzers, bewusst auf Englisch):
- * ab 5 Minuten Zitate berühmter Leute über Geduld, ab 10 Minuten sarkastische Sprüche, ab 15 Minuten der Hinweis auf die Sprachauswahl.
+ * Entertainment during very long loading (user's wish, deliberately in English):
+ * from 5 minutes quotes of famous people about patience, from 10 minutes sarcastic remarks, from 15 minutes the hint about the language selection.
  */
 object LoadFun {
     const val QUOTES_AFTER = 5 * 60_000L
     const val SARCASM_AFTER = 10 * 60_000L
     const val HINT_AFTER = 15 * 60_000L
-    /** So lange bleibt ein Spruch stehen. */
+    /** How long a saying stays displayed. */
     const val ROTATE = 15_000L
 
     val QUOTES = listOf(
@@ -216,7 +216,7 @@ object LoadFun {
         "Counting titles… we ran out of fingers a while ago."
     )
 
-    /** 0 = nichts, 1 = Zitate, 2 = Sarkasmus, 3 = zusätzlich Hinweis auf die Sprachauswahl. */
+    /** 0 = nothing, 1 = quotes, 2 = sarcasm, 3 = additionally the hint about the language selection. */
     fun stage(elapsedMs: Long): Int = when {
         elapsedMs >= HINT_AFTER -> 3
         elapsedMs >= SARCASM_AFTER -> 2
@@ -224,7 +224,7 @@ object LoadFun {
         else -> 0
     }
 
-    /** Der Spruch für diesen Moment (Text, Urheber oder null) – wechselt alle [ROTATE] ms; vor 5 Minuten null. */
+    /** The saying for this moment (text, author or null) – changes every [ROTATE] ms; null before 5 minutes. */
     fun line(elapsedMs: Long): Pair<String, String?>? = when (stage(elapsedMs)) {
         0 -> null
         1 -> QUOTES[(((elapsedMs - QUOTES_AFTER) / ROTATE) % QUOTES.size).toInt()]

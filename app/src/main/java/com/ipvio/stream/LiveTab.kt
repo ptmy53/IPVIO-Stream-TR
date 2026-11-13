@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,33 +36,68 @@ import coil.compose.AsyncImage
 
 object ZapContext {
     var list: List<Item> = emptyList()
-    /** Kategorie, aus der gestartet wurde (z. B. eigene Senderliste „L:3“) – der Player zeigt sie im Senderwechsel. */
+    /** Category from which playback was started (e.g. own channel list "L:3") – the player shows it when switching channels. */
     var key: String? = null
 }
 
-/** Merkt sich die zuletzt gewählte Kategorie / Liste in Live TV (auch über einen Neustart). */
+/** Remembers the last chosen category / list in Live TV (also across a restart). */
 object LiveMemory {
     fun sel(c: android.content.Context): String? = Profiles.sp(c, "ipvio_live").getString("sel", null)
     fun setSel(c: android.content.Context, k: String) { Profiles.sp(c, "ipvio_live").edit().putString("sel", k).apply() }
 }
 
-/** Eingabe eines Namens (neue Senderliste, Umbenennen). */
+/** Entering a name (new channel list, rename). */
 private class NameAsk(val title: String, val initial: String, val onSave: (String) -> Unit)
 
-/** Gewählte Quelle im Live TV bei mehreren Playlists (-1 = alle), gilt für die laufende Sitzung. */
+/** Chosen source in Live TV with several playlists (-1 = all), valid for the running session. */
 object LiveSource {
     var k by mutableIntStateOf(-1)
 }
 
+/** Held Up/Down key in the channel list: time of the last repeat event (plain field, not state, so writing it never recomposes). */
+object LiveHold {
+    @Volatile var lastRepeat = 0L
+    /** True while the key is held (a repeat arrived within the last 300 ms). */
+    fun active(): Boolean = android.os.SystemClock.uptimeMillis() - lastRepeat < 300
+    /** Time of the last repeat that was let through to the list (key-repeat throttle). */
+    @Volatile var lastStep = 0L
+}
+
+/**
+ * While Up/Down is held, the list jumps to the focused row at once instead of animating every step: the scroll animation of
+ * one step takes longer than the pause between two held steps, so the list was animating without a break while new rows
+ * were built. Single key presses keep the soft scrolling. Does nothing when the row is already fully visible.
+ */
+internal suspend fun holdJump(state: LazyListState, index: Int) {
+    if (!LiveHold.active()) return
+    val info = state.layoutInfo
+    val row = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val peek = 90   // same margin as the app-wide soft scrolling
+    if (row.offset < info.viewportStartOffset) state.scrollToItem(index, -peek)
+    else if (row.offset + row.size > info.viewportEndOffset) state.scrollToItem(index, -(info.viewportEndOffset - peek - row.size).coerceAtLeast(0))
+}
+
+/** Last read recordings (session only), shown while the folder is read again in the background. */
+private object LiveRecCache {
+    @Volatile var items: List<Item> = emptyList()
+}
+
+/** Reads the focused channel only here, so a focus change recomposes the backdrop and not the whole Live TV tab. */
+@Composable
+private fun FocusedBackdrop(focused: State<Item?>, modifier: Modifier) { LiveBackdrop(focused.value, modifier) }
+
+@Composable
+private fun FocusedNowPanel(focused: State<Item?>, fallback: Item?) { LiveNowPanel(focused.value ?: fallback) }
+
 @Composable
 fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: List<Item>, onOpen: (Item) -> Unit, onPlayNow: (Item) -> Unit = onOpen) {
     val ctx = LocalContext.current
-    // Mehrere Playlists: Quelle mit einem Druck wechseln (Alle → Playlist 1 → Playlist 2 → …)
+    // Several playlists: switch source with one press (All → Playlist 1 → Playlist 2 → …)
     val srcNames = PlaylistStore.sourceNames
     var plOpen by remember { mutableStateOf(false) }
     var plBack by remember { mutableStateOf(false) }
     val plFocus = remember { FocusRequester() }
-    // Nach dem Schließen der Auswahl den Fokus zurück auf die Zeile holen (sonst bleibt er im Nichts hängen)
+    // After closing the selection bring the focus back to the row (otherwise it gets lost)
     LaunchedEffect(plBack) { if (plBack) { plBack = false; runCatching { plFocus.requestFocus() } } }
     val plScope = rememberCoroutineScope()
     val srcK = if (LiveSource.k in srcNames.indices && srcNames.size > 1) LiveSource.k else -1
@@ -71,33 +107,69 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
             for ((g, l) in groupsAll) { val f = l.filter { it.src == srcK }; if (f.isNotEmpty()) m[g] = f }
         }
     }
+    // Genres (sports, movies, documentary, kids, news, music) – detected by category and channel name
+    val genres = remember(live) { LiveGenre.split(live) }
     val favs = remember(favsAll, srcK) { if (srcK < 0) favsAll else favsAll.filter { it.src == srcK } }
     CatFavs.init(ctx)
     ChannelLists.init(ctx)
-    // Zuletzt gewählte Kategorie / Liste (Runde 14): nach dem Zurück aus dem Player und nach einem Neustart wieder dieselbe
-    var sel by remember {
-        val saved = LiveMemory.sel(ctx)?.takeIf { k ->
-            (k == FAV_CAT && favs.isNotEmpty()) || k == "ALL" || k in groups || ChannelLists.byKey(k) != null || k == "REC"
-        }
-        mutableStateOf(saved ?: if (favs.isNotEmpty()) FAV_CAT else "ALL")
-    }
-    val favCats = CatFavs.list.filter { it in groups }
+    remember { LiveQuality.init(ctx) }
+    // Last chosen category / list (round 14): the same one again after Back from the player and after a restart
+    // The tab always opens on "Start" (home), so the cursor lands there instead of on the last category or "Alle Sender"
+    var sel by remember { mutableStateOf("HOME") }
+    HiddenCats.init(ctx)
+    CatOrder.init(ctx)
+    // Channel name search ("SEARCH" entry): text is kept while the tab is open
+    var query by remember { mutableStateOf("") }
+    var showMulti by remember { mutableStateOf(false) }
+    if (showMulti) MultiViewScreen(live) { showMulti = false }
+    val searchReq = remember { FocusRequester() }
+    // First key of the on-screen keyboard shown in the search (right side)
+    val kbFirst = remember { FocusRequester() }
+    val favCats = CatFavs.list.filter { it in groups && it !in HiddenCats.list }
     val myLists = ChannelLists.lists.toList()
-    val byId = remember(live) { live.associateBy { it.id } }
-    // Reihenfolge: Favoriten, eigene Senderlisten, „Neue Senderliste“, alle Sender, Kategorien
-    // Aufnahmen (Runde 20): eigene Kategorie, sobald es welche gibt
-    val recs = remember(Recorder.active.size, sel == "REC") { Recorder.list(ctx).map { Recorder.itemOf(it) } }
-    val names = (if (PlaylistStore.lists.size > 1) listOf("PL") else emptyList()) + listOf("GUIDE", FAV_CAT) + (if (recs.isNotEmpty()) listOf("REC") else emptyList()) + myLists.map { ChannelListLogic.key(it) } + listOf("NEW", "ALL") + favCats + groups.keys.filter { it !in favCats }
+    // Only built when an own channel list needs it (thousands of channels, not needed for opening the tab)
+    val byIdLazy = remember(live) { lazy { live.associateBy { it.id } } }
+    // Order: favorites, own channel lists, "New channel list", all channels, categories
+    // Recordings (round 20): own category as soon as there are any
+    // Reading the recordings folder (also USB storage) is file I/O: done in the background, the last result shows meanwhile
+    val recs by produceState(LiveRecCache.items, Recorder.active.size, sel == "REC") {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Recorder.list(ctx).map { Recorder.itemOf(it) } }
+        LiveRecCache.items = value
+    }
+    val names = (if (PlaylistStore.lists.size > 1) listOf("PL") else emptyList()) + listOf("HOME", "GUIDE", "SEARCH", "MULTI", FAV_CAT) + (if (recs.isNotEmpty()) listOf("REC") else emptyList()) + myLists.map { ChannelListLogic.key(it) } + listOf("NEW", "ALL") + genres.keys + favCats + CatOrder.sorted(CatOrder.LIVE, groups.keys.toList()).filter { it !in favCats && it !in HiddenCats.list } + (if (HiddenCats.list.any { it in groups }) listOf("HIDDEN") else emptyList())
+    val catKeys = remember(names) { val seen = HashSet<String>(); names.mapIndexed { i, n -> if (seen.add(n)) n else "$n#$i" } }
     val curList = ChannelLists.byKey(sel)
-    val list = when {
+    // Own list currently being filled (OK on a channel adds it); declared early because bundling depends on it
+    var addTo by remember { mutableStateOf<Int?>(null) }
+    // Adding channels opens the name search (stays open: add several channels, change the search text in between)
+    var addFocusTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(addFocusTick) { if (addFocusTick > 0) { kotlinx.coroutines.delay(300); runCatching { kbFirst.requestFocus() } } }
+    // Name search in the background: typing stays smooth, the previous hits stay visible until the new ones are there
+    val searchOn = sel == "SEARCH"
+    val searchRes by produceState(if (addTo != null && query.isBlank()) live else emptyList(), live, query, addTo, searchOn) {
+        if (!searchOn) return@produceState
+        // Short pause while typing: a new letter cancels the pending search instead of queueing a full pass over all channels
+        if (query.isNotBlank()) kotlinx.coroutines.delay(120)
+        value = if (addTo != null && query.isBlank()) live
+            else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { ChannelSearch.filter(live, query) }
+    }
+    val rawList = when {
         sel == FAV_CAT -> favs
         sel == "ALL" -> live
+        sel == "SEARCH" -> searchRes
+        sel == "HOME" -> emptyList()
+        LiveGenre.isGenreKey(sel) -> genres[sel].orEmpty()
         sel == "REC" -> recs
-        curList != null -> ChannelListLogic.resolve(curList, byId)
+        curList != null -> ChannelListLogic.resolve(curList, byIdLazy.value)
         else -> groups[sel].orEmpty()
     }
+    // Quality variants of one channel as a single row (not in favorites, own lists, recordings or while filling a list)
+    val bundleOn = General.bundleLive && sel != FAV_CAT && sel != "REC" && curList == null && addTo == null
+    val bundled = remember(rawList, bundleOn) { if (bundleOn) LiveBundleLogic.bundle(rawList) else null }
+    val list = bundled?.list ?: rawList
+    val variantsOf = bundled?.variants.orEmpty()
     val firstChan = remember { FocusRequester() }
-    // Zurück aus dem Player: der zuletzt gesehene Sender bekommt den Fokus (nicht die Seitenleiste)
+    // Back from the player: the last watched channel gets the focus (not the sidebar)
     val chanState = remember { LazyListState() }
     val restoreReq = remember { FocusRequester() }
     val restoreId = remember { LastFocus.pending }
@@ -115,35 +187,40 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
     val catState = remember { LazyListState() }
     var ask by remember { mutableStateOf<NameAsk?>(null) }
     SideEffect { ContentFocus.tab = 3 }
-    // Auswahl zeigt auf eine gelöschte Liste: zurück zu „Alle Sender“
+    // Selection points to a deleted list: back to "All channels"
     LaunchedEffect(sel, myLists.size) { if (ChannelListLogic.idOfKey(sel) != null && curList == null) sel = "ALL" }
 
-    // Sender zu einer eigenen Liste hinzufügen: in „Alle Sender“/Kategorien fügt OK den Sender hinzu (statt ihn zu starten)
-    var addTo by remember { mutableStateOf<Int?>(null) }
+    // Add a channel to an own list: in "All channels"/categories OK adds the channel (instead of starting it)
     val addList = addTo?.let { id -> myLists.firstOrNull { it.id == id } }
     fun finishAdd() { val id = addTo; addTo = null; if (id != null) sel = ChannelListLogic.PREFIX + id }
     androidx.activity.compose.BackHandler(enabled = addList != null) { finishAdd() }
 
-    // Ohne eigenes Fenster und ohne Tastatur: die Liste wird gleich mit Standardnamen angelegt (umbenennen geht jederzeit)
+    // Without a window and without a keyboard: the list is created right away with a default name (renaming works any time)
     fun newList(first: String?) {
         val id = ChannelLists.create(ctx, Lang.tr("Senderliste " + (myLists.size + 1)), first)
         sel = ChannelListLogic.PREFIX + id
         if (first == null) Toast.makeText(ctx, Lang.tr("Liste angelegt. Mit „Sender hinzufügen“ füllen."), Toast.LENGTH_SHORT).show()
     }
 
-    // Runde 17b: markierter Sender bestimmt Hintergrund und die große Anzeige rechts („Was läuft gerade“)
-    var focusedCh by remember { mutableStateOf<Item?>(null) }
-    // 17c: erst nach kurzem Verweilen wechseln (beim schnellen Durchblättern kein Laden von Logo und Programm)
+    // Round 17b: the selected channel determines the background and the big display on the right ("What is on now")
+    // Kept as State and read only in FocusedBackdrop / FocusedNowPanel (see there)
+    val focusedState = remember { mutableStateOf<Item?>(null) }
+    // 17c: switch only after a short dwell (no loading of logo and program while paging quickly)
     var focusTarget by remember { mutableStateOf<Item?>(null) }
-    LaunchedEffect(focusTarget) { if (focusedCh != null) kotlinx.coroutines.delay(300); focusedCh = focusTarget }
+    // snapshotFlow instead of LaunchedEffect(focusTarget): reading the state in composition would recompose the whole tab on every focus move
+    // (held Down key = dozens of recompositions per second on a Fire TV stick)
+    LaunchedEffect(Unit) {
+        snapshotFlow { focusTarget }.collectLatest { t -> if (focusedState.value != null) kotlinx.coroutines.delay(300); focusedState.value = t }
+    }
     Box(Modifier.fillMaxSize()) {
-        LiveBackdrop(focusedCh, Modifier.fillMaxSize())
+        FocusedBackdrop(focusedState, Modifier.fillMaxSize())
         Row(Modifier.fillMaxSize().padding(top = 20.dp)) {
             LazyColumn(Modifier.width(270.dp).fillMaxHeight().padding(start = 24.dp, end = 8.dp), state = catState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                itemsIndexed(names) { _, n ->
+                // Stable keys: after moving a category, focus and menu state move with the row (duplicates get an index suffix)
+                itemsIndexed(names, key = { i, n -> catKeys.getOrElse(i) { "$n#$i" } }) { _, n ->
                     val ml = ChannelLists.byKey(n)
                     if (n == "GUIDE") {
-                        // TV-Guide wie im Entwurf: startet den zuletzt gesehenen (sonst ersten) Sender der Auswahl und öffnet den Guide
+                        // TV guide as in the design: starts the last watched (otherwise first) channel of the selection and opens the guide
                         CatRow("TV-Guide", -1, false, Modifier, onFocus = {}, onRight = { runCatching { firstChan.requestFocus() } }, onFav = {}, icon = AIcon.Grid) {
                             val src = list.ifEmpty { live }
                             val ch = History.ids.firstNotNullOfOrNull { id -> src.firstOrNull { it.id == id } } ?: src.firstOrNull()
@@ -151,9 +228,23 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
                         }
                         return@itemsIndexed
                     }
+                    if (n == "MULTI") {
+                        CatRow(Lang.tr("Mehrfachansicht"), -1, false, Modifier, onFocus = {}, onRight = { runCatching { firstChan.requestFocus() } }, onFav = {}, icon = AIcon.Layers, raw = true) { showMulti = true }
+                        return@itemsIndexed
+                    }
+                    if (n == "SEARCH") {
+                        CatRow(
+                            Lang.tr("Sender suchen") + if (query.isNotBlank()) ": $query" else "", -1, sel == "SEARCH",
+                            if (sel == "SEARCH") Modifier.focusRequester(ContentFocus.req) else Modifier,
+                            onFocus = { sel = "SEARCH" },
+                            onRight = { runCatching { kbFirst.requestFocus() } },
+                            onFav = {}, icon = AIcon.Edit, raw = true
+                        ) { runCatching { kbFirst.requestFocus() } }
+                        return@itemsIndexed
+                    }
                     if (n == "PL") {
-                        // Playlist wählen (Runde 22): „Alle“ (bei mehreren gezeigten), eine der gezeigten Quellen filtern
-                        // oder eine andere Playlist aktivieren und laden – ohne in die Einstellungen zu gehen.
+                        // Choose playlist (round 22): "All" (with several shown), filter one of the shown sources
+                        // or activate and load another playlist – without going into the settings.
                         val pls = PlaylistStore.lists.toList()
                         val multiView = srcNames.size > 1
                         val opts = (if (multiView) listOf(Lang.tr("Alle Playlists")) else emptyList()) + pls.map { it.name }
@@ -178,7 +269,7 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
                                         plScope.launch { PlaylistStore.switchTo(ctx, pi) }
                                     }
                                 }
-                                // Gewählte Kategorie gibt es in der anderen Playlist vielleicht nicht: dann „Alle Sender“
+                                // The chosen category may not exist in the other playlist: then "All channels"
                                 sel = "ALL"
                             }
                         }
@@ -188,8 +279,20 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
                         val lbl = Lang.tr("Quelle") + ": " + (if (srcK < 0) Lang.tr("Alle") else srcNames[srcK])
                         CatRow(lbl, -1, false, Modifier, onFocus = {}, onRight = { runCatching { firstChan.requestFocus() } }, onFav = {}, icon = AIcon.Sliders, raw = true) {
                             LiveSource.k = if (srcK + 1 >= srcNames.size) -1 else srcK + 1
-                            // Gewählte Kategorie gibt es in der anderen Quelle vielleicht nicht: dann „Alle Sender“
+                            // The chosen category may not exist in the other source: then "All channels"
                             if (sel != FAV_CAT && sel != "ALL" && ChannelLists.byKey(sel) == null) sel = "ALL"
+                        }
+                        return@itemsIndexed
+                    }
+                    if (n == "HIDDEN") {
+                        var hidMenu by remember { mutableStateOf(false) }
+                        val hid = HiddenCats.list.filter { it in groups }
+                        Box {
+                            CatRow(Lang.tr("Ausgeblendete") + " (" + hid.size + ")", -1, false, Modifier, onFocus = {}, onRight = {}, onFav = {}, icon = AIcon.Sliders, raw = true) { hidMenu = true }
+                            if (hidMenu) OptionPopup(listOf("Alle wieder einblenden") + hid, -1, { hidMenu = false }) { i ->
+                                hidMenu = false
+                                if (i == 0) HiddenCats.showAll(ctx) else HiddenCats.show(ctx, hid[i - 1])
+                            }
                         }
                         return@itemsIndexed
                     }
@@ -199,34 +302,65 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
                     }
                     val label = when {
                         n == FAV_CAT -> "Favoriten"
+                        n == "HOME" -> "Start"
                         n == "ALL" -> "Alle Sender"
                         n == "REC" -> "Aufnahmen"
+                        LiveGenre.isGenreKey(n) -> LiveGenre.byKey(n)?.label ?: n
                         ml != null -> ml.name
                         else -> n
                     }
                     val icon = when {
                         n == FAV_CAT || n in CatFavs.list -> AIcon.Star
                         n == "REC" -> AIcon.Download
+                        n == "HOME" -> AIcon.Live
+                        LiveGenre.isGenreKey(n) -> AIcon.Live
                         ml != null -> AIcon.Lists
                         else -> null
                     }
                     val count = when {
                         n == FAV_CAT -> favs.size
                         n == "ALL" -> live.size
+                        n == "HOME" -> 0
                         n == "REC" -> recs.size
-                        ml != null -> ChannelListLogic.resolve(ml, byId).size
+                        LiveGenre.isGenreKey(n) -> genres[n]?.size ?: 0
+                        ml != null -> ChannelListLogic.resolve(ml, byIdLazy.value).size
                         else -> groups[n]?.size ?: 0
                     }
                     var listMenu by remember { mutableStateOf(false) }
+                    var catMenu by remember { mutableStateOf(false) }
+                    val plainCat = ml == null && n != FAV_CAT && n != "ALL" && n != "REC" && n != "HOME" && !LiveGenre.isGenreKey(n) && groups.containsKey(n)
                     Box {
                         CatRow(
                             label, count, n == sel,
                             if (n == sel) Modifier.focusRequester(ContentFocus.req) else Modifier,
                             onFocus = { sel = n }, onRight = { runCatching { firstChan.requestFocus() } },
-                            onFav = { if (ml != null) listMenu = true else if (n != FAV_CAT && n != "ALL" && n != "REC") CatFavs.toggle(ctx, n) },
+                            onFav = { if (ml != null) listMenu = true else if (plainCat) catMenu = true else if (n != FAV_CAT && n != "ALL" && n != "REC" && !LiveGenre.isGenreKey(n)) CatFavs.toggle(ctx, n) },
                             icon = icon, raw = ml != null
                         ) { runCatching { firstChan.requestFocus() } }
-                        // Menü einer eigenen Liste: umbenennen, löschen
+                        // Menu of a provider category: favorite on/off, hide, move, sorting of all categories
+                        var sortMenu by remember { mutableStateOf(false) }
+                        if (catMenu && plainCat) OptionPopup(
+                            listOf(
+                                if (n in CatFavs.list) "Aus Favoriten entfernen" else "Zu Favoriten hinzufügen", "Kategorie ausblenden",
+                                "Nach oben verschieben", "Nach unten verschieben", "An den Anfang verschieben", "Kategorien sortieren …"
+                            ), -1, { catMenu = false }
+                        ) { i ->
+                            catMenu = false
+                            val all = groupsAll.keys.toList()
+                            when (i) {
+                                0 -> CatFavs.toggle(ctx, n)
+                                1 -> { if (sel == n) sel = "ALL"; HiddenCats.hide(ctx, n) }
+                                2 -> CatOrder.move(ctx, CatOrder.LIVE, all, n, -1)
+                                3 -> CatOrder.move(ctx, CatOrder.LIVE, all, n, 1)
+                                4 -> CatOrder.toTop(ctx, CatOrder.LIVE, all, n)
+                                else -> sortMenu = true
+                            }
+                        }
+                        if (sortMenu) OptionPopup(listOf("Anbieter-Reihenfolge", "A–Z", "Eigene Reihenfolge"), CatOrder.mode(CatOrder.LIVE), { sortMenu = false }) { i ->
+                            sortMenu = false
+                            CatOrder.setMode(ctx, CatOrder.LIVE, i)
+                        }
+                        // Menu of an own list: rename, delete
                         if (listMenu && ml != null) OptionPopup(listOf("Umbenennen", "Liste löschen"), -1, { listMenu = false }) { i ->
                             listMenu = false
                             if (i == 0) ask = NameAsk("Liste umbenennen", ml.name) { ChannelLists.rename(ctx, ml.id, it) }
@@ -235,8 +369,12 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
                     }
                 }
             }
+            // With no live channels at all the plain list shows the hint instead of an empty home
+            if (sel == "HOME" && live.isNotEmpty()) Box(Modifier.weight(2f).fillMaxHeight().padding(end = 24.dp)) {
+                LiveHome(live, genres, favs, firstChan, onOpen = { ch, l -> ZapContext.list = l; ZapContext.key = "ALL"; onOpen(ch) })
+            } else {
             Column(Modifier.weight(0.9f).fillMaxHeight().padding(end = 24.dp)) {
-                // Eigene Liste: Umbenennen und Löschen gut sichtbar über den Sendern (vorher nur über langes OK auf der Liste)
+                // Own list: rename and delete clearly visible above the channels (before only via long OK on the list)
                 if (curList != null) Row(
                     Modifier.fillMaxWidth().padding(bottom = 12.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -244,7 +382,7 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
                     AppIcon(AIcon.Lists, Accent1, size = 22.dp)
                     Text(raw = true, text = curList.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    PillButton("Sender hinzufügen", if (list.isEmpty()) Modifier.focusRequester(firstChan) else Modifier, icon = AIcon.Plus) { addTo = curList.id; sel = "ALL" }
+                    PillButton("Sender hinzufügen", if (list.isEmpty()) Modifier.focusRequester(firstChan) else Modifier, icon = AIcon.Plus) { addTo = curList.id; query = ""; sel = "SEARCH"; addFocusTick++ }
                     PillButton("Umbenennen", icon = AIcon.Edit) { ask = NameAsk("Liste umbenennen", curList.name) { ChannelLists.rename(ctx, curList.id, it) } }
                     Box {
                         PillButton("Liste löschen", icon = AIcon.Close) { askDelete = true }
@@ -263,49 +401,86 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
                         color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     PillButton("Fertig", light = true) { finishAdd() }
                 }
+                if (sel == "SEARCH") Field(query, { query = it.take(40) }, "Sendername eingeben", Modifier.padding(bottom = 12.dp), inner = Modifier.focusRequester(searchReq))
                 if (list.isEmpty()) EmptyState(
                     if (sel == FAV_CAT) AIcon.Heart else AIcon.Live,
-                    if (sel == FAV_CAT) "Noch keine Favoriten" else if (curList != null) "Diese Liste ist noch leer" else "Keine Sender",
+                    if (sel == FAV_CAT) "Noch keine Favoriten" else if (sel == "SEARCH") (if (query.isBlank()) "Sender suchen" else "Keine Treffer") else if (curList != null) "Diese Liste ist noch leer" else "Keine Sender",
                     when {
+                        sel == "SEARCH" -> "Tippe rechts mit der Tastatur. Gesucht wird im Sendernamen und in der Kategorie."
                         sel == FAV_CAT -> "Auf einem Sender OK gedrückt halten und „Zu Favoriten“ wählen."
                         curList != null -> "In „Alle Sender“ oder einer Kategorie auf einem Sender OK gedrückt halten und „Zu …“ wählen."
+                        // The whole playlist has no live channels: most likely the content mode is "movies & series only"
+                        live.isEmpty() -> "There are no live channels. If there should be some, check Settings > Playlists: the content mode of this playlist may be set to movies & series only."
                         else -> "In dieser Kategorie gibt es keine Sender. Links eine andere Kategorie wählen."
                     }
-                ) else LazyColumn(state = chanState, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 40.dp)) {
-                    // In eigenen Listen wandert der Fokus beim Verschieben mit dem Sender mit (Schlüssel = Sender)
-                    itemsIndexed(list, key = if (curList != null) { ix, ch -> ch.id + "#" + ix } else null) { i, ch ->
+                ) else LazyColumn(
+                    state = chanState,
+                    // Held Down/Up key: at most ~9 steps per second, so a weak box is not flooded with scroll animations and rebinds
+                    modifier = Modifier.onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && (e.key == Key.DirectionDown || e.key == Key.DirectionUp) && e.nativeKeyEvent.repeatCount > 0) {
+                            val now = android.os.SystemClock.uptimeMillis()
+                            LiveHold.lastRepeat = now
+                            if (now - LiveHold.lastStep < 110) true else { LiveHold.lastStep = now; false }
+                        } else false
+                    },
+                    verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 40.dp)
+                ) {
+                    // In own lists the focus moves along with the channel when moving it (key = channel)
+                    itemsIndexed(list, key = if (curList != null) { ix, ch -> ch.id + "#" + ix } else null, contentType = { _, _ -> "ch" }) { i, ch ->
                         ChannelLine(
                             ch, (if (i == 0) Modifier.focusRequester(firstChan) else Modifier)
-                                .then(if (ch.id == restoreId) Modifier.focusRequester(restoreReq) else Modifier), curList,
+                                .then(if (ch.id == restoreId) Modifier.focusRequester(restoreReq) else Modifier)
+                                // Favorites: the focus follows a channel that was just moved
+                                .then(if (sel == FAV_CAT) Modifier.followFav(ch.id) else Modifier), curList,
                             onNewList = { newList(ch.id) },
-                            onFocus = { focusTarget = ch }
+                            onFocus = { focusTarget = ch; plScope.launch { holdJump(chanState, i) } },
+                            variants = variantsOf[ch.id].orEmpty(),
+                            favShown = if (sel == FAV_CAT) list else null,
+                            onVariant = { v -> ZapContext.list = list; ZapContext.key = sel; LiveMemory.setSel(ctx, sel); onOpen(v) }
                         ) {
                             if (addList != null) {
                                 val has = ch.id in addList.ids
                                 if (has) ChannelLists.remove(ctx, addList.id, ch.id) else ChannelLists.add(ctx, addList.id, ch.id)
                                 Toast.makeText(ctx, (if (has) Lang.tr("Entfernt: ") else Lang.tr("Hinzugefügt: ")) + ch.title, Toast.LENGTH_SHORT).show()
-                            } else if (sel == "REC") onPlayNow(ch)   // Aufnahme: wie ein Film abspielen (spulbar)
+                            } else if (sel == "REC") onPlayNow(ch)   // Recording: play like a movie (seekable)
                             else { ZapContext.list = list; ZapContext.key = sel; LiveMemory.setSel(ctx, sel); onOpen(ch) }
                         }
                     }
                 }
             }
-            // Rechts: was auf dem markierten Sender läuft
+            // Right: what is on the selected channel
             Box(Modifier.weight(1.1f).fillMaxHeight().padding(start = dpx(30), end = dpx(60), top = dpx(150))) {
-                LiveNowPanel(focusedCh ?: list.firstOrNull())
+                if (sel == "SEARCH") Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) { FocusedNowPanel(focusedState, list.firstOrNull()) }
+                    Spacer(Modifier.height(10.dp))
+                    // Setting "device keyboard" (Wishbox): a normal text field opens Gboard & co. (all languages, voice input)
+                    if (AppSettings.systemKeyboard) Field(
+                        query, { query = it.take(40) }, "Sender suchen",
+                        Modifier.fillMaxWidth().padding(bottom = dpx(24)), inner = Modifier.focusRequester(kbFirst)
+                    ) else SearchKeyboard(
+                        Modifier.fillMaxWidth().padding(bottom = dpx(24)),
+                        onKey = { query = (query + it).take(40) },
+                        onSpace = { if (query.isNotEmpty() && !query.endsWith(" ")) query += " " },
+                        onDelete = { query = query.dropLast(1) },
+                        onClear = { query = "" },
+                        onPhone = null, onVoice = null,
+                        firstKey = kbFirst, onFocusChange = {}, onRight = { true }
+                    )
+                } else FocusedNowPanel(focusedState, list.firstOrNull())
             }
-        }
+                    }
+}
         ask?.let { a -> NameDialog(a.title, a.initial, onDismiss = { ask = null }) { a.onSave(it); ask = null } }
     }
 }
 
-/** Kleiner Dialog: Name eingeben (Bildschirmtastatur), Speichern oder Abbrechen. */
+/** Small dialog: enter a name (on-screen keyboard), save or cancel. */
 @Composable
 private fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(initial) }
     val fr = remember { FocusRequester() }
     androidx.activity.compose.BackHandler { onDismiss() }
-    // Fokus auf „Speichern“, nicht ins Textfeld: sonst geht die Bildschirmtastatur sofort auf und „Zurück“ schließt erst sie, dann erst das Fenster
+    // Focus on "Save", not in the text field: otherwise the on-screen keyboard opens immediately and "Back" first closes it, only then the window
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(100); runCatching { fr.requestFocus() } }
     Box(Modifier.fillMaxSize().background(Color(0xB3000000)), contentAlignment = Alignment.Center) {
         Column(
@@ -351,22 +526,29 @@ private fun CatRow(
 }
 
 @Composable
-private fun ChannelLine(item: Item, modifier: Modifier, inList: ChList?, onNewList: () -> Unit, onFocus: () -> Unit = {}, onClick: () -> Unit) {
-    val ctx = LocalContext.current
+private fun ChannelLine(item: Item, modifier: Modifier, inList: ChList?, onNewList: () -> Unit, onFocus: () -> Unit = {}, variants: List<Item> = emptyList(), onVariant: (Item) -> Unit = {}, favShown: List<Item>? = null, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     Box {
-    if (menu) ChannelMenu(item, inList, onNewList) { menu = false }
+    if (menu) ChannelMenu(item, inList, onNewList, variants, onVariant, favShown) { menu = false }
     val shape = RoundedCornerShape(DS.RadiusM)
-    val epg by produceState(emptyList<EpgEntry>(), item.id) { value = Epg.now(item) }
-    val nowE = Epg.current(epg)
-    val nextE = epg.firstOrNull { nowE != null && it.start >= nowE.end }
-    // Runde 17b: markierter Sender schwebt als helles Glas mit Schatten hervor (statt Rahmen)
+    // Wait briefly before loading the guide data: rows that only fly past while scrolling are cancelled and cost nothing
+    // While Up/Down is held no guide data is loaded: the row would grow by two lines and the list would re-measure while it scrolls
+    // Start with the cached guide data: a row that comes into view is composed once with its program, not first empty
+    val epg by produceState(Epg.peek(item) ?: emptyList(), item.id) {
+        // The same row slot can show another channel (list changed): never keep the previous channel's program
+        val cached = Epg.peek(item)
+        value = cached ?: emptyList()
+        if (cached != null) return@produceState
+        kotlinx.coroutines.delay(150)
+        while (LiveHold.active()) kotlinx.coroutines.delay(120)
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Epg.now(item) }   // off the main thread: the guide lookup must not block scrolling
+    }
+    // Round 17b: the selected channel floats forward as light glass with a shadow (instead of a frame)
     val sc by androidx.compose.animation.core.animateFloatAsState(if (f) focusScale(1.03f) else 1f, label = "chl")
     Row(
-        modifier.fillMaxWidth()
+        modifier.fillMaxWidth().height(100.dp)   // fixed height: rows no longer grow when guide data arrives, so the list never re-measures while scrolling
             .graphicsLayer { scaleX = sc; scaleY = sc; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f) }
-            .then(if (f) Modifier.shadow(18.dp, shape, ambientColor = Tok.Lift, spotColor = Tok.Lift) else Modifier)
             .clip(shape)
             .background(if (f) Color(0x29FFFFFF) else Color(0x0AFFFFFF))
             .border(1.dp, if (f) Color(0x40FFFFFF) else Color.Transparent, shape)
@@ -377,37 +559,70 @@ private fun ChannelLine(item: Item, modifier: Modifier, inList: ChList?, onNewLi
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Box(Modifier.size(56.dp).clip(RoundedCornerShape(DS.RadiusS)).background(DS.Overlay2), contentAlignment = Alignment.Center) {
-            if (item.logo != null) AsyncImage(item.logo, null, Modifier.fillMaxSize().padding(6.dp), contentScale = ContentScale.Fit)
-            else Text(raw = true, text = item.title.take(2).uppercase(), color = Color.White, fontWeight = FontWeight.Bold)
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(raw = true, text = item.title, color = Tok.TextHi, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (nowE != null) {
-                val frac = ((System.currentTimeMillis() / 1000 - nowE.start).toFloat() / (nowE.end - nowE.start)).coerceIn(0f, 1f)
-                Text(raw = true, text = "${hhmm(nowE.start)}–${hhmm(nowE.end)}  ${nowE.title}", color = Accent2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(50)).background(DS.Overlay3)) {
-                    Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(Accent2))
-                }
-                if (nextE != null) Text(raw = true, text = "${hhmm(nextE.start)}  ${nextE.title}", color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            } else Text(raw = true, text = item.group, color = Muted, fontSize = 13.sp, maxLines = 1)
-        }
-        if (Catchup.version >= 0 && Catchup.has(item)) AppIcon(AIcon.Catchup, Accent2, size = 20.dp)
-        if (DeadLinks.isDead(item.url)) AppIcon(AIcon.Warning, DS.Gold, size = 20.dp)
-        if (Library.isFav(item.id)) AppIcon(AIcon.Star, DS.Gold, size = 20.dp)
+        ChannelLineContent(item, epg, variants.size)
     }
     }
 }
 
 /**
- * Menü eines Senders (Menü-Taste oder OK gedrückt halten): Favorit, eigene Listen (hinzufügen/entfernen),
- * in der Liste verschieben, neue Liste. [onNewList] = null blendet „Neue Senderliste“ aus (Player).
+ * Content of a channel row (logo, title, badges, guide lines, status icons). Own composable that does not read the
+ * focus state: a focus change recomposes only the row frame in [ChannelLine] and skips this part, so the time
+ * formatting and the favorite, catch-up and dead-link checks do not run again on every focus move.
  */
 @Composable
-fun ChannelMenu(item: Item, inList: ChList?, onNewList: (() -> Unit)?, onClose: () -> Unit) {
+private fun RowScope.ChannelLineContent(item: Item, epg: List<EpgEntry>, variantCount: Int) {
+    val nowE = Epg.current(epg)
+    val nextE = epg.firstOrNull { nowE != null && it.start >= nowE.end }
+    ChannelLogo(item.logo, item.title)
+    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(raw = true, text = item.title, color = Tok.TextHi, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            val lq = remember(item.id) { LiveQuality.get(item.id) ?: item.quality }
+            if (lq != null) Box(Modifier.clip(RoundedCornerShape(DS.RadiusXs)).background(Color(0x26FFFFFF)).padding(horizontal = 6.dp, vertical = 1.dp)) {
+                Text(raw = true, text = lq, color = Accent2, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            // Bundled channel: show how many quality variants are behind this row
+            if (variantCount > 1) Box(Modifier.clip(RoundedCornerShape(DS.RadiusXs)).background(Color(0x26FFFFFF)).padding(horizontal = 6.dp, vertical = 1.dp)) {
+                Text(raw = true, text = "+" + (variantCount - 1), color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+        }
+        if (nowE != null) {
+            val frac = ((System.currentTimeMillis() / 1000 - nowE.start).toFloat() / (nowE.end - nowE.start)).coerceIn(0f, 1f)
+            Text(raw = true, text = "${hhmm(nowE.start)}–${hhmm(nowE.end)}  ${nowE.title}", color = Accent2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(50)).background(DS.Overlay3)) {
+                Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(Accent2))
+            }
+            if (nextE != null) Text(raw = true, text = "${hhmm(nextE.start)}  ${nextE.title}", color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        } else Text(raw = true, text = item.group, color = Muted, fontSize = 13.sp, maxLines = 1)
+    }
+    if (Catchup.version >= 0 && Catchup.has(item)) AppIcon(AIcon.Catchup, Accent2, size = 20.dp)
+    // DeadLinks.count is read as a change signal (same pattern as Catchup.version): isDead itself is a plain map lookup
+    if (DeadLinks.count >= 0 && DeadLinks.isDead(item.url)) AppIcon(AIcon.Warning, DS.Gold, size = 20.dp)
+    if (Library.isFav(item.id)) AppIcon(AIcon.Star, DS.Gold, size = 20.dp)
+}
+
+/** Logo of a channel row. Own composable with plain String parameters, so a focus change of the row skips it (no new image request). */
+@Composable
+private fun ChannelLogo(logo: String?, title: String) {
+    Box(Modifier.size(56.dp).clip(RoundedCornerShape(DS.RadiusS)).background(DS.Overlay2), contentAlignment = Alignment.Center) {
+        if (logo != null) AsyncImage(logo, null, Modifier.fillMaxSize().padding(6.dp), contentScale = ContentScale.Fit)
+        else Text(raw = true, text = title.take(2).uppercase(), color = Color.White, fontWeight = FontWeight.Bold)
+    }
+}
+
+/**
+ * Menu of a channel (menu key or hold OK): favorite, own lists (add/remove),
+ * move within the list, new list. [onNewList] = null hides "New channel list" (player).
+ */
+@Composable
+fun ChannelMenu(item: Item, inList: ChList?, onNewList: (() -> Unit)?, variants: List<Item> = emptyList(), onVariant: (Item) -> Unit = {}, favShown: List<Item>? = null, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val acts = ArrayList<Triple<String, AIcon?, () -> Unit>>()
+    // Bundled quality variants: pick one to play (best first)
+    if (variants.size > 1) for (v in variants) acts.add(Triple(Lang.tr("Qualität") + ": " + (v.quality ?: v.title), AIcon.Play) { onVariant(v) })
     acts.add(Triple(if (Library.isFav(item.id)) "Aus Favoriten entfernen" else "Zu Favoriten", AIcon.Star) { Library.toggleFav(ctx, item.id) })
+    // In the favorites category of the Live tab: move the channel (favShown = the favorites on screen)
+    if (favShown != null) acts.addAll(favMoveActions(ctx, item, favShown))
     if (inList != null) {
         acts.add(Triple("Nach oben", AIcon.Up) { ChannelLists.move(ctx, inList.id, item.id, -1) })
         acts.add(Triple("Nach unten", AIcon.Down) { ChannelLists.move(ctx, inList.id, item.id, 1) })
@@ -423,8 +638,8 @@ fun ChannelMenu(item: Item, inList: ChList?, onNewList: (() -> Unit)?, onClose: 
 }
 
 /**
- * Erinnerung, während die App offen ist (auch im Player): „In 5 Min: Tagesschau · Das Erste“ mit Umschalten/Schließen.
- * Verschwindet nach einer Minute von selbst.
+ * Reminder while the app is open (also in the player): "In 5 min: Tagesschau · Das Erste" with Switch/Close.
+ * Disappears by itself after a minute.
  */
 @Composable
 fun ReminderCard(r: Reminder, modifier: Modifier, onClose: () -> Unit, onSwitch: () -> Unit) {
@@ -451,5 +666,33 @@ fun ReminderCard(r: Reminder, modifier: Modifier, onClose: () -> Unit, onSwitch:
         }
         PillButton("Umschalten", Modifier.focusRequester(fr), light = true) { onSwitch() }
         PillButton("Schließen") { onClose() }
+    }
+}
+
+
+/** Start in the Live TV area: last watched, favorites and a row of channels per genre. */
+@Composable
+private fun LiveHome(live: List<Item>, genres: Map<String, List<Item>>, favs: List<Item>, firstReq: FocusRequester, onOpen: (Item, List<Item>) -> Unit) {
+    val byId = remember(live) { live.associateBy { it.id } }
+    val recent = remember(live, History.ids.size) { History.ids.mapNotNull { byId[it] }.take(24) }
+    val rows = ArrayList<Pair<String, List<Item>>>()
+    if (recent.isNotEmpty()) rows.add("Zuletzt gesehen" to recent)
+    if (favs.isNotEmpty()) rows.add("Favoriten" to favs.take(40))
+    for ((k, l) in genres) rows.add((LiveGenre.byKey(k)?.label ?: k) to l.take(40))
+    if (rows.isEmpty()) rows.add("Alle Sender" to live.take(40))
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        itemsIndexed(rows, key = { _, r -> r.first }) { ri, r ->
+            Column {
+                Text(r.first, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, top = 12.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    itemsIndexed(r.second, key = { i, c -> c.id + "#" + i }) { i, c ->
+                        LiveCard(c, { onOpen(c, r.second) }, Modifier.width(260.dp).then(if (ri == 0 && i == 0) Modifier.focusRequester(firstReq) else Modifier))
+                    }
+                }
+            }
+        }
     }
 }

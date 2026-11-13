@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Übersetzungen Teil E: Sortierung, Sprachnamen, Farben, Genres, Player-Reste
+// Translations part E: sorting, language names, colors, genres, remaining player texts
 val DictE = """
 Rating¦Rating¦Puan¦Ocjena¦Ocjena¦Ocena¦Valoración¦Note¦Voto
 Genre¦Genre¦Tür¦Žanr¦Žanr¦Žanr¦Género¦Genre¦Genere

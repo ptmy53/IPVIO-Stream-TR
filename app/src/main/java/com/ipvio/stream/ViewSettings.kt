@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -23,22 +24,48 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Runde 22: Einstellungen „Ansicht“ in Unterseiten mit je einer Live-Vorschau.
- * Jede Unterseite zeigt ein Mini-Bild der App. Beim Markieren einer Auswahl (ohne OK) zeigt die Vorschau sofort,
- * wie es aussehen würde; Schritt-Knöpfe und Schalter wirken ohnehin direkt.
+ * Round 22: "View" settings in sub pages, each with a live preview.
+ * Each sub page shows a mini picture of the app. When a choice is highlighted (without OK), the preview immediately shows
+ * how it would look; step buttons and switches act directly anyway.
  */
 private val PREVIEW_W = 400.dp
 private val PREVIEW_H = 225.dp
 
 @Composable
-internal fun ViewPage(ctx: Context) {
+internal fun ViewPage(ctx: Context, live: Boolean = false) {
     CatPrefs.init(ctx); BrowsePrefs.init(ctx)
-    val tabs = listOf("Karten", "Seitenleiste", "Raster & Ansicht", "Startseite", "Kategorien")
-    var tab by remember { mutableIntStateOf(0) }
-    // Beim Markieren eines Reiters wechselt die Unterseite sofort: Links/Rechts blättert durch alle Bereiche
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        tabs.forEachIndexed { i, l -> ViewChip(l, tab == i, { on -> if (on) tab = i }) { tab = i } }
+    val tabs = listOf("Karten", "Seitenleiste", "Raster", "Startseite", "Kategorien")
+    val tab = ViewLive.tab
+    // When a tab is highlighted, the sub page switches immediately: Left/Right pages through all areas
+    val tabChips: @Composable () -> Unit = {
+        tabs.forEachIndexed { i, l -> ViewChip(l, tab == i, { on -> if (on) ViewLive.tab = i }) { ViewLive.tab = i } }
     }
+    // Live panel: only the area that was started; the real app behind shows the matching screen
+    if (live) {
+        Text(tabs[tab], color = Accent2, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+        when (tab) {
+            0 -> CardsTab(ctx)
+            1 -> SidebarTab(ctx)
+            2 -> GridTab(ctx)
+            3 -> HomeTab(ctx)
+            else -> CategoriesTab(ctx)
+        }
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { tabChips() }
+    if (!live) Hint(
+        when (tab) {
+            0 -> "Karten: So sehen einzelne Filme und Serien in den Listen aus (Poster oder breites Bild, Größe, Infos)."
+            1 -> "Seitenleiste: Das Menü am Rand mit Startseite, Filme, Serien und Live TV. Du kannst sie links, rechts oder oben anzeigen."
+            2 -> "Raster: Wie viele Spalten und Zeilen die Rasteransicht (zum Beispiel „Alle Filme“) zeigt."
+            3 -> "Startseite: Aussehen der ersten Seite nach dem Start. Welche Reihen erscheinen, stellst du über „Startseite anpassen“ ein."
+            else -> "Kategorien: Die Ordner deines Anbieters oder automatische Genres und ihre Darstellung."
+        }
+    )
+    // Every choice applies immediately: one click shows it on the real home screen with your own titles
+    // Every area except the sidebar can be tried live: the real screen opens with your own titles, every choice acts at once
+    PillButton("Live-Vorschau starten", light = true, icon = AIcon.Play) { ViewLive.active = true }
+    Hint("Zeigt die echte App mit deinen Titeln; die Einstellungen erscheinen in einer schmalen Leiste unten. Ein Klick auf eine Auswahl wirkt sofort.")
     when (tab) {
         0 -> CardsTab(ctx)
         1 -> SidebarTab(ctx)
@@ -48,9 +75,11 @@ internal fun ViewPage(ctx: Context) {
     }
 }
 
-/** Links die Einstellungen, rechts die feste Vorschau. */
+/** Settings on the left, the fixed preview on the right. */
 @Composable
 private fun TabLayout(preview: @Composable () -> Unit, controls: @Composable ColumnScope.() -> Unit) {
+    // Live mode: the real app is the preview, so only the controls are shown
+    if (ViewLive.active) { Column(verticalArrangement = Arrangement.spacedBy(10.dp), content = controls); return }
     Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), content = controls)
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -60,19 +89,21 @@ private fun TabLayout(preview: @Composable () -> Unit, controls: @Composable Col
     }
 }
 
-/** Auswahl-Chips: Markieren zeigt die Vorschau (hover), OK übernimmt (onPick). */
+/** Choice chips: highlighting shows the preview (hover), OK adopts it (onPick). */
 @Composable
 private fun Chips(labels: List<String>, selected: Int, hov: MutableState<Int?>, onPick: (Int) -> Unit) {
     val items: @Composable () -> Unit = {
         labels.forEachIndexed { i, l ->
-            ViewChip(l, selected == i, { on -> if (on) hov.value = i else if (hov.value == i) hov.value = null }) { onPick(i) }
+            ViewChip(l, selected == i, { on ->
+                if (on) { hov.value = i; if (ViewLive.active && selected != i) onPick(i) } else if (hov.value == i) hov.value = null
+            }) { onPick(i) }
         }
     }
-    if (labels.sumOf { it.length } > 26) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { items() }
+    if (labels.sumOf { it.length } > (if (ViewLive.active) 14 else 26)) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { items() }
     else Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { items() }
 }
 
-// ───────── Bausteine der Mini-Vorschau ─────────
+// ───────── Building blocks of the mini preview ─────────
 
 @Composable
 private fun rememberImgs(): List<Pair<Any?, Any?>> = remember(PlaylistStore.channels) {
@@ -107,7 +138,7 @@ private fun MiniNavItem(sel: Boolean, labels: Boolean) {
     }
 }
 
-/** Mini-Fernseher mit Seitenleiste an der gewählten Position; der Inhalt bekommt den freien Platz. */
+/** Mini TV with the sidebar at the chosen position; the content gets the free space. */
 @Composable
 private fun MiniScreen(pos: Int, labels: Boolean, content: @Composable (Dp, Dp) -> Unit) {
     val sbW = if (labels) 58.dp else 22.dp
@@ -133,13 +164,14 @@ private fun MiniScreen(pos: Int, labels: Boolean, content: @Composable (Dp, Dp) 
     }
 }
 
-// ───────── 1. Karten ─────────
+// ───────── 1. Cards ─────────
 
 @Composable
 private fun CardsTab(ctx: Context) {
     val hSize = remember { mutableStateOf<Int?>(null) }
     val hArt = remember { mutableStateOf<Int?>(null) }
     val hStyle = remember { mutableStateOf<Int?>(null) }
+    val hView = remember { mutableStateOf<Int?>(null) }
     val size = hSize.value ?: General.cardSize
     val art = hArt.value ?: General.cardArt
     val style = hStyle.value ?: General.previewStyle
@@ -156,7 +188,7 @@ private fun CardsTab(ctx: Context) {
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                     for (i in 0 until n) Tile(imgs.getOrNull(i)?.let { if (land) it.second else it.first }, w, h)
                 }
-                // Markierte Karte: so sieht die Vorschau beim Markieren aus
+                // Highlighted card: this is how the preview looks on highlight
                 val ph = maxHeight - h - 28.dp
                 if (ph > 30.dp) {
                     Row(Modifier.fillMaxWidth().height(ph).clip(RoundedCornerShape(6.dp)).background(Color(0x14FFFFFF)).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -183,11 +215,14 @@ private fun CardsTab(ctx: Context) {
         Chips(listOf("Cover", "Szenenbild"), General.cardArt, hArt) { General.setCardView(ctx, General.cardSize, it) }
         Text("Vorschau beim Markieren", color = Muted, fontSize = 15.sp)
         Chips(listOf("Infos auf dem Poster", "Breites Szenenbild"), General.previewStyle, hStyle) { General.setPreviewStyle(ctx, it) }
+        Text("Standard-Ansicht", color = Muted, fontSize = 15.sp)
+        Chips(listOf("Raster", "Kino"), if (BrowsePrefs.detail) 1 else 0, hView) { BrowsePrefs.set(ctx, it == 1) }
+        Hint("Raster zeigt viele Titel auf einmal. Kino zeigt oben die Details zum markierten Titel und unten eine Reihe zum Durchblättern.")
         Hint("Beim Markieren einer Auswahl zeigt die Vorschau sofort die Wirkung, OK übernimmt sie. Schriftgröße und Farben findest du unter „Design“.")
     }
 }
 
-// ───────── 2. Seitenleiste ─────────
+// ───────── 2. Sidebar ─────────
 
 @Composable
 private fun SidebarTab(ctx: Context) {
@@ -219,7 +254,7 @@ private fun SidebarTab(ctx: Context) {
     }
 }
 
-// ───────── 3. Raster & Ansicht ─────────
+// ───────── 3. Grid & view ─────────
 
 @Composable
 private fun GridTab(ctx: Context) {
@@ -233,7 +268,7 @@ private fun GridTab(ctx: Context) {
         MiniScreen(SidebarPrefs.pos, SidebarPrefs.labels) { maxWidth, maxHeight ->
             val gap = 4.dp
             if (view == 0) {
-                // Raster: Spalten × Zeilen
+                // grid: columns × rows
                 val w = (maxWidth - gap * (cols - 1)) / cols
                 val h = minOf(if (land) w * 9 / 16 else w * 3 / 2, (maxHeight - gap * (rows - 1)) / rows)
                 Column(verticalArrangement = Arrangement.spacedBy(gap)) {
@@ -242,7 +277,7 @@ private fun GridTab(ctx: Context) {
                     }
                 }
             } else {
-                // Kino: oben Details zum markierten Titel, unten eine Reihe zum Durchblättern
+                // Cinema: details of the selected title on top, a row to page through below
                 val n = 6
                 val w = (maxWidth - gap * (n - 1)) / n
                 val h = if (land) w * 9 / 16 else w * 3 / 2
@@ -264,9 +299,6 @@ private fun GridTab(ctx: Context) {
             }
         }
     }) {
-        Text("Standard-Ansicht", color = Muted, fontSize = 15.sp)
-        Chips(listOf("Raster", "Kino"), if (BrowsePrefs.detail) 1 else 0, hView) { BrowsePrefs.set(ctx, it == 1) }
-        Hint("Raster zeigt viele Titel auf einmal. Kino zeigt oben die Details zum markierten Titel und unten eine Reihe zum Durchblättern.")
         StepRow("Spalten (Raster)", cols.toString(),
             { AppSettings.setGrid(ctx, cols - 1, rows) },
             { AppSettings.setGrid(ctx, cols + 1, rows) })
@@ -277,7 +309,7 @@ private fun GridTab(ctx: Context) {
     }
 }
 
-// ───────── 4. Startseite ─────────
+// ───────── 4. Home screen ─────────
 
 @Composable
 private fun HomeTab(ctx: Context) {
@@ -291,7 +323,7 @@ private fun HomeTab(ctx: Context) {
             val cw = (AppSettings.cardW * scale).dp
             val ch = cw * 3 / 2
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // Banner mit Fortschrittsbalken: wechselt im gewählten Takt
+                // Banner with progress bar: switches at the chosen rate
                 Box(Modifier.fillMaxWidth().height(maxHeight * 0.48f).clip(RoundedCornerShape(6.dp)).background(Color(0x14FFFFFF))) {
                     Img(imgs.getOrNull(0)?.second, Modifier.fillMaxSize())
                     Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xDD000000), Color.Transparent))))
@@ -304,7 +336,7 @@ private fun HomeTab(ctx: Context) {
                         Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(p).height(3.dp).background(Accent2))
                     }
                 }
-                // Reihen mit Karten in der gewählten Kartengröße
+                // Rows with cards in the chosen card size
                 Bar(46.dp, 5.dp, Color(0x99FFFFFF))
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     var used = 0.dp
@@ -326,7 +358,7 @@ private fun HomeTab(ctx: Context) {
     }
 }
 
-// ───────── 5. Kategorien ─────────
+// ───────── 5. Categories ─────────
 
 @Composable
 private fun CategoriesTab(ctx: Context) {
@@ -336,7 +368,7 @@ private fun CategoriesTab(ctx: Context) {
     TabLayout(preview = {
         MiniScreen(SidebarPrefs.pos, SidebarPrefs.labels) { maxWidth, maxHeight ->
             if (list) {
-                // Liste links, Vorschau der markierten Kategorie rechts
+                // List on the left, preview of the highlighted category on the right
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.width(maxWidth * 0.34f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         repeat(8) { i ->

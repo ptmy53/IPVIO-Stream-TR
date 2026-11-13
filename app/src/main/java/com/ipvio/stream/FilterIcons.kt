@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Kleine Linien-Symbole für die Filterleisten (gezeichnet, keine Schriftzeichen – sehen auf jedem Gerät gleich aus). */
+/** Small line icons for the filter bars (drawn, not font characters – look the same on every device). */
 enum class FIcon { Sort, Rating, Year, Genre, Country, View, Grid, Reset }
 
 @Composable
@@ -49,7 +49,7 @@ fun FilterIcon(icon: FIcon, color: Color, size: Dp = 20.dp) {
                 drawLine(color, o(16f, 3f), o(16f, 7f), 2f * u, StrokeCap.Round)
             }
             FIcon.Genre -> {
-                // Klappe: Rahmen + schräger Streifen oben
+                // Clapperboard: frame + slanted stripe at the top
                 drawRoundRect(color, o(3.5f, 9.5f), Size(17f * u, 11f * u), CornerRadius(2.5f * u), style = st)
                 drawLine(color, o(3.5f, 9.5f), o(5.5f, 4.5f), 2f * u, StrokeCap.Round)
                 drawLine(color, o(5.5f, 4.5f), o(20.5f, 4.5f), 2f * u, StrokeCap.Round)

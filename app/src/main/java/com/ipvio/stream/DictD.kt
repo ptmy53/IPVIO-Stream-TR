@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Übersetzungen Teil D: Design, Diagnose, Genres-Filter, Live-TV/EPG, Playlist, Über
+// Translations part D: design, diagnostics, genre filter, live TV/EPG, playlist, about
 val DictD = """
 Farbthema¦Color theme¦Renk teması¦Tema boja¦Tema boja¦Tema boja¦Tema de color¦Thème de couleur¦Tema colore
 Eigene Farbe¦Custom color¦Özel renk¦Vlastita boja¦Vlastita boja¦Vlastita boja¦Color personalizado¦Couleur personnalisée¦Colore personalizzato

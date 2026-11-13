@@ -11,6 +11,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -45,78 +57,78 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Farben kommen aus dem Gestaltungs-Zustand (Look.kt): beim Umschalten des Themes ändert sich die ganze App sofort.
+// Colors come from the design state (Look.kt): when the theme is switched the whole app changes immediately.
 val Bg: Color get() = Look.bg
 val Surf: Color get() = Look.surf
 val Surf2: Color get() = Look.surf2
 val Accent1: Color get() = Look.accent1
 val Accent2: Color get() = Look.accent2
-/** Schriftfarbe auf Accent1-Flächen (bei sehr hellen Farben wie IPVIO-Grün dunkel). */
+/** Text color on Accent1 surfaces (dark for very light colors such as IPVIO green). */
 val OnAccent: Color get() = Look.onAccent
-/** Metadaten-Grau (Runde 17 heller: Kontrast ≥ 6:1 auf allen Flächen, auch auf Glas über Bildern lesbar). */
+/** Metadata gray (round 17 lighter: contrast ≥ 6:1 on all surfaces, readable even on glass over images). */
 val Muted = Color(0xFFA0A6B8)
 
 /**
- * Farb-Tokens (Runde 17). Neutrale Text-Stufen gelten in jedem Design; Flächen leiten sich aus dem gewählten Design (Look) ab.
- * Kontrast auf IPVIO Navy #0B0F19 (WCAG): TextHi 17:1, TextMid 12:1, TextLow/Muted 7,9:1; auf der hellsten Fläche immer ≥ 5,9:1.
- * Fokus: Knöpfe weiß mit dunkler Schrift, Karten weißer Rahmen mit Schatten.
+ * Color tokens (round 17). Neutral text levels apply in every design; surfaces derive from the chosen design (Look).
+ * Contrast on IPVIO Navy #0B0F19 (WCAG): TextHi 17:1, TextMid 12:1, TextLow/Muted 7.9:1; on the lightest surface always ≥ 5.9:1.
+ * Focus: buttons white with dark text, cards white frame with shadow.
  */
 object Tok {
     val TextHi = Color(0xFFF4F6FB)
     val TextMid = Color(0xFFD3D7E2)
     val TextLow = Color(0xFFA0A6B8)
-    /** Ruhende Karte/Zeile, markierte Zeile */
+    /** Card/row at rest, marked row */
     val Card: Color get() = lerp(Look.surf, Color.White, 0.03f)
     val CardFocus: Color get() = lerp(Look.surf2, Color.White, 0.08f)
-    /** Glas über Bildern (Leisten, Pillen), stark für Karten mit viel Text */
+    /** Glass over images (bars, pills), strong for cards with a lot of text */
     val Glass: Color get() = Look.bg.copy(alpha = 0.8f)
     val GlassStrong: Color get() = Look.bg.copy(alpha = 0.94f)
     val Line = Color(0x26FFFFFF)
-    /** Schatten für gehobene (markierte) Karten */
+    /** Shadow for raised (selected) cards */
     val Lift = Color(0xE6000000)
 }
 
 /**
- * Designsystem: zentrale Maße und Farben. Neue Oberflächen nutzen nur diese Werte.
+ * Design system: central measures and colors. New UIs use only these values.
  *
- * Fokus (Fernbedienung), überall gleich:
- *  - Knöpfe und Pillen: weiße Fläche, dunkle Schrift, leicht größer ([ButtonColors]).
- *  - Karten und Poster: Rahmen in der Hervorhebungsfarbe, größer, weicher Schein ([focusGlow]).
- *  - Listen- und Einstellungszeilen: hellere Fläche plus Rahmen in der Hervorhebungsfarbe ([RowFocus]).
+ * Focus (remote control), the same everywhere:
+ *  - Buttons and pills: white surface, dark text, slightly larger ([ButtonColors]).
+ *  - Cards and posters: frame in the highlight color, larger, soft glow ([focusGlow]).
+ *  - List and settings rows: lighter surface plus frame in the highlight color ([RowFocus]).
  */
 object DS {
-    // Abstände (dp)
+    // Spacing (dp)
     val SpaceXs = 4.dp
-    /** Seitlicher Rand der Inhalte (TV-sicherer Bereich). */
+    /** Side margin of the content (TV-safe area). */
     val PageX = 48.dp
-    /** Oberer/unterer Rand: mindestens 27 dp (Android-TV-Richtlinie gegen Überscan). */
+    /** Top/bottom margin: at least 27 dp (Android TV guideline against overscan). */
     val PageY = 28.dp
-    /** Breite der Seitenleiste (wie im Entwurf immer mit Texten: 230 von 1658 Entwurfs-Pixeln). */
-    /** Platz der eingeklappten Seitenleiste (Runde 14: nur Symbole, klappt beim Hineingehen über den Inhalt auf). */
+    /** Width of the sidebar (always with texts as in the design: 230 of 1658 design pixels). */
+    /** Space of the collapsed sidebar (round 14: icons only, expands over the content when entered). */
     val SidebarW: Dp get() = if (SidebarPrefs.labels) SidebarOpenW else SidebarCollapsedW
-    /** Eingeklappte Seitenleiste (nur Symbole). */
+    /** Collapsed sidebar (icons only). */
     val SidebarCollapsedW: Dp get() = dpx(92)
-    /** Breite der aufgeklappten Seitenleiste. */
+    /** Width of the expanded sidebar. */
     val SidebarOpenW: Dp get() = dpx(250)
 
-    // Ecken
+    // Corners
     val RadiusXs = 8.dp
     val RadiusS = 12.dp
     val RadiusM = 16.dp
     val RadiusL = 20.dp
     val RadiusXl = 24.dp
 
-    // Rahmen
+    // Border
     val Border = 2.dp
     val FocusBorder = 3.dp
 
-    // Schriftgrößen
+    // Font sizes
     val TextCaption = 12.sp
     val TextSmall = 14.sp
     val TextBody = 16.sp
     val TextLead = 18.sp
 
-    // Ebenen über dem Hintergrund (weiß mit Deckkraft)
+    // Layers above the background (white with opacity)
     val Overlay1 = Color(0x14FFFFFF)
     val Overlay2 = Color(0x22FFFFFF)
     val Overlay3 = Color(0x33FFFFFF)
@@ -124,36 +136,36 @@ object DS {
     val Hairline = Color(0x1AFFFFFF)
     val Scrim = Color(0xAA000000)
 
-    // Schrift- und Signalfarben
+    // Text and signal colors
     val TextSoft = Color(0xFFD7DAE5)
     val Danger = Color(0xFFFF6B6B)
     val Gold = Color(0xFFFFD166)
 
-    // Fokus für Knöpfe
+    // Focus for buttons
     val FocusFill = Color.White
     val FocusInk = Color(0xFF0B0F19)
 }
 
-/** Fläche einer Zeile mit Fokus (aus dem Theme abgeleitet, passt zu jedem Hintergrund). */
+/** Surface of a row with focus (derived from the theme, fits every background). */
 val RowFocus: Color get() = lerp(Look.surf, Color.White, 0.08f)
 
-/** Farben eines Knopfs: fokussiert weiß, sonst Akzent (primär) oder halbtransparent (sekundär). */
+/** Colors of a button: focused white, otherwise accent (primary) or semi-transparent (secondary). */
 class ButtonColors(val bg: Color, val text: Color)
 
 fun buttonColors(focused: Boolean, primary: Boolean): ButtonColors = when {
     focused -> ButtonColors(DS.FocusFill, DS.FocusInk)
-    // Runde 14: Hauptknopf nicht mehr voll farbig (sah aus wie markiert) – nur leicht getönt; markiert ist allein die weiße Fläche
+    // Round 14: main button no longer fully colored (looked selected) – only slightly tinted; only the white surface marks selection
     primary -> ButtonColors(lerp(DS.Overlay3, Look.accent1, 0.32f), Color.White)
     else -> ButtonColors(DS.Overlay3, Color.White)
 }
 
-/** Weicher Schein in der Hervorhebungsfarbe um fokussierte Karten (Android 9+ farbig, darunter neutral). */
+/** Soft glow in the highlight color around focused cards (colored on Android 9+, neutral below). */
 fun Modifier.focusGlow(focused: Boolean, shape: androidx.compose.ui.graphics.Shape): Modifier =
-    // Runde 14 (Wunsch des Nutzers): kein farbiger Schein mehr um markierte Felder, nur ein dezenter dunkler Schatten
-    if (!focused) this else this.shadow(20.dp, shape, clip = false, ambientColor = Tok.Lift, spotColor = Tok.Lift)
+    // Round 14 (user's wish): no colored glow around selected fields any more, only a subtle dark shadow
+    if (!focused) this else this.shadow(10.dp, shape, clip = false, ambientColor = Tok.Lift, spotColor = Tok.Lift)
 
 @Composable
-fun FocusButton(text: String, modifier: Modifier = Modifier, primary: Boolean = false, onClick: () -> Unit) {
+fun FocusButton(text: String, modifier: Modifier = Modifier, primary: Boolean = false, compact: Boolean = false, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
     val s by animateFloatAsState(if (f) focusScale(1.07f) else 1f, label = "btn")
     val shape = RoundedCornerShape(50)
@@ -164,21 +176,44 @@ fun FocusButton(text: String, modifier: Modifier = Modifier, primary: Boolean = 
             .background(if (f) SolidColor(DS.FocusFill) else if (primary) SolidColor(lerp(DS.Overlay3, Look.accent1, 0.32f)) else SolidColor(DS.Overlay3))
             .onFocusChanged { f = it.isFocused }
             .clickable(onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 14.dp),
+            .padding(horizontal = if (compact) 20.dp else 28.dp, vertical = if (compact) 9.dp else 14.dp),
         contentAlignment = Alignment.Center
-    ) { Text(text, color = if (f) DS.FocusInk else Color.White, fontSize = DS.TextLead, fontWeight = FontWeight.SemiBold) }
+    ) { Text(text, color = if (f) DS.FocusInk else Color.White, fontSize = if (compact) 16.sp else DS.TextLead, fontWeight = FontWeight.SemiBold) }
 }
 
+/**
+ * Text field for remote-control use: focus only highlights the field, OK (or a tap) starts editing and opens the
+ * keyboard. While editing, Up/Down leave the field; Done closes the keyboard and returns to the highlighted state.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun Field(
     value: String, onChange: (String) -> Unit, hint: String,
     modifier: Modifier = Modifier, inner: Modifier = Modifier, password: Boolean = false,
-    /** Nur Ziffern (Zahlen-Tastatur), z. B. „Gehe zu Folge“. */
+    /** Digits only (number keyboard), e.g. "go to episode". */
     number: Boolean = false,
-    /** „Fertig“ auf der Bildschirmtastatur. */
-    onDone: (() -> Unit)? = null
+    /** "Done" on the on-screen keyboard. */
+    onDone: (() -> Unit)? = null,
+    /** Start in edit mode right away (keyboard opens without pressing OK first). */
+    autoOpen: Boolean = false
 ) {
     var f by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(autoOpen) }
+    var hadFocus by remember { mutableStateOf(false) }
+    var returnToBox by remember { mutableStateOf(false) }
+    val boxReq = remember { FocusRequester() }
+    val textReq = remember { FocusRequester() }
+    val fm = LocalFocusManager.current
+    val kb = LocalSoftwareKeyboardController.current
+    LaunchedEffect(editing) {
+        if (editing) {
+            runCatching { textReq.requestFocus() }
+            kb?.show()
+        } else if (returnToBox) {
+            returnToBox = false
+            runCatching { boxReq.requestFocus() }
+        }
+    }
     val shape = RoundedCornerShape(16.dp)
     Box(
         modifier
@@ -188,22 +223,46 @@ fun Field(
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.CenterStart
     ) {
+        // Focus target while not editing; OK / tap starts editing
+        Box(
+            inner.fillMaxSize()
+                .focusRequester(boxReq)
+                .onFocusChanged { f = it.isFocused || it.hasFocus }
+                .clickable { editing = true }
+        )
         BasicTextField(
-            value = value, onValueChange = onChange, singleLine = true,
+            value = value, onValueChange = onChange, singleLine = true, enabled = editing,
             textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
             cursorBrush = SolidColor(Accent2),
             visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = if (number) KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done)
-                else if (onDone != null) KeyboardOptions(imeAction = ImeAction.Done) else KeyboardOptions.Default,
-            // Nur mit eigener Aktion überschreiben; sonst bleibt das Standardverhalten (Tastatur schließen)
-            keyboardActions = if (onDone != null) KeyboardActions(onDone = { onDone(); defaultKeyboardAction(ImeAction.Done) }) else KeyboardActions.Default,
-            modifier = inner.fillMaxWidth().onFocusChanged { f = it.isFocused }
+                else KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                onDone?.invoke()
+                kb?.hide()
+                returnToBox = true
+                editing = false
+            }),
+            modifier = Modifier.fillMaxWidth()
+                .focusRequester(textReq)
+                .onFocusChanged {
+                    if (it.isFocused) { hadFocus = true; f = true }
+                    else if (hadFocus) { hadFocus = false; if (editing) editing = false }
+                }
+                .onPreviewKeyEvent { e ->
+                    val up = e.key == Key.DirectionUp
+                    if (e.type == KeyEventType.KeyDown && (up || e.key == Key.DirectionDown)) {
+                        kb?.hide()
+                        fm.moveFocus(if (up) FocusDirection.Up else FocusDirection.Down)
+                        true
+                    } else false
+                }
         )
         if (value.isEmpty()) Text(hint, color = Muted, fontSize = 20.sp)
     }
 }
 
-/** Schlichter Lade-Kreis (ersetzt den aus material3). */
+/** Plain loading circle (replaces the one from material3). */
 @Composable
 fun Spinner(color: Color, modifier: Modifier = Modifier) {
     val t = rememberInfiniteTransition(label = "spin")
@@ -217,7 +276,7 @@ fun Spinner(color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** Platzhalter-Farbe, die sanft pulsiert (Lade-Skelett statt Spinner). Bei "Bewegung: aus" ruhig. */
+/** Placeholder color that pulses gently (loading skeleton instead of a spinner). Calm with "Motion: off". */
 @Composable
 fun shimmerColor(): Color {
     val t = rememberInfiniteTransition(label = "sk")
@@ -225,7 +284,7 @@ fun shimmerColor(): Color {
     return Color.White.copy(alpha = if (Look.motion > 0) a else 0.08f)
 }
 
-/** Grauer Platzhalter in Form des späteren Inhalts. */
+/** Gray placeholder in the shape of the later content. */
 @Composable
 fun SkeletonBox(modifier: Modifier, color: Color = shimmerColor(), shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(DS.RadiusXs)) {
     Box(modifier.clip(shape).background(color))

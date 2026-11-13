@@ -7,20 +7,20 @@ import java.io.InputStream
 import java.io.OutputStream
 
 /**
- * Binärer Zwischenspeicher der Playlist (ohne Android, testbar).
- * Version 5: enthält nur die gezeigten Sprachen (große Anbieter: 800.000 Einträge → z. B. 120.000) und im Kopf
- * die Anzahl und Datenmenge je Sprache der ganzen Liste sowie die damals ausgeblendeten Sprachen.
- * Die ganze Liste liegt zusätzlich komprimiert auf dem Gerät (pl_*.m3u.gz), daraus wird bei einer anderen Sprachauswahl neu eingelesen.
- * Version 4 (ganze Liste, Sprache vorne in jedem Eintrag) und 3 (ohne Sprache) werden weiter gelesen.
+ * Binary cache of the playlist (without Android, testable).
+ * Version 5: contains only the shown languages (large providers: 800,000 entries → e.g. 120,000) and in the head
+ * the count and amount of data per language of the whole list as well as the languages hidden at that time.
+ * The whole list is additionally stored compressed on the device (pl_*.m3u.gz); with a different language selection it is parsed again from it.
+ * Version 4 (whole list, language at the front of each entry) and 3 (without language) are still read.
  */
 object PlaylistCacheIO {
     const val VERSION = 5
-    private const val MAX_STR = 1 shl 20      // 1 MB pro Text: mehr kann nur eine beschädigte Datei sein
+    private const val MAX_STR = 1 shl 20      // 1 MB per text: anything larger can only be a corrupt file
     private const val MAX_COUNT = 2_000_000
 
     /**
-     * [hidden] = beim Schreiben ausgeblendete Sprachen (nur Version 5); null = der Speicher enthält die ganze Liste (Version 3/4).
-     * [bytes] = Datenmenge je Sprache der ganzen Liste (für die Speicher-Schätzung), bei Version 3/4 leer.
+     * [hidden] = languages hidden when writing (version 5 only); null = the cache contains the whole list (version 3/4).
+     * [bytes] = amount of data per language of the whole list (for the memory estimate), empty for version 3/4.
      */
     class Cached(
         val items: List<Item>, val epg: List<String>, val order: Map<String, Int>, val counts: Map<String, Int>,
@@ -28,8 +28,8 @@ object PlaylistCacheIO {
     )
 
     /**
-     * Schreibt Version 5. [list] = die gezeigten Einträge; [counts]/[bytes] beschreiben die ganze Liste.
-     * Ohne [counts] wird aus [list] gezählt (dann enthält [list] alles, [hidden] ist leer).
+     * Writes version 5. [list] = the shown entries; [counts]/[bytes] describe the whole list.
+     * Without [counts] it is counted from [list] (then [list] contains everything, [hidden] is empty).
      */
     fun write(
         out: OutputStream, url: String, list: List<Item>, epg: List<String>, order: Map<String, Int>,
@@ -49,7 +49,7 @@ object PlaylistCacheIO {
         o.flush()
     }
 
-    /** Kopf des Zwischenspeichers (Adresse geprüft); die Einträge folgen danach im Datenstrom. */
+    /** Head of the cache (address checked); the entries follow afterwards in the data stream. */
     private class Head(
         val version: Int, val epg: List<String>, val order: Map<String, Int>,
         val hidden: Set<String>?, val counts: Map<String, Int>?, val bytes: Map<String, Long>
@@ -77,8 +77,8 @@ object PlaylistCacheIO {
     }
 
     /**
-     * Nur der Kopf, ohne Einträge: EPG-Adressen, Kategorien-Reihenfolge, Zähler und die damals ausgeblendeten Sprachen.
-     * [Cached.hidden] = null bedeutet: der Speicher enthält die ganze Liste (Version 3/4). Die Zähler sind dann leer.
+     * Only the head, without entries: EPG addresses, category order, counters and the languages hidden at that time.
+     * [Cached.hidden] = null means: the cache contains the whole list (version 3/4). The counters are then empty.
      */
     fun readHeader(input: InputStream, url: String): Cached? {
         val h = DataInputStream(input).head(url) ?: return null
@@ -86,8 +86,8 @@ object PlaylistCacheIO {
     }
 
     /**
-     * Liest den Zwischenspeicher; null, wenn er zu einer anderen Adresse gehört oder eine unbekannte Version hat. Beschädigt → Ausnahme.
-     * [check] wird alle 2.000 Einträge aufgerufen (Speicher-Wache, Abbruch).
+     * Reads the cache; null if it belongs to a different address or has an unknown version. Damaged → exception.
+     * [check] is called every 2,000 entries (memory guard, abort).
      */
     fun read(input: InputStream, url: String, hidden: Set<String>, check: (() -> Unit)? = null): Cached? {
         val i = DataInputStream(input)
@@ -123,7 +123,7 @@ object PlaylistCacheIO {
         return String(b, Charsets.UTF_8)
     }
 
-    /** Überspringt einen Text, ohne ihn anzulegen (für ausgeblendete Einträge). */
+    /** Skips a text without creating it (for hidden entries). */
     private fun DataInputStream.skipStr() {
         val n = readInt()
         if (n < 0) return
@@ -146,16 +146,16 @@ object PlaylistCacheIO {
         }
     }
 
-    /** Liest einen Eintrag; ausgeblendete Sprachen liefern null (gezählt werden sie trotzdem). */
+    /** Reads an entry; hidden languages return null (they are counted anyway). */
     private fun DataInputStream.readItem(version: Int, pool: StringPool, hidden: Set<String>, counts: HashMap<String, Int>): Item? {
         val id = str() ?: ""
         val kind = Kind.entries.getOrNull(readInt()) ?: throw IOException("Zwischenspeicher beschädigt")
         var lang: String? = if (version >= 4) pool.of(str() ?: LangTagLogic.UNKNOWN) else null
         if (lang != null) {
             counts[lang] = (counts[lang] ?: 0) + 1
-            if (lang in hidden) { skipItemRest(); return null }
+            if (LangTagLogic.hides(hidden, lang, kind)) { skipItemRest(); return null }
         }
-        // Ältere Zwischenspeicher: Titel noch mit „&amp;“ bzw. „|EN|“ – beim Lesen bereinigen (schnell, meist unverändert)
+        // Older caches: titles still with "&amp;" or "|EN|" – clean up while reading (fast, mostly unchanged)
         val rawTitle = str() ?: ""
         val title = if (kind == Kind.LIVE) TitleText.decode(rawTitle) else TitleText.title(rawTitle)
         val y = readInt()
@@ -173,7 +173,7 @@ object PlaylistCacheIO {
             val eu = str() ?: ""
             val eq = pool.ofOrNull(str())
             val vc = count()
-            // Ältere Zwischenspeicher enthalten auch Einzel-Quellen als Liste: dann wie beim Einlesen weglassen (spart Speicher)
+            // Older caches also contain single sources as a list: then omit as when parsing (saves memory)
             val vars = if (vc == 0) emptyList() else ArrayList<Variant>(vc).also { l ->
                 for (j in 0 until vc) l.add(Variant(str() ?: "", pool.of(str() ?: ""), pool.ofOrNull(str()), pool.ofOrNull(str())))
             }
@@ -182,7 +182,7 @@ object PlaylistCacheIO {
         if (lang == null) {
             lang = pool.of(LangTagLogic.of(group, rawTitle, kind == Kind.LIVE))
             counts[lang] = (counts[lang] ?: 0) + 1
-            if (lang in hidden) return null
+            if (LangTagLogic.hides(hidden, lang, kind)) return null
         }
         return Item(
             id = id, kind = kind, title = title, year = if (y < 0) null else y, url = url, logo = logo,
@@ -191,7 +191,7 @@ object PlaylistCacheIO {
     }
 
     private fun DataInputStream.skipItemRest() {
-        skipStr(); readInt(); skipStr(); skipStr(); skipStr(); skipStr(); skipStr()   // Titel, Jahr, Adresse, Logo, Kategorie, Qualität, tvg-id
+        skipStr(); readInt(); skipStr(); skipStr(); skipStr(); skipStr(); skipStr()   // title, year, URL, logo, category, quality, tvg-id
         val n = count()
         for (k in 0 until n) {
             readInt(); readInt(); skipStr(); skipStr(); skipStr()

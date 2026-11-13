@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Nederlandse vertalingen (deel 5/5): rijen Duits-Nederlands, aanvulling op de 9 talen in DictA–J
+// Dutch translations (part 5/5): German-Dutch rows, in addition to the 9 languages in DictA–J
 val DictNl5 = """
 Dunkler Kasten hinter der Uhr. Aus = nur die Zahlen.¦Donker vak achter de klok. Uit = alleen de cijfers.
 Puffer (bei langsamem Internet)¦Buffer (bij traag internet)
@@ -257,15 +257,374 @@ Darts & Snooker¦Darts & snooker
 Nächste 3 Std.¦Komende 3 uur
 Morgen¦Morgen
 Keine Sendungen für diese Auswahl¦Geen uitzendingen voor deze selectie
-Zweiter Stream¦Tweede stream
+Zusatzbild¦Extra beeld
 Anordnung¦Indeling
 Bild-in-Bild¦Beeld-in-beeld
 Geteilt¦Gesplitst scherm
 Ton von¦Geluid van
 Hauptstream¦Hoofdstream
 Streams tauschen¦Streams wisselen
-Zweiter Stream nicht abspielbar¦Tweede stream kan niet worden afgespeeld
+Dieser Sender ist beim Anbieter gerade nicht erreichbar. Probiere einen anderen.¦Deze zender is momenteel niet bereikbaar bij de aanbieder. Probeer een andere.
+Dein Anbieter erlaubt vermutlich nur eine Verbindung gleichzeitig. Frage nach einem Zugang mit mehr Verbindungen.¦Je aanbieder staat waarschijnlijk maar één verbinding tegelijk toe. Vraag om een account met meer verbindingen.
+Die Verbindung ist zu langsam oder wurde abgelehnt. Ein Sender in niedrigerer Qualität hilft oft.¦De verbinding is te traag of geweigerd. Een zender in lagere kwaliteit helpt vaak.
+Dein Gerät schafft zwei Videos gleichzeitig nicht. Wähle für beide Bilder SD-Sender.¦Je apparaat kan geen twee video's tegelijk aan. Kies SD-zenders voor beide beelden.
+Probiere einen anderen Sender oder eine niedrigere Qualität.¦Probeer een andere zender of een lagere kwaliteit.
+Schon ein anderes Gerät mit IPVIO Stream? Spiele die Sicherung ein: Playlists, Zugangsdaten, Verlauf, Favoriten und Einstellungen sind danach sofort da.¦Heb je al een ander apparaat met IPVIO Stream? Speel de back-up in: afspeellijsten, inloggegevens, geschiedenis, favorieten en instellingen zijn meteen aanwezig.
+Sicherung von anderem Gerät einspielen¦Back-up van ander apparaat inspelen
+Keine gültige Sicherung gefunden.¦Geen geldige back-up gevonden.
+Auf diesem Gerät gibt es keine Dateiauswahl. Spiele die Sicherung über die Handy-Seite rechts ein.¦Dit apparaat heeft geen bestandskiezer. Speel de back-up in via de telefoonpagina rechts.
+Sicherung mit Playlists speichern …¦Back-up met afspeellijsten opslaan …
+Auf diesem Gerät gibt es keine Dateiauswahl. Nutze die Übertragung im WLAN.¦Dit apparaat heeft geen bestandskiezer. Gebruik de wifi-overdracht.
+Gesichert werden Einstellungen, Favoriten, Verlauf, Weiterschauen und Profile. Playlists und Zugangsdaten sind nur in „Sicherung mit Playlists“ enthalten (die Datei enthält Passwörter, gib sie nicht weiter). Beim Wiederherstellen startet die App neu. Auf einem neuen Gerät geht das gleich beim Hinzufügen der ersten Playlist.¦Instellingen, favorieten, geschiedenis, verder kijken en profielen worden opgeslagen. Afspeellijsten en inloggegevens staan alleen in “Back-up met afspeellijsten opslaan” (het bestand bevat wachtwoorden, deel het niet). De app herstart bij het terugzetten. Op een nieuw apparaat kan dat meteen bij het toevoegen van de eerste afspeellijst.
+Wichtig zu wissen¦Goed om te weten
+IPVIO Stream ist nur ein Abspielgerät. Die App liefert selbst keine Sender, Filme, Serien und keine Playlist. Den Link oder die Zugangsdaten bekommst du von deinem IPTV-Anbieter oder aus deiner eigenen Quelle. Wir können dir keinen Link nennen.¦IPVIO Stream is alleen een speler. De app levert zelf geen zenders, films, series of afspeellijst. De link of inloggegevens krijg je van je IPTV-aanbieder of eigen bron. Wij kunnen je geen link geven.
+OK = groß¦OK = groot
+Handy und dieses Gerät müssen im selben WLAN sein. Halte die Kamera auf das Bild. Es klappt auch aus einiger Entfernung.¦Telefoon en dit apparaat moeten op hetzelfde wifi zitten. Houd de camera op het beeld. Het werkt ook op enige afstand.
+Oder Adresse im Browser eintippen:¦Of typ het adres in de browser:
+Zurück oder OK schließt das Bild.¦Terug of OK sluit het beeld.
+Leiste nach unten¦Balk naar onderen
+Leiste nach oben¦Balk naar boven
+Texte¦Teksten
+Immer zeigen¦Altijd tonen
+Nur Symbole¦Alleen pictogrammen
+Beim Markieren¦Bij markeren
+Bild¦Beeld
+Kartenbreite¦Kaartbreedte
+Spalten und Zeilen gelten nur in der Ansicht „Raster“.¦Kolommen en rijen gelden alleen in de weergave ‘Raster’.
+Zeigt die echte App mit deinen Titeln; die Einstellungen erscheinen in einer schmalen Leiste unten. Ein Klick auf eine Auswahl wirkt sofort.¦Toont de echte app met je titels; de instellingen verschijnen in een smalle balk onderaan. Eén klik op een keuze werkt meteen.
+Zwei gleich groß¦Twee even groot
+Einer groß, einer klein¦Eén groot, één klein
+So sieht eine Karte aus: normal und markiert¦Zo ziet een kaart eruit: normaal en gemarkeerd
+Score-Overlay¦Score-overlay
+Anzeige¦Weergave
+Untereinander¦Onder elkaar
+Nebeneinander¦Naast elkaar
+In den Ecken verteilt¦Verdeeld over de hoeken
+Ausgewählte Spiele entfernen¦Gekozen wedstrijden verwijderen
+Zusatzbild nicht abspielbar¦Extra beeld kan niet worden afgespeeld
 Alle Playlists¦Alle playlists
 Fenstergröße¦Venstergrootte
 Gilt für Bild-in-Bild. Deine Auswahl wird gespeichert.¦Geldt voor beeld-in-beeld. Je keuze wordt onthouden.
+Handy-Suche¦Zoeken met je telefoon
+Der Server konnte nicht gestartet werden.¦De server kon niet worden gestart.
+Suche und starte Filme, Serien und Sender am Handy. Handy und Fernseher müssen im selben WLAN sein.¦Zoek en start films, series en zenders op je telefoon. Telefoon en tv moeten op hetzelfde wifi zitten.
+Filme, Serien, Sender suchen …¦Zoek films, series, zenders …
+Pause / Weiter¦Pauze / Verder
+Leiser¦Zachter
+Lauter¦Luider
+Code vom Fernseher:¦Code van de tv:
+Tippe einen Titel ein.¦Typ een titel.
+Läuft auf dem Fernseher.¦Speelt af op de tv.
+Fehler. Ist der Fernseher noch an?¦Fout. Staat de tv nog aan?
+Es läuft nichts.¦Er wordt niets afgespeeld.
+Die Playlist wird noch geladen.¦De afspeellijst wordt nog geladen.
+Nichts gefunden.¦Niets gevonden.
+Folge¦Aflevering
+Lädt …¦Laden …
+Stopp¦Stop
+Beenden¦Beëindigen
+Fertige Designs¦Kant-en-klare thema's
+Ein Klick stellt Farbe und Hintergrund passend ein. Darunter kannst du alles weiter von Hand ändern.¦Met één klik stel je passende kleur en achtergrond in. Hieronder kun je alles nog met de hand aanpassen.
+Bildschirm anpassen¦Scherm aanpassen
+Uhr anzeigen¦Klok tonen
+Zeigt die Uhrzeit oben neben dem Profil-Symbol.¦Toont de tijd bovenaan naast het profielpictogram.
+Rand links und rechts¦Rand links en rechts
+Rand oben und unten¦Rand boven en onder
+Wenn am Fernseher Menü oder Texte am Rand abgeschnitten werden, stelle hier einen Rand ein. Der Hintergrund bleibt vollflächig, der Player nutzt immer den ganzen Bildschirm.¦Als menu of tekst aan de rand van je tv wordt afgesneden, stel hier een rand in. De achtergrond blijft schermvullend, de speler gebruikt altijd het hele scherm.
+Leer¦Spatie
+Löschen¦Wissen
+Alles¦Alles
+Gestern¦Gisteren
+Heute¦Vandaag
+Beendet¦Afgelopen
+Auf¦Op
+Nicht in deinen Sendern¦Niet op je zenders
+Kein Sender in deiner Liste gefunden¦Geen zender gevonden in je lijst
+Live-Ergebnisse: An¦Live-uitslagen: Aan
+Live-Ergebnisse: Aus¦Live-uitslagen: Uit
+Jetzt live auf deinen Sendern¦Nu live op je zenders
+Ergebnisse werden geladen …¦Uitslagen laden …
+Ergebnisse gerade nicht erreichbar – es werden nur Playlist und TV-Guide gezeigt.¦Uitslagen nu niet bereikbaar – alleen lijst en tv-gids worden getoond.
+Filme¦Films
+Dokumentationen¦Documentaires
+Kinder¦Kinderen
+Nachrichten¦Nieuws
+Musik¦Muziek
+Start¦Start
+Zuletzt gesehen¦Recent bekeken
+noch¦nog
+▲▼ Sender  ·  OK Steuerung  ·  OK halten: mehr¦▲▼ zenders  ·  OK bediening  ·  OK ingedrukt: meer
+Meine Teams¦Mijn teams
+Teams merken¦Teams bewaren
+OK auf einem Team merkt es oder entfernt es wieder. Es erscheinen die Teams der Spiele des gewählten Tages.¦OK op een team bewaart of verwijdert het. De teams van de wedstrijden van de gekozen dag worden getoond.
+Hinweise: An¦Meldingen: Aan
+Hinweise: Aus¦Meldingen: Uit
+Verzögerung¦Vertraging
+Dein Team spielt gleich¦Je team speelt zo
+Dein Team spielt jetzt¦Je team speelt nu
+Punkte!¦Score!
+Mini-Spielstand¦Mini-tussenstand
+Ein kleines Fenster in der Ecke zeigt den Stand, solange eines deiner Teams spielt – auch beim Film oder auf einem anderen Sender.¦Een klein venster in de hoek toont de stand terwijl een van je teams speelt – ook tijdens een film of op een andere zender.
+Fenster: An¦Venster: Aan
+Fenster: Aus¦Venster: Uit
+Größe¦Grootte
+Klein¦Klein
+Normal¦Normaal
+Groß¦Groot
+Logos und Namen¦Logo's en namen
+Nur Logos¦Alleen logo's
+Spielzeit: An¦Speeltijd: Aan
+Spielzeit: Aus¦Speeltijd: Uit
+Tabelle¦Tabel
+Schließen¦Sluiten
+Keine Tabelle verfügbar.¦Geen tabel beschikbaar.
+Lade…¦Laden…
+Ausgeblendete¦Verborgen
+Alle wieder einblenden¦Alles weer tonen
+Kategorie ausblenden¦Categorie verbergen
+Gruppen ignorieren¦Groepen negeren
+Alle wieder einschalten¦Alles weer inschakelen
+Ignoriert¦Genegeerd
+Titel und Sender sind nach der Kennung deines Anbieters gebündelt (z. B. „TR |“, „[EN]“, „AR:“). Schalte Bündel aus, die du nicht brauchst: Sie verschwinden sofort überall, ohne die Playlist neu zu laden. Ausgeschaltet heißt ignoriert. Hilft dort, wo der Sprachfilter eine Kennung nicht erkennt.¦Titels en zenders worden gebundeld op basis van de tag van je aanbieder (bijv. "TR |", "[EN]", "AR:"). Zet bundels uit die je niet nodig hebt: ze verdwijnen overal meteen, zonder de lijst opnieuw te laden. Uit betekent genegeerd. Helpt waar het taalfilter een tag niet herkent.
+Kalender¦Kalender
+Ligen¦Competities
+Abgewählte Ligen erscheinen nicht und werden nicht abgefragt.¦Uitgeschakelde competities worden niet getoond en niet opgevraagd.
+Live-Ergebnisse sind aus. Schalte sie oben ein, dann erscheint der Kalender.¦Live-uitslagen staan uit. Zet ze hierboven aan, dan verschijnt de kalender.
+Du hast noch keine Teams gemerkt. Unter „Meine Teams“ kannst du Teams merken.¦Je hebt nog geen teams onthouden. Dat kan onder “Mijn teams”.
+Kalender wird geladen …¦Kalender wordt geladen …
+In den nächsten 7 Tagen spielt keines deiner Teams.¦Geen van je teams speelt de komende 7 dagen.
+Spiele deiner Teams in den nächsten 7 Tagen¦Wedstrijden van je teams de komende 7 dagen
+Sicherung speichern unter …¦Back-up opslaan als …
+Sicherung aus Datei laden …¦Back-up laden uit bestand …
+Sicherung gespeichert.¦Back-up opgeslagen.
+Auf diesem Gerät gibt es keine Dateiauswahl. Nutze „Sicherung erstellen“.¦Dit apparaat heeft geen bestandskiezer. Gebruik “Back-up maken”.
+Auf diesem Gerät gibt es keine Dateiauswahl.¦Dit apparaat heeft geen bestandskiezer.
+„Speichern unter“ lässt dich den Ort wählen, zum Beispiel Google Drive, Downloads oder einen USB-Stick – so nimmst du die Sicherung auf ein anderes Gerät mit.¦“Opslaan als” laat je de locatie kiezen, bijvoorbeeld Google Drive, Downloads of een USB-stick – zo neem je de back-up mee naar een ander apparaat.
+# Sports Hub Premium (round 24)
+Übersicht¦Overzicht
+Spielplan¦Speelschema
+Teams¦Teams
+Top-Spiel¦Topwedstrijd
+Demnächst¦Binnenkort
+Beliebte Ligen¦Populaire competities
+Sportarten¦Sporten
+Verschoben¦Uitgesteld
+Abgesagt¦Afgelast
+Statistik¦Statistieken
+Aufstellung¦Opstellingen
+Ereignisse¦Gebeurtenissen
+Kommentar¦Commentaar
+Bank¦Bank
+Tore¦Doelpunten
+Zuschauer¦Toeschouwers
+Sender starten¦Zender starten
+▶ Auf deinen Sendern¦▶ Op jouw zenders
+Lade Spiele …¦Wedstrijden laden …
+Heute keine Spiele gefunden.¦Vandaag geen wedstrijden gevonden.
+Keine Spiele für diese Auswahl.¦Geen wedstrijden voor deze selectie.
+Dieser Bereich folgt im nächsten Schritt.¦Dit onderdeel volgt in de volgende stap.
+Lade Details …¦Details laden …
+Keine Details verfügbar.¦Geen details beschikbaar.
+Keine Liga aktiv.¦Geen competitie actief.
+Lade Tabelle …¦Stand laden …
+Für diese Liga gibt es keine Tabelle.¦Voor deze competitie is geen stand.
+Lade Teams …¦Teams laden …
+Keine Teams gefunden.¦Geen teams gevonden.
+Nächste Spiele¦Volgende wedstrijden
+Letzte Spiele¦Laatste wedstrijden
+Nächstes Spiel¦Volgende wedstrijd
+Letztes Spiel¦Laatste wedstrijd
+Kader¦Selectie
+Trainer¦Trainer
+Spiele¦Wedstrijden
+Team merken¦Team onthouden
+Nicht mehr merken¦Niet meer onthouden
+Meine Ligen¦Mijn competities
+Meine Sportarten¦Mijn sporten
+Heute für dich¦Vandaag voor jou
+Heute keine Spiele deiner Favoriten.¦Vandaag geen wedstrijden van je favorieten.
+Noch keine Teams gemerkt. Im Team Center gibt es „Team merken“.¦Nog geen teams onthouden. Gebruik “Team onthouden” in het Teamcentrum.
+Design und Farbe¦Ontwerp en kleur
+Berechtigung erteilt. Der Autostart ist bereit.¦Toestemming verleend. Automatisch starten is klaar.
+Berechtigung fehlt noch. Bitte „Einstellung öffnen“ wählen und IPVIO Stream erlauben.¦Toestemming ontbreekt nog. Kies “Instelling openen” en sta IPVIO Stream toe.
+Hauptliste¦hoofdlijst
+zusätzlich angezeigt¦ook getoond
+Nicht mehr zusätzlich anzeigen¦Niet meer extra tonen
+Zusätzlich anzeigen¦Extra tonen
+Zur Hauptliste machen¦Hoofdlijst maken
+Die Hauptliste ist die Playlist, mit der die App arbeitet. „Zusätzlich anzeigen“ blendet eine weitere Playlist dazu ein; sie ersetzt die Hauptliste nicht.¦De hoofdlijst is de afspeellijst waarmee de app werkt. “Extra tonen” voegt een andere afspeellijst toe; het vervangt de hoofdlijst niet.
+Sender suchen¦Zenders zoeken
+Sendername eingeben¦Zendernaam invoeren
+OK auf dem Feld öffnet die Tastatur. Gesucht wird im Sendernamen und in der Kategorie.¦OK op het veld opent het toetsenbord. Er wordt gezocht in zendernamen en categorieën.
+Im TV-Guide suchen¦In de tv-gids zoeken
+Sender oder Sendung¦Zender of programma
+Suche¦Zoeken
+Mit dem Handy suchen¦Zoeken met je telefoon
+Handy¦Telefoon
+Zuletzt gesucht (OK lange gedrückt = Eintrag entfernen)¦Recent gezocht (OK lang indrukken = item verwijderen)
+Zuletzt gesucht¦Recent gezocht
+Suche nach einem Titel: hier erscheinen Beschreibung, Bewertung und Format des markierten Treffers.¦Zoek een titel: hier verschijnen beschrijving, beoordeling en formaat van de gemarkeerde treffer.
+SportsHub¦Sports Hub
+Sports Hub öffnen¦Sports Hub openen
+Sender-Qualitäten bündeln¦Zenderkwaliteiten bundelen
+Derselbe Sender in 8K, 4K, FHD, HD und SD erscheint als eine Zeile. OK startet die beste Qualität, die anderen wählst du im Menü des Senders (OK gedrückt halten).¦Dezelfde zender in 8K, 4K, FHD, HD en SD verschijnt als één rij. OK start de beste kwaliteit; kies de andere in het zendermenu (houd OK ingedrukt).
+Qualität¦Kwaliteit
+Sprache¦Taal
+Ohne Kennung¦Zonder label
+Rand: „Schatten“ legt einen weichen dunklen Schatten unter die Schrift, „Kontur“ zeichnet einen schwarzen Rand rundherum (besser lesbar auf hellem Bild), „Kein“ lässt die Schrift pur.¦Rand: “Schaduw” legt een zachte donkere schaduw onder de tekst, “Contour” tekent een zwarte rand eromheen (beter leesbaar op een licht beeld), “Geen” laat de tekst puur.
+Bildschirmrand einstellen¦Schermrand instellen
+Zeigt einen Rahmen mit vier Ecken am Fernseher: Stelle den Rand ein, bis alle vier Ecken sichtbar sind. Hilft, wenn dein Fernseher Menü oder Texte am Rand abschneidet.¦Toont een kader met vier hoeken op de tv: stel de rand in tot alle vier de hoeken zichtbaar zijn. Helpt als je tv menu of tekst aan de rand afsnijdt.
+Du siehst einen weißen Rahmen mit vier grünen Punkten. Wenn eine Ecke fehlt, schneidet dein Fernseher den Rand ab. Rechts/Links ändert den Rand seitlich, Hoch/Runter oben und unten, bis alle vier Ecken sichtbar sind. OK speichert.¦Je ziet een wit kader met vier groene punten. Ontbreekt er een hoek, dan snijdt je tv de rand af. Rechts/links verandert de zijrand, omhoog/omlaag boven en onder, tot alle vier de hoeken zichtbaar zijn. OK slaat op.
+Seitlich¦Zijkanten
+Oben/unten¦Boven/onder
+Wiedergabe¦Afspelen
+Intro und nächste Folge¦Intro en volgende aflevering
+Uhr im Bild¦Klok in beeld
+Netzwerk und Bildrate¦Netwerk en beeldsnelheid
+Liste importiert¦Lijst geïmporteerd
+Titel gelesen¦titels gelezen
+in deiner Playlist gefunden¦gevonden in je playlist
+Mehrfachansicht¦Multiview
+Vier gleich groß¦Vier even groot
+Einer groß, drei klein¦Eén groot, drie klein
+OK = Ton hierher, OK lange = Sender wechseln¦OK = geluid hier, OK lang = zender wisselen
+So sieht die Reihenfolge aus¦Zo ziet de volgorde eruit
+Nichts gezeigt¦Niets getoond
+Listen importieren¦Lijsten importeren
+Letterboxd, MyAnimeList, Trakt¦Letterboxd, MyAnimeList, Trakt
+Hole deine Listen von Letterboxd, MyAnimeList oder Trakt in die App. Die Titel werden mit deiner Playlist abgeglichen: Merkliste und Gesehen werden übernommen.¦Haal je lijsten van Letterboxd, MyAnimeList of Trakt in de app. De titels worden vergeleken met je afspeellijst: kijklijst en gezien worden overgenomen.
+Letterboxd: ZIP oder CSV · MyAnimeList: XML · Trakt: JSON¦Letterboxd: ZIP of CSV · MyAnimeList: XML · Trakt: JSON
+Dieses Gerät hat keinen sicheren Schlüsselspeicher: Playlist-Adressen mit Zugangsdaten werden unverschlüsselt gespeichert.¦Dit apparaat heeft geen veilige sleutelopslag: playlist-adressen met inloggegevens worden onversleuteld opgeslagen.
+Datei vom Gerät wählen¦Bestand van apparaat kiezen
+Auf diesem Gerät gibt es keine Dateiauswahl. Nutze den Import im WLAN.¦Dit apparaat heeft geen bestandskiezer. Gebruik de wifi-import.
+Import im WLAN starten¦Import via wifi starten
+Import beenden¦Import stoppen
+Am Handy „Liste importieren“ wählen, den Code eingeben und die Exportdatei hochladen.¦Kies op de telefoon "Lijst importeren", voer de code in en upload het exportbestand.
+Direkt auf der Startseite bearbeiten¦Startpagina direct bewerken
+Öffnet die echte Startseite mit deinen Titeln. Über jeder Reihe erscheint eine Leiste zum Verschieben und Ein- oder Ausblenden.¦Opent de echte startpagina met je titels. Boven elke rij staat een balk om te verplaatsen en te tonen of te verbergen.
+Oder hier in der Liste: Schalte Reihen und Widgets ein oder aus und schiebe sie mit „Hoch“ und „Runter“ an die Stelle, die du möchtest. Die Änderung gilt sofort.¦Of hier in de lijst: schakel rijen en widgets in of uit en verplaats ze met "Omhoog" en "Omlaag". De wijziging geldt direct.
+Immer oben¦Altijd bovenaan
+Ausblenden¦Verbergen
+Einblenden¦Tonen
+Fertig¦Klaar
+Bearbeiten: Über jeder Reihe kannst du sie verschieben oder ausblenden.¦Bewerken: boven elke rij kun je die verplaatsen of verbergen.
+Auf der echten Startseite ansehen¦Bekijk het op de echte startpagina
+Live-Vorschau¦Live-voorbeeld
+Eine Auswahl wirkt sofort, ohne OK.¦Een keuze werkt direct, zonder OK.
+Weiter nach unten wechselt den Bereich, die App dahinter springt mit.¦Verder naar beneden wisselt het gebied, de app erachter volgt.
+Raster: Wie viele Spalten und Zeilen die Rasteransicht (zum Beispiel „Alle Filme“) zeigt.¦Raster: hoeveel kolommen en rijen de rasterweergave (bijvoorbeeld „Alle films“) toont.
+Score-Overlay: An¦Score-overlay: aan
+Score-Overlay: Aus¦Score-overlay: uit
+Setzt Ansicht, Menü, Player, Ton und Start auf die Standardwerte. Playlists, Favoriten und Verlauf bleiben erhalten. Das Design hat einen eigenen Knopf.¦Zet weergave, menu, speler, geluid en start terug naar standaard. Playlists, favorieten en geschiedenis blijven behouden. Design heeft een eigen knop.
+Live-Vorschau starten¦Live-voorbeeld starten
+Zeigt die echte App mit deinen Titeln; unten erscheinen die Einstellungen. Jede Auswahl wirkt sofort, ohne OK.¦Toont de echte app met je titels; onderaan staan de instellingen. Elke keuze werkt direct, zonder OK.
+Letterboxd · Gesehen¦Letterboxd · Gezien
+Letterboxd · Merkliste¦Letterboxd · Kijklijst
+Trakt · Gesehen¦Trakt · Gezien
+Trakt · Merkliste¦Trakt · Kijklijst
+MyAnimeList · Gesehen¦MyAnimeList · Gezien
+MyAnimeList · Merkliste¦MyAnimeList · Kijklijst
+# Sports Hub (round 26)
+1 Spiel¦1 wedstrijd
+{#0} Spiele¦{#0} wedstrijden
+Spiel¦Wedstrijd
+Formel 1¦Formule 1
+1. Training¦1e training
+2. Training¦2e training
+3. Training¦3e training
+Qualifying¦Kwalificatie
+Sprint-Qualifying¦Sprintkwalificatie
+Sprint¦Sprint
+Rennen¦Race
+Aktuelle Position¦Huidige positie
+Alle Ligen¦Alle competities
+Alle Wettbewerbe¦Alle competities
+Als Favorit merken¦Aan favorieten toevoegen
+Favorit¦Favoriet
+Anderen Sender wählen¦Andere zender kiezen
+Sender zuordnen¦Zender koppelen
+Automatisch zuordnen¦Automatisch koppelen
+Auf deinen Sendern¦Op je zenders
+Live ansehen¦Live kijken
+Kein passender Sender gefunden¦Geen passende zender gevonden
+ESPN liefert keine Streams. Gesucht wird in deinem TV-Guide und in deinen Sendernamen. Du kannst den Sender auch selbst zuordnen; die App merkt sich das für dieses Spiel.¦ESPN levert geen streams. Er wordt gezocht in je tv-gids en je zendernamen. Je kunt de zender ook zelf koppelen; de app onthoudt dat voor deze wedstrijd.
+Von dir zugeordnet¦Door jou gekoppeld
+Laut TV-Guide¦Volgens de tv-gids
+Sendername passt¦Zendernaam komt overeen
+Verfügbar¦Beschikbaar
+Keine Sender in der Playlist.¦Geen zenders in de playlist.
+Match Center¦Wedstrijdcentrum
+Daten konnten nicht geladen werden¦Gegevens konden niet worden geladen
+Die Daten konnten nicht geladen werden. Bitte versuche es erneut.¦De gegevens konden niet worden geladen. Probeer het opnieuw.
+ESPN antwortet gerade nicht. Bitte versuche es erneut.¦ESPN reageert op dit moment niet. Probeer het opnieuw.
+ESPN antwortet gerade nicht. Prüfe die Internetverbindung und versuche es erneut.¦ESPN reageert op dit moment niet. Controleer de internetverbinding en probeer het opnieuw.
+ESPN hat für dieses Team gerade keine Daten geliefert.¦ESPN heeft voor dit team nu geen gegevens geleverd.
+ESPN liefert für diesen Spieler keine Daten.¦ESPN levert geen gegevens voor deze speler.
+Keine Spielerdaten¦Geen spelersgegevens
+Ergebnisse von heute¦Uitslagen van vandaag
+Ergebnisse¦Uitslagen
+Letzte Ergebnisse¦Laatste uitslagen
+Keine Ergebnisse¦Geen uitslagen
+Noch keine Ergebnisse¦Nog geen uitslagen
+Live-Ergebnisse sind aus¦Live-uitslagen staan uit
+Ergebnisse, Tabellen und Spielpläne kommen von ESPN (inoffizielle Quelle). Schalte sie ein, um den Sports Hub zu nutzen.¦Uitslagen, standen en speelschema’s komen van ESPN (onofficiële bron). Zet ze aan om de Sports Hub te gebruiken.
+Einschalten¦Aanzetten
+Gerade läuft nichts¦Er is nu niets live
+Sobald ein Spiel deiner Ligen beginnt, erscheint es hier.¦Zodra een wedstrijd van je competities begint, verschijnt die hier.
+Ändere die Filter oder schau in den Spielplan.¦Pas de filters aan of bekijk het speelschema.
+Spielplan öffnen¦Speelschema openen
+In deinen Ligen ist heute nichts angesetzt. Im Spielplan siehst du die nächsten Tage.¦In je competities staat vandaag niets gepland. Het speelschema toont de volgende dagen.
+An diesem Tag ist in deinen Ligen nichts angesetzt. Tennis, Formel 1, UFC, Golf und Cricket zeigt ESPN nur für die laufenden Turniere und Wochenenden.¦Op deze dag staat er niets gepland in je competities. Tennis, Formule 1, UFC, golf en cricket toont ESPN alleen voor lopende toernooien en weekenden.
+Hinweis: Die letzte Aktualisierung hat nicht geklappt. Angezeigt wird der letzte Stand.¦Let op: de laatste update is mislukt. De laatste stand wordt getoond.
+In den nächsten Tagen keine Spiele deiner Favoriten.¦De komende dagen geen wedstrijden van je favorieten.
+Kein Spiel geplant¦Geen wedstrijd gepland
+Keine Spiele geplant¦Geen wedstrijden gepland
+Heute keine Spiele.¦Vandaag geen wedstrijden.
+Gerade keine Ereignisse.¦Op dit moment geen evenementen.
+In diesem Zeitraum liefert ESPN keine Spiele.¦ESPN levert voor deze periode geen wedstrijden.
+Ligen schaltest du im Reiter „Sender“ unter „Ligen“ ein.¦Competities zet je aan in het tabblad „Zenders“ onder „Competities“.
+Lade Daten …¦Gegevens laden …
+Meine Favoriten¦Mijn favorieten
+Merke dir Teams, Wettbewerbe, Spieler oder Sportarten. Sie erscheinen hier mit ihren Spielen.¦Bewaar teams, competities, spelers of sporten. Ze verschijnen hier met hun wedstrijden.
+Noch keine Favoriten¦Nog geen favorieten
+Sport entdecken¦Sport ontdekken
+Nur Favoriten¦Alleen favorieten
+OK auf eine Sportart merkt sie oder entfernt sie wieder.¦OK op een sport bewaart die of verwijdert die weer.
+Wichtige Ereignisse¦Belangrijke momenten
+Spielbericht¦Wedstrijdverslag
+Direktvergleich¦Onderling
+Form¦Vorm
+Klassement¦Klassement
+Kampfabend¦Vechtavond
+Spieler¦Spelers
+Startelf¦Basisopstelling
+Ersatzbank¦Wissels
+eingewechselt¦ingevallen
+ausgewechselt¦gewisseld
+Satz¦Set
+Sätze¦Sets
+Spitze¦Kop
+Torjäger¦Topscorers
+Topspieler¦Topspelers
+Wettbewerbe¦Competities
+Aktuell¦Actueel
+Geboren¦Geboren
+Gewicht¦Gewicht
+Nation¦Nationaliteit
+Nummer¦Nummer
+Team¦Team
+Beginn: {0}¦Begin: {0}
+{0} führt {1} gegen {2}.¦{0} leidt {1} tegen {2}.
+{0} gewinnt {1} gegen {2}.¦{0} wint {1} van {2}.
+Es steht {0} zwischen {1} und {2}.¦Het staat {0} tussen {1} en {2}.
+{0} und {1} trennen sich {2}.¦{0} en {1} spelen {2} gelijk.
+Pkt¦Ptn
+Sp¦G
+S¦W
+U¦G
+N¦V
+TD¦DS
+OTN¦VNV
+Serie¦Reeks
+J.¦jr
 """

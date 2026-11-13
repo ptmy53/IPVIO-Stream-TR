@@ -8,10 +8,10 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 
 /**
- * Software-Tondecoder (FFmpeg): spielt Tonformate wie AC3, E-AC3, DTS oder TrueHD auch dann, wenn das Gerät sie nicht selbst
- * decodieren kann – typisch mit Bluetooth-Kopfhörern (AirPods), wo es keinen Durchreich-Ausgang an den Receiver gibt.
- * Bleibt wie bisher, wenn die Bibliothek fehlt oder nicht zur Media3-Version passt: der Test erzeugt einmal probeweise den
- * Decoder, bevor er eingeschaltet wird, und fängt jeden Fehler ab (kein Absturz beim Abspielen).
+ * Software audio decoder (FFmpeg): plays audio formats like AC3, E-AC3, DTS or TrueHD even when the device cannot
+ * decode them itself – typical with Bluetooth headphones (AirPods), where there is no passthrough output to the receiver.
+ * Stays as before if the library is missing or does not match the Media3 version: the test creates the
+ * decoder once on trial before it is switched on and catches every error (no crash during playback).
  */
 object SoftAudio {
     private var checked = false

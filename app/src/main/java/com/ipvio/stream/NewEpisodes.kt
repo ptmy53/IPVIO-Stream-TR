@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.compose.runtime.mutableStateListOf
 
 /**
- * Neue Folgen bei Favoriten-Serien melden (Glocke oben rechts). Der Stand je Serie wird auf dem Gerät gemerkt;
- * geprüft wird, wenn die Playlist geladen ist. Öffnet man die Serie, ist die Meldung erledigt.
+ * Report new episodes for favorite series (bell at the top right). The state per series is remembered on the device;
+ * it is checked when the playlist is loaded. Opening the series dismisses the notice.
  */
 object NewEpisodes {
     val list = mutableStateListOf<NewEpisodeLogic.Notice>()
@@ -33,10 +33,10 @@ object NewEpisodes {
             .apply()
     }
 
-    /** Favoriten-Serien prüfen (nach dem Laden der Playlist und wenn sich die Favoriten ändern). */
+    /** Check favorite series (after loading the playlist and when the favorites change). */
     fun check(c: Context, favSeries0: List<Item>) {
         init(c)
-        // Serien mit Platzhalter kennen ihre Folgen noch nicht: kein Vergleich (sonst falsche Meldungen)
+        // Series with a placeholder do not know their episodes yet: no comparison (otherwise false notices)
         val favSeries = favSeries0.filter { !XtreamLogic.isLazy(it) }
         if (favSeries.isEmpty()) return
         val r = NewEpisodeLogic.detect(known, favSeries.map { s -> NewEpisodeLogic.Show(s.id, s.title, s.episodes.map { it.season to it.num }) })
@@ -47,12 +47,12 @@ object NewEpisodes {
             if (old != null) list.remove(old)
             list.add(0, if (old != null) n.copy(added = n.added + old.added) else n)
         }
-        // Meldungen zu Serien, die keine Favoriten mehr sind, entfernen
+        // Remove notices for series that are no longer favorites
         list.removeAll { it.id !in ids }
         save(c)
     }
 
-    /** Serie geöffnet: Meldung erledigt. */
+    /** Series opened: notice dismissed. */
     fun dismiss(c: Context, id: String) {
         init(c)
         if (list.removeAll { it.id == id }) save(c)

@@ -1,12 +1,12 @@
 package com.ipvio.stream
 
 /**
- * Kleiner QR-Code-Erzeuger (Runde 21), ohne Bibliothek: Byte-Modus, Fehlerkorrektur M, Version 1–11
- * (bis 250 Zeichen). Reicht für Adressen wie http://192.168.0.20:8080/ oder https://www.google.com/device.
- * Das Ergebnis ist ein Raster: true = dunkles Feld.
+ * Small QR code generator (round 21), without a library: byte mode, error correction M, version 1–11
+ * (up to 250 characters). Enough for addresses like http://192.168.0.20:8080/ or https://www.google.com/device.
+ * The result is a grid: true = dark module.
  */
 object QrCode {
-    private val ECC_PER_BLOCK = intArrayOf(0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30)   // Stufe M, ab Version 1
+    private val ECC_PER_BLOCK = intArrayOf(0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30)   // level M, from version 1
     private val BLOCKS = intArrayOf(0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5)
     const val MAX_VERSION = 11
 
@@ -22,10 +22,10 @@ object QrCode {
 
     private fun dataCodewords(ver: Int) = rawModules(ver) / 8 - ECC_PER_BLOCK[ver] * BLOCKS[ver]
 
-    /** Größte Zeichenzahl (Bytes), die noch hineinpasst. */
+    /** Largest number of characters (bytes) that still fits. */
     fun maxBytes(): Int = dataCodewords(MAX_VERSION) - 3
 
-    /** Raster für den Text, oder null wenn er zu lang ist. */
+    /** Grid for the text, or null if it is too long. */
     fun encode(text: String): Array<BooleanArray>? {
         val data = text.toByteArray(Charsets.UTF_8)
         var ver = 1
@@ -178,7 +178,7 @@ object QrCode {
             return r
         }
 
-        /** Stufe M hat die Formatkennung 0. */
+        /** Level M has the format identifier 0. */
         fun formatBits(mask: Int) {
             val data = (0 shl 3) or mask
             var rem = data
@@ -229,7 +229,7 @@ object QrCode {
 
         fun penalty(): Int {
             var p = 0
-            // Gleiche Felder in einer Reihe/Spalte
+            // Same cells in a row/column
             for (a in 0 until size) for (rowMode in 0..1) {
                 var run = 1
                 for (b in 1 until size) {
@@ -238,12 +238,12 @@ object QrCode {
                     if (cur == prev) { run++; if (run == 5) p += 3 else if (run > 5) p++ } else run = 1
                 }
             }
-            // 2×2-Blöcke
+            // 2×2 blocks
             for (y in 0 until size - 1) for (x in 0 until size - 1) {
                 val c = m[y][x]
                 if (c == m[y][x + 1] && c == m[y + 1][x] && c == m[y + 1][x + 1]) p += 3
             }
-            // Muster wie bei den Eckquadraten
+            // Patterns like in the corner squares
             val pat = booleanArrayOf(true, false, true, true, true, false, true)
             for (a in 0 until size) for (rowMode in 0..1) for (s in 0..size - 7) {
                 var ok = true
@@ -253,7 +253,7 @@ object QrCode {
                 }
                 if (ok) p += 40
             }
-            // Verhältnis dunkel/hell
+            // Ratio dark/light
             var dark = 0
             for (row in m) for (c in row) if (c) dark++
             val total = size * size

@@ -25,15 +25,15 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Symbole der ganzen App. Alle sind gezeichnet (24×24-Raster), nicht aus der Schrift:
- * keine Emojis, die je nach Gerät bunt, anders oder gar nicht dargestellt werden.
+ * Icons for the whole app. All are drawn (24×24 grid), not taken from a font:
+ * no emojis, which look colorful, different or missing depending on the device.
  */
 enum class AIcon {
     Play, Star, StarOutline, Check, Close, Plus, Warning, Bell, BellOff, Mic, Phone, Info,
     Grid, Categories, Lists, Refresh, External, Up, Down, Left, Right, Caret, Dot, Gear,
     Sparkle, Music, Tag, Live, Download, Person, Lock, Storage, Pulse, Backspace, History,
     Tomato, Rewind, FastForward, Catchup, Eye, EyeOff, Globe,
-    // Runde 14
+    // Round 14
     Edit, Heart, HeartFilled, Sliders, Layers
 }
 
@@ -42,7 +42,7 @@ fun AppIcon(icon: AIcon, tint: Color, modifier: Modifier = Modifier, size: Dp = 
     Canvas(modifier.size(size)) { drawAIcon(icon, tint) }
 }
 
-/** Symbol + Text in einer Zeile (für Knöpfe, Abzeichen, Menüeinträge). */
+/** Icon + text in one row (for buttons, badges, menu entries). */
 @Composable
 fun IconLabel(
     icon: AIcon?, text: String, color: Color, fontSize: TextUnit, fontWeight: FontWeight? = null,
@@ -102,7 +102,7 @@ private fun star(u: Float): Path {
     return p
 }
 
-/** Glocke (für Erinnerungen). */
+/** Bell (for reminders). */
 private fun DrawScope.bell(c: Color, u: Float) {
     val p = Path()
     p.moveTo(5f * u, 17f * u)
@@ -118,7 +118,7 @@ private fun DrawScope.bell(c: Color, u: Float) {
     l(c, u, 12f, 2.8f, 12f, 4.5f)
 }
 
-/** Uhr mit Pfeil gegen den Uhrzeigersinn (Verlauf). */
+/** Clock with a counterclockwise arrow (history). */
 private fun DrawScope.clockBack(c: Color, u: Float) {
     arc(c, u, 12.5f, 12.5f, 8f, 200f, 300f)
     fillPoly(c, u, 2.6f, 8.6f, 6.8f, 8.2f, 4.2f, 12.6f)
@@ -271,12 +271,12 @@ private fun DrawScope.drawAIcon(icon: AIcon, c: Color) {
             l(c, u, 3.5f, 9f, 20.5f, 9f, 1.8f)
             l(c, u, 3.5f, 15f, 20.5f, 15f, 1.8f)
         }
-        // Stift (umbenennen)
+        // Pencil (rename)
         AIcon.Edit -> {
             poly(c, u, 2f, true, 15.5f, 4.5f, 19.5f, 8.5f, 9f, 19f, 4.5f, 19.5f, 5f, 15f)
             l(c, u, 13.5f, 6.5f, 17.5f, 10.5f)
         }
-        // Herz (Favoriten für Filme und Serien)
+        // Heart (favorites for movies and series)
         AIcon.Heart, AIcon.HeartFilled -> {
             val p = Path()
             p.moveTo(12f * u, 19.5f * u)
@@ -290,12 +290,12 @@ private fun DrawScope.drawAIcon(icon: AIcon, c: Color) {
             if (icon == AIcon.HeartFilled) drawPath(p, c)
             drawPath(p, c, style = Stroke(width = 2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
-        // Regler (Ansicht anpassen)
+        // Sliders (adjust view)
         AIcon.Sliders -> {
             l(c, u, 4f, 7f, 20f, 7f); l(c, u, 4f, 17f, 20f, 17f)
             drawCircle(c, 2.6f * u, Offset(9f * u, 7f * u)); drawCircle(c, 2.6f * u, Offset(15f * u, 17f * u))
         }
-        // Gestapelte Ebenen (mehrere Quellen)
+        // Stacked layers (several sources)
         AIcon.Layers -> {
             poly(c, u, 2f, true, 12f, 4f, 21f, 9f, 12f, 14f, 3f, 9f)
             poly(c, u, 2f, false, 3f, 13f, 12f, 18f, 21f, 13f)

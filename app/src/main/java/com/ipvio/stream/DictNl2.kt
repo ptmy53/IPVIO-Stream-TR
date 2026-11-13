@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Nederlandse vertalingen (deel 2/5): rijen Duits-Nederlands, aanvulling op de 9 talen in DictA–J
+// Dutch translations (part 2/5): German-Dutch rows, in addition to the 9 languages in DictA–J
 val DictNl2 = """
 Keine Auswahl verfügbar (feste Qualität).¦Geen keuze beschikbaar (vaste kwaliteit).
 Sprungweite¦Sprongafstand

@@ -39,7 +39,7 @@ fun FilterPill(text: String, active: Boolean, modifier: Modifier = Modifier, ico
     var f by remember { mutableStateOf(false) }
     val s by animateFloatAsState(if (f) focusScale(1.06f) else 1f, label = "fp")
     val shape = RoundedCornerShape(50)
-    // Einheitlich mit den Knöpfen der Detailseite (Runde 15): leicht durchsichtig mit feinem Rand, Markierung hell gefüllt
+    // Consistent with the buttons of the detail page (round 15): slightly transparent with a fine border, selection filled light
     val c = ButtonColors(
         if (f) DS.FocusFill else if (active) Color(0x4DFFFFFF) else Color(0x33FFFFFF),
         if (f) DS.FocusInk else Color.White
@@ -81,7 +81,7 @@ fun DropdownPill(
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
-        // Mit Symbol: nur Symbol + Wert (der Name der Einstellung steht im geöffneten Menü bzw. ist am Symbol erkennbar)
+        // With icon: only icon + value (the setting's name is in the opened menu or recognizable from the icon)
         FilterPill(if (icon != null) value else "$label: $value", active, modifier, icon, caret = true) { open = true }
         if (open) OptionPopup(options, selected, { open = false }) { onPick(it); open = false }
     }
@@ -128,7 +128,7 @@ fun OptionRow(text: String, selected: Boolean, modifier: Modifier = Modifier, ic
     }
 }
 
-/** Runder Plus-/Minus-Knopf. Das Zeichen wird gezeichnet statt als Text gesetzt, damit es exakt mittig sitzt. */
+/** Round plus/minus button. The sign is drawn instead of set as text so it sits exactly centered. */
 @Composable
 fun StepButton(plus: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }

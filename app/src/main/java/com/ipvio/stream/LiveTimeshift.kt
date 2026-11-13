@@ -15,20 +15,20 @@ import androidx.media3.exoplayer.ExoPlayer
 import java.io.IOException
 import java.io.RandomAccessFile
 
-/** Einstellungen für Live TV: Zurückspulen (Puffer) und Aufnahmen. Gilt für alle Profile. */
+/** Settings for Live TV: rewind (buffer) and recordings. Applies to all profiles. */
 object LiveSettings {
     private const val PREFS = "ipvio_livetv"
     val BUFFER_MB = listOf(256, 512, 1024, 2048)
 
-    /** Live immer über den Puffer abspielen (Zurückspulen, Pause ohne Verlust). Aus = nur bei einer Aufnahme. */
+    /** Always play live through the buffer (rewind, pause without loss). Off = only during a recording. */
     var timeshift by mutableStateOf(false)
         private set
     var bufferMb by mutableIntStateOf(512)
         private set
-    /** Speicherort der Aufnahmen: Index in [Recorder.dirs]. */
+    /** Storage location of the recordings: index into [Recorder.dirs]. */
     var recDir by mutableIntStateOf(0)
         private set
-    /** Minuten Nachlauf nach dem Ende der Sendung laut TV-Guide. */
+    /** Minutes of overrun after the end of the show according to the TV guide. */
     var recPad by mutableIntStateOf(3)
         private set
     private var inited = false
@@ -53,8 +53,8 @@ object LiveSettings {
 }
 
 /**
- * Liest aus einem [LiveTap] („tap://ID/START.ts“). Media3 wartet beim Lesen wie bei einer langsamen Verbindung;
- * die Stelle START ist die Byte-Stelle im Puffer, ab der gespielt wird (Zurückspulen = neu öffnen an anderer Stelle).
+ * Reads from a [LiveTap] ("tap://ID/START.ts"). Media3 waits on reading as with a slow connection;
+ * START is the byte position in the buffer from which playback starts (rewinding = reopen at another position).
  */
 class TapDataSource : BaseDataSource(true) {
     private var tap: LiveTap? = null
@@ -99,7 +99,7 @@ class TapDataSource : BaseDataSource(true) {
     }
 }
 
-/** Leitet „tap://“ an den Puffer, alles andere an die normale Quelle (HTTP, Datei, …). */
+/** Routes "tap://" to the buffer, everything else to the normal source (HTTP, file, …). */
 class TapAwareDataSource(private val normal: DataSource) : DataSource {
     private val listeners = ArrayList<TransferListener>()
     private var cur: DataSource? = null
@@ -112,7 +112,20 @@ class TapAwareDataSource(private val normal: DataSource) : DataSource {
     override fun open(dataSpec: DataSpec): Long {
         val d = if (dataSpec.uri.scheme == "tap") TapDataSource().also { s -> listeners.forEach { s.addTransferListener(it) } } else normal
         cur = d
-        return d.open(dataSpec)
+        if (dataSpec.uri.scheme != "https") return d.open(dataSpec)
+        // Provider certificate does not match its address: use the same address over http (once per host, remembered)
+        val url = dataSpec.uri.toString()
+        if (TlsFallback.isBrokenUrl(url)) TlsFallback.downgradeUrl(url)?.let { return d.open(dataSpec.withUri(Uri.parse(it))) }
+        try {
+            return d.open(dataSpec)
+        } catch (e: IOException) {
+            val low = if (TlsFallback.isHostMismatch(e)) TlsFallback.downgradeUrl(url) else null
+            if (low == null) throw e
+            dataSpec.uri.host?.let { TlsFallback.markBroken(it) }
+            Diag.report("Zertifikat passt nicht zur Adresse – Wiedergabe ohne Verschlüsselung")
+            runCatching { d.close() }
+            return d.open(dataSpec.withUri(Uri.parse(low)))
+        }
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int = cur?.read(buffer, offset, length) ?: C.RESULT_END_OF_INPUT
@@ -133,27 +146,27 @@ class TapAwareDataSource(private val normal: DataSource) : DataSource {
 }
 
 /**
- * Zurückspulen im Live TV über den Puffer. Hält den Puffer des gerade gespielten Senders; der Player spielt
- * „tap://ID/START.ts“. Die Zeit wird selbst gerechnet: [baseMs] = Pufferzeit am Anfang des gerade geöffneten Stücks.
+ * Rewinding in Live TV through the buffer. Holds the buffer of the channel currently playing; the player plays
+ * "tap://ID/START.ts". The time is calculated here: [baseMs] = buffer time at the beginning of the piece just opened.
  */
 object LiveTimeshift {
-    /** Puffer des Players (null = Live läuft direkt vom Server). */
+    /** Buffer of the player (null = live runs directly from the server). */
     var tap: LiveTap? = null
         private set
     private var baseMs = 0L
-    /** Ändert sich bei jedem Start/Stopp (Oberfläche). */
+    /** Changes with every start/stop (UI). */
     var version by mutableIntStateOf(0)
         private set
 
-    /** Puffer aktiv? (liest [version], damit die Oberfläche bei Start/Stopp neu zeichnet) */
+    /** Buffer active? (reads [version] so the UI redraws on start/stop) */
     val active: Boolean get() = version >= 0 && tap?.let { !it.closed } == true
 
-    /** Soll diese Adresse über den Puffer laufen? */
+    /** Should this address run through the buffer? */
     fun wanted(url: String, forRecording: Boolean = false): Boolean = (LiveSettings.timeshift || forRecording) && TapLogic.tappable(url)
 
     /**
-     * Sender über den Puffer starten. Läuft für diese Adresse schon ein Puffer (z. B. Aufnahme), wird er geteilt und
-     * kurz vor dem Live-Bild eingestiegen. false = Puffer nicht möglich (zu wenig Speicher) → direkt abspielen.
+     * Start a channel through the buffer. If a buffer already runs for this address (e.g. a recording), it is shared and
+     * joined shortly before the live picture. false = buffer not possible (too little memory) → play directly.
      */
     fun start(c: Context, player: ExoPlayer, url: String): Boolean {
         val old = tap
@@ -166,7 +179,7 @@ object LiveTimeshift {
         return true
     }
 
-    /** Puffer loslassen (anderer Sender ohne Puffer, Player zu). Eine laufende Aufnahme behält ihn. */
+    /** Release the buffer (another channel without buffer, player closed). A running recording keeps it. */
     fun stop() {
         val t = tap ?: return
         tap = null
@@ -181,7 +194,7 @@ object LiveTimeshift {
         return ok
     }
 
-    /** Zum Live-Bild (etwa 2 s dahinter, damit der Player etwas Vorrat hat). */
+    /** To the live picture (about 2 s behind so the player has some reserve). */
     fun goLive(player: ExoPlayer) {
         val t = tap ?: return
         val target = (t.nowMs() - 2000).coerceAtLeast(t.oldestMs())
@@ -189,19 +202,19 @@ object LiveTimeshift {
         openAt(player, t, b)
     }
 
-    /** Aktuelle Stelle in Pufferzeit. */
+    /** Current position in buffer time. */
     fun posMs(player: ExoPlayer): Long = baseMs + player.currentPosition.coerceAtLeast(0)
 
-    /** Abstand zum Live-Bild in ms. */
+    /** Distance to the live picture in ms. */
     fun behindMs(player: ExoPlayer): Long {
         val t = tap ?: return 0
         return (t.nowMs() - posMs(player)).coerceAtLeast(0)
     }
 
-    /** Wie weit zurück der Puffer reicht (ms). */
+    /** How far back the buffer reaches (ms). */
     fun spanMs(): Long { val t = tap ?: return 0; return (t.nowMs() - t.oldestMs()).coerceAtLeast(0) }
 
-    /** Um [deltaMs] springen (negativ = zurück). Nicht über das Live-Bild hinaus, nicht vor den Puffer. */
+    /** Jump by [deltaMs] (negative = back). Not beyond the live picture, not before the buffer. */
     fun seekBy(player: ExoPlayer, deltaMs: Long) {
         val t = tap ?: return
         val now = t.nowMs()
@@ -212,17 +225,17 @@ object LiveTimeshift {
         player.playWhenReady = wasPlaying || deltaMs != 0L
     }
 
-    /** Neu verbinden: mit Puffer an das Live-Bild, ohne Puffer wie bisher. */
+    /** Reconnect: with buffer to the live picture, without buffer as before. */
     fun reconnect(player: ExoPlayer) {
         val t = tap
         when {
             t != null && !t.closed && t.failure == null -> { t.kick(); goLive(player) }
-            // Puffer gescheitert (z. B. Zugang abgelehnt): direkt vom Server weiter, ohne Puffer
+            // Buffer failed (e.g. login rejected): continue directly from the server, without buffer
             t != null -> { val u = t.url; stop(); openStream(player, u, 0L) }
             else -> { player.seekToDefaultPosition(); player.prepare() }
         }
     }
 }
 
-/** Abspielbare Adresse aus einer Datei (Aufnahme). */
+/** Playable address from a file (recording). */
 fun fileUrl(f: java.io.File): String = Uri.fromFile(f).toString()

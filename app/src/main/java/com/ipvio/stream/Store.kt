@@ -24,9 +24,9 @@ object Langs {
         "fr" to "Französisch", "es" to "Spanisch", "it" to "Italienisch", "tr" to "Türkisch", "hr" to "Kroatisch", "sr" to "Serbisch",
         "bs" to "Bosnisch", "pt" to "Portugiesisch", "pl" to "Polnisch", "ru" to "Russisch", "ar" to "Arabisch", "nl" to "Niederländisch"
     )
-    /** Zweite Tonsprache: wenn es die erste nicht gibt. */
+    /** Second audio language: used when the first is not available. */
     val AUDIO2 = listOf("" to "Keine") + AUDIO.drop(1)
-    /** Sprache der Untertitel; leer = wie die App. */
+    /** Subtitle language; empty = same as the app. */
     val SUBS = listOf("" to "Wie die App-Sprache") + AUDIO.drop(1)
     val SUB_MODES = listOf("Aus", "Immer an", "Nur bei fremder Tonspur")
 }
@@ -50,33 +50,35 @@ object AppSettings {
     var subBg by mutableIntStateOf(1)
     var subEdge by mutableIntStateOf(2)
     var audioLang by mutableStateOf("")
-    /** Zweite Tonsprache (Ersatz, wenn es die erste nicht gibt). */
+    /** Second audio language (fallback when the first is not available). */
     var audioLang2 by mutableStateOf("")
-    /** Sprache der Untertitel ("" = wie die App). Ob sie an sind, steuert [subMode]. */
+    /** Subtitle language ("" = same as the app). Whether they are on is controlled by [subMode]. */
     var subLang by mutableStateOf("")
-    /** [TrackLogic.SUB_OFF], [TrackLogic.SUB_ALWAYS] oder [TrackLogic.SUB_FOREIGN]. */
+    /** [TrackLogic.SUB_OFF], [TrackLogic.SUB_ALWAYS] or [TrackLogic.SUB_FOREIGN]. */
     var subMode by mutableIntStateOf(TrackLogic.SUB_OFF)
-    /** Untertitel für Hörgeschädigte (CC/SDH) bevorzugen. */
+    /** Prefer subtitles for the hard of hearing (CC/SDH). */
     var ccPref by mutableStateOf(false)
     var skipIntro by mutableStateOf(true)
     var showInfo by mutableStateOf(true)
+    /** Search with the device's own keyboard (e.g. Gboard: other languages, voice input) instead of the built-in one. */
+    var systemKeyboard by mutableStateOf(false)
     var seekStep by mutableIntStateOf(10)
     var autoNext by mutableStateOf(true)
     var hideSec by mutableIntStateOf(4)
     var showEndTime by mutableStateOf(true)
-    /** Zeitzone für Programmzeiten: 0 = Deutschland (Berlin), 1 = Zeitzone des Geräts. Viele TV-Geräte stehen auf UTC. */
+    /** Time zone for program times: 0 = Germany (Berlin), 1 = time zone of the device. Many TVs are set to UTC. */
     var tzMode by mutableIntStateOf(0)
     var autoSkipIntro by mutableStateOf(false)
-    /** Beim Beginn des Abspanns gleich die nächste Folge starten (nur wenn Abspann-Zeiten bekannt sind). */
+    /** Start the next episode right when the credits begin (only if credits times are known). */
     var autoSkipOutro by mutableStateOf(false)
-    /** Uhrzeit im Bild: an/aus, Ecke (0 oben rechts, 1 oben links, 2 unten rechts, 3 unten links), Deckkraft in %, Größe (0 klein, 1 mittel, 2 groß). */
+    /** Clock on screen: on/off, corner (0 top right, 1 top left, 2 bottom right, 3 bottom left), opacity in %, size (0 small, 1 medium, 2 large). */
     var clockOn by mutableStateOf(false)
-    /** Bildrate an den Film anpassen (ExoPlayer: nur, wenn der Wechsel nahtlos möglich ist). */
+    /** Match the frame rate to the movie (ExoPlayer: only if the switch is possible seamlessly). */
     var autoFps by mutableStateOf(true)
-    /** Uhr: Hintergrundkasten an/aus und seine Deckkraft in % (die Deckkraft der Schrift ist clockOpacity). */
+    /** Clock: background box on/off and its opacity in % (the opacity of the text is clockOpacity). */
     var clockBg by mutableStateOf(true)
     var clockBgOpacity by mutableIntStateOf(40)
-    /** Puffer: 0 Automatisch (lernt bei Ruckeln), 1 Normal, 2 Groß, 3 Sehr groß. [bufferLearned] = von der Automatik gelernte Stufe 0..2. */
+    /** Buffer: 0 Automatic (learns on stutter), 1 Normal, 2 Large, 3 Very large. [bufferLearned] = level 0..2 learned by the automatic mode. */
     var bufferMode by mutableIntStateOf(0)
     var bufferLearned by mutableIntStateOf(0)
     var clockPos by mutableIntStateOf(0)
@@ -89,7 +91,7 @@ object AppSettings {
 
     fun init(c: Context) {
         val p = prefs(c)
-        // Standard: Kategorien des Anbieters; automatische Genres nur, wenn man sie wählt (Einstellung oder Ansicht „Kategorien“)
+        // Default: provider categories; automatic genres only if chosen (setting or view "Categories")
         ipvioFilter = p.getBoolean("ipvio_filter", false)
         gridCols = p.getInt("grid_cols", 6).coerceIn(3, 10)
         gridRows = p.getInt("grid_rows", 3).coerceIn(2, 8)
@@ -101,11 +103,12 @@ object AppSettings {
         audioLang = p.getString("audio_lang", "") ?: ""
         audioLang2 = p.getString("audio_lang2", "") ?: ""
         subLang = p.getString("sub_lang", "") ?: ""
-        // Früher: Untertitel-Sprache leer = aus. Ohne neue Einstellung daraus ableiten.
+        // Before: subtitle language empty = off. Derive from that without a new setting.
         subMode = if (p.contains("sub_mode")) p.getInt("sub_mode", 0).coerceIn(0, 2) else if (subLang.isEmpty()) TrackLogic.SUB_OFF else TrackLogic.SUB_ALWAYS
         ccPref = p.getBoolean("cc_pref", false)
         skipIntro = p.getBoolean("skip_intro", true)
         showInfo = p.getBoolean("show_info", true)
+        systemKeyboard = p.getBoolean("sys_kb", false)
         seekStep = p.getInt("seek_step", 10).coerceIn(5, 120)
         autoNext = p.getBoolean("auto_next", true)
         hideSec = p.getInt("hide_sec", 4).coerceIn(3, 15)
@@ -124,7 +127,7 @@ object AppSettings {
         clockSize = p.getInt("clock_size", 1).coerceIn(0, 2)
         menuOrder.clear(); menuOrder.addAll(MenuLogic.parseOrder(p.getString("menu_order", null)))
         menuHidden.clear(); menuHidden.addAll(MenuLogic.parseHidden(p.getString("menu_hidden", MenuLogic.DEFAULT_HIDDEN)))
-        // Einmalig (Runde 14): „EPG“ aus der Seitenleiste nehmen (öffnete nur den TV-Guide, den es in Live TV gibt)
+        // One-time (round 14): remove "EPG" from the sidebar (it only opened the TV guide, which exists in Live TV)
         if (p.getInt("menu_ver", 1) < 2) {
             if (MenuLogic.EPG !in menuHidden) menuHidden.add(MenuLogic.EPG)
             p.edit().putInt("menu_ver", 2).putString("menu_hidden", menuHidden.joinToString(",")).apply()
@@ -132,11 +135,11 @@ object AppSettings {
         searchHistory.clear()
         searchHistory.addAll((p.getString("search_hist", "") ?: "").split("\n").filter { it.isNotBlank() })
         if (p.getInt("look_ver", 1) < 2) {
-            // Einmalig: Firmenfarben (IPVIO-Grün auf Navy) als neues Standard-Design setzen. Eigene Farbe bleibt erhalten.
+            // One-time: set company colors (IPVIO green on navy) as the new default design. A custom color is kept.
             p.edit().putInt("look_accent", 0).putInt("look_bg", 0).putInt("look_ver", 2).commit()
         }
         if (p.getInt("look_ver", 1) < 4) {
-            // Einmalig: frühere Standard-Grüns (#39FF13, #22C55E) als eigene Farbe durch das aktuelle ersetzen.
+            // One-time: replace earlier default greens (#39FF13, #22C55E) as custom color with the current one.
             val e = p.edit().putInt("look_ver", 4)
             val old = setOf(0x39FF13, 0x22C55E)
             if ((p.getInt("look_custom", Look.BRAND_GREEN) and 0xFFFFFF) in old) e.putInt("look_custom", Look.BRAND_GREEN)
@@ -145,15 +148,15 @@ object AppSettings {
             e.commit()
         }
         if (p.getInt("look_ver", 1) < 5) {
-            // Einmalig (Runde 13): Farben des Entwurfs (Orange auf Schwarz). Neue Vorgabe an Stelle 12 –
-            // die eigene Farbe rückt dadurch von 12 auf 13 (bleibt erhalten). Zurück geht es unter Einstellungen > Design.
+            // One-time (round 13): colors of the design (orange on black). New preset at position 12 –
+            // the custom color therefore moves from 12 to 13 (it is kept). Going back is possible under Settings > Design.
             val e = p.edit().putInt("look_ver", 5)
             if (p.getInt("look_accent", 0) == 12) e.putInt("look_custom_was", 1)
             e.putInt("look_accent", 12).putInt("look_bg", 5).commit()
         }
         if (p.getInt("look_ver", 1) < 6) {
-            // Einmalig (Runde 13e): zurück zu den Standard-Farben (IPVIO-Grün auf Navy). Die Entwurfs-Vorgaben gibt es nicht mehr,
-            // die eigene Farbe steht wieder an Stelle 12. Wer vorher die eigene Farbe hatte, bekommt sie zurück.
+            // One-time (round 13e): back to the default colors (IPVIO green on navy). The design presets no longer exist,
+            // the custom color is at position 12 again. Whoever had the custom color before gets it back.
             val e = p.edit().putInt("look_ver", 6)
             val acc = p.getInt("look_accent", 0)
             val newAcc = when {
@@ -172,7 +175,7 @@ object AppSettings {
         Look.uiScale = p.getInt("look_scale", Look.DEFAULT_SCALE).coerceIn(0, Look.SCALES.lastIndex)
     }
 
-    /** Speichert Farbthema, Hintergrund, Animationsstufe und Anzeigegröße. */
+    /** Saves color theme, background, animation level and display size. */
     fun setLook(c: Context, accent: Int, custom: Int, bg: Int, motion: Int, scale: Int, custom2: Int = Look.custom2) {
         Look.accentIdx = accent.coerceIn(0, Look.ACCENTS.size)
         Look.custom = custom and 0xFFFFFF
@@ -196,8 +199,8 @@ object AppSettings {
     }
 
     /**
-     * Setzt ALLE Einstellungen auf die Standardwerte zurück (Ansicht, Menü, Player, Ton, Gestaltung).
-     * Playlists, Favoriten, Verlauf und gespeicherte Positionen bleiben unangetastet.
+     * Resets ALL settings to the defaults (view, menu, player, audio, design).
+     * Playlists, favorites, history and saved positions are left untouched.
      */
     fun resetAll(c: Context) {
         val hist = searchHistory.toList()
@@ -207,9 +210,26 @@ object AppSettings {
         if (hist.isNotEmpty()) prefs(c).edit().putString("search_hist", hist.joinToString("\n")).apply()
     }
 
+    /**
+     * Resets only the given preference keys to their defaults: removes them and reloads every value from storage
+     * (the defaults are the ones in [init]). All other settings keep their saved value.
+     */
+    fun resetKeys(c: Context, keys: Set<String>) {
+        if (keys.isEmpty()) return
+        val e = prefs(c).edit()
+        keys.forEach { e.remove(it) }
+        e.apply()
+        init(c)
+    }
+
     fun set(c: Context, v: Boolean) {
         ipvioFilter = v
         prefs(c).edit().putBoolean("ipvio_filter", v).apply()
+    }
+
+    fun setSystemKeyboard(c: Context, on: Boolean) {
+        systemKeyboard = on
+        prefs(c).edit().putBoolean("sys_kb", on).apply()
     }
 
     fun setPlayer(c: Context, skip: Boolean, info: Boolean, step: Int) {
@@ -236,13 +256,13 @@ object AppSettings {
         prefs(c).edit().putBoolean("clock_bg", on).putInt("clock_bg_op", clockBgOpacity).apply()
     }
 
-    /** Wechsel des Modus setzt die gelernte Stufe zurück. */
+    /** Changing the mode resets the learned level. */
     fun setBufferMode(c: Context, mode: Int) {
         bufferMode = mode.coerceIn(0, 3); bufferLearned = 0
         prefs(c).edit().putInt("buf_mode", bufferMode).putInt("buf_learned", 0).apply()
     }
 
-    /** Die Automatik hat Ruckeln bemerkt: nächste Wiedergabe mit größerem Puffer. */
+    /** The automatic mode noticed stutter: next playback with a larger buffer. */
     fun learnBuffer(c: Context) {
         val n = BufferLogic.bump(bufferMode, bufferLearned)
         if (n == bufferLearned) return
@@ -287,7 +307,7 @@ object AppSettings {
         prefs(c).edit().putString("audio_lang2", audio2).putInt("sub_mode", subMode).putBoolean("cc_pref", cc).apply()
     }
 
-    /** Untertitel-Sprache, die gilt: eingestellt oder die der App. */
+    /** Subtitle language that applies: the configured one or the app's. */
     fun subLangEffective(): String = subLang.ifEmpty { Lang.code() }
 
     private fun saveMenu(c: Context) {
@@ -318,6 +338,12 @@ object AppSettings {
         prefs(c).edit().putString("search_hist", searchHistory.joinToString("\n")).apply()
     }
 
+    /** Removes one entry from the search history. */
+    fun removeSearch(c: Context, q: String) {
+        searchHistory.removeAll { it.equals(q, true) }
+        prefs(c).edit().putString("search_hist", searchHistory.joinToString("\n")).apply()
+    }
+
     fun clearSearch(c: Context) {
         searchHistory.clear()
         prefs(c).edit().remove("search_hist").apply()
@@ -339,6 +365,18 @@ object Library {
 
     fun toggleFav(c: Context, id: String) {
         if (!favs.remove(id)) favs.add(0, id)
+        prefs(c).edit().putString("favs", favs.joinToString("\n")).apply()
+    }
+
+    /** Moves favorite [id] by [delta] places inside [shown] (the favorites on screen); all other entries keep their place. */
+    fun moveFav(c: Context, shown: List<String>, id: String, delta: Int) = setFavs(c, FavOrderLogic.move(favs.toList(), shown, id, delta))
+
+    /** Moves favorite [id] to the first place inside [shown]. */
+    fun favToTop(c: Context, shown: List<String>, id: String) = setFavs(c, FavOrderLogic.toTop(favs.toList(), shown, id))
+
+    private fun setFavs(c: Context, list: List<String>) {
+        if (list == favs.toList()) return
+        favs.clear(); favs.addAll(list)
         prefs(c).edit().putString("favs", favs.joinToString("\n")).apply()
     }
 
@@ -381,11 +419,17 @@ object History {
         while (ids.size > 80) ids.removeAt(ids.lastIndex)
         prefs(c).edit().putString("ids", ids.joinToString("\n")).apply()
     }
+
+    /** Removes a single title from "Recently watched". */
+    fun remove(c: Context, id: String) {
+        if (!ids.remove(id)) return
+        prefs(c).edit().putString("ids", ids.joinToString("\n")).apply()
+    }
 }
 
 /**
- * Fortsetzen-Punkt. Bei Serien: Staffel/Folge ([season]/[ep]); [next] = die Folge davor ist zu Ende geschaut,
- * angeboten wird die nächste (Position 0).
+ * Resume point. For series: season/episode ([season]/[ep]); [next] = the previous episode has been watched to the end,
+ * the next one is offered (position 0).
  */
 data class Entry(
     val itemId: String, val title: String, val url: String, val pos: Long, val dur: Long, val ts: Long,
@@ -393,8 +437,8 @@ data class Entry(
 )
 
 /**
- * Kleines Protokoll zur Fehlersuche bei „Weiterschauen“ (Einstellungen > Diagnose): was gemerkt, übergangen und fortgesetzt wurde.
- * Enthält nur Titel und Zeiten, keine Adressen.
+ * Small log for troubleshooting "Continue watching" (Settings > Diagnostics): what was remembered, skipped and resumed.
+ * Contains only titles and times, no addresses.
  */
 object ResumeLog {
     val lines = mutableStateListOf<String>()
@@ -433,8 +477,8 @@ object WatchStore {
     }
 
     /**
-     * Merkt den Stand. Zu Ende geschaut: bei Serien wird [next] (die nächste Folge) angeboten, sonst verschwindet der Eintrag.
-     * Unter 30 Sekunden ändert sich nichts – ein kurzes Reinschauen löscht keinen alten Fortsetzen-Punkt.
+     * Remembers the state. Watched to the end: for series [next] (the next episode) is offered, otherwise the entry disappears.
+     * Under 30 seconds nothing changes – a short peek does not delete an old resume point.
      */
     fun save(c: Context, e: Entry, next: Entry? = null) {
         val fin = ResumeLogic.finished(e.pos, e.dur)
@@ -453,7 +497,7 @@ object WatchStore {
         persist(c)
     }
 
-    /** Aus „Weiterschauen“ entfernen (Menü-Taste auf der Karte). */
+    /** Remove from "Continue watching" (menu key on the card). */
     fun remove(c: Context, itemId: String) {
         if (entries.removeAll { it.itemId == itemId }) persist(c)
     }
@@ -466,11 +510,11 @@ object WatchStore {
     }
 
     /**
-     * Was „Fortsetzen“ abspielt: Titel und eine AKTUELLE Adresse aus der geladenen Playlist
-     * (Anbieter ändern Adressen beim Aktualisieren; die gespeicherte wäre dann tot).
+     * What "Resume" plays: title and a CURRENT address from the loaded playlist
+     * (providers change addresses on refresh; the stored one would then be dead).
      */
     fun target(c: Context, item0: Item, e: Entry): Pair<String, String> {
-        // Serie mit Platzhalter: sind die Folgen schon geladen (Serie geöffnet), nimmt Fortsetzen diese
+        // Series with a placeholder: if the episodes are already loaded (series opened), Resume uses them
         val item = LazySeries.full(item0)
         if (item.kind != Kind.SERIES) return e.title to item.url.ifBlank { e.url }
         var s = e.season; var n = e.ep
@@ -484,8 +528,8 @@ object WatchStore {
 }
 
 /**
- * Fortschritt je Folge (für Balken und „gesehen“ in der Folgenliste). Je Serie eine kompakte Zeile;
- * gemerkt werden die 150 zuletzt geschauten Serien.
+ * Progress per episode (for bars and "watched" in the episode list). One compact line per series;
+ * the 150 most recently watched series are remembered.
  */
 object EpProgress {
     private const val MAX_SERIES = 400
@@ -505,14 +549,37 @@ object EpProgress {
         val v = ResumeLogic.EpPos((posMs / 1000).toInt(), (durMs / 1000).toInt())
         val k = ResumeLogic.key(season, ep)
         val old = m[k]
-        // Einmal gesehen bleibt gesehen (nochmal Reinschauen setzt den Haken nicht zurück)
+        // Once seen stays seen (peeking again does not reset the check mark)
         if (old != null && old.done && !v.done) return
         if (old == v) return
         m[k] = v
+        store(c, seriesId, m)
+    }
+
+    /** Length (seconds) of the placeholder progress that marks an episode as watched by hand. */
+    private const val MARK_SECONDS = 60
+
+    /**
+     * Marks episodes ([keys] = [ResumeLogic.key]) as watched by hand, or resets them to "not watched".
+     * A movie uses the key (0, 0).
+     */
+    @Synchronized
+    fun mark(c: Context, seriesId: String, keys: Collection<Long>, seen: Boolean) {
+        val m = load(c, seriesId)
+        for (k in keys) {
+            if (seen) m[k] = ResumeLogic.EpPos(MARK_SECONDS, MARK_SECONDS) else m.remove(k)
+        }
+        if (m.isEmpty()) {
+            cache.remove(seriesId)
+            prefs(c).edit().remove(seriesId).apply()
+        } else store(c, seriesId, m)
+    }
+
+    private fun store(c: Context, seriesId: String, m: Map<Long, ResumeLogic.EpPos>) {
         val p = prefs(c)
         val e = p.edit().putString(seriesId, System.currentTimeMillis().toString() + "|" + ResumeLogic.encode(m))
         if (p.all.size > MAX_SERIES) {
-            // älteste Serien vergessen
+            // forget the oldest series
             p.all.entries.filter { it.key != seriesId }
                 .sortedBy { (it.value as? String)?.substringBefore('|')?.toLongOrNull() ?: 0L }
                 .take(p.all.size - MAX_SERIES).forEach { e.remove(it.key); cache.remove(it.key) }
@@ -552,14 +619,14 @@ object Genres {
 
 object Classifier {
     /**
-     * Grenze für die automatischen Genres: Bei sehr großen Bibliotheken (über 60.000 Filme und Serien – gezählt nach dem Sprachfilter)
-     * würde das Abfragen aller Titel bei TMDB Stunden dauern und den Arbeitsspeicher füllen.
-     * Dann nutzt die App die Kategorien des Anbieters – ohne Abgleich, schnell und stabil.
+     * Limit for automatic genres: with very large libraries (over 60,000 movies and series – counted after the language filter)
+     * querying all titles at TMDB would take hours and fill the working memory.
+     * Then the app uses the provider's categories – without matching, fast and stable.
      */
     const val MAX_TITLES = 60_000
     fun supported(n: Int) = n <= MAX_TITLES
 
-    /** Wahr, wenn der Heap zu über 70 % belegt ist: dann wird der Abgleich angehalten statt abzustürzen. */
+    /** True if the heap is more than 70 % full: then the matching is paused instead of crashing. */
     private fun lowMemory(): Boolean = Mem.heapTight(0.70)
     var progress by mutableIntStateOf(0)
     var total by mutableIntStateOf(0)
@@ -571,9 +638,9 @@ object Classifier {
     private var job: Job? = null
 
     /**
-     * Startet die Erkennung für eine (neue) Liste. Ein laufender Durchgang wird erst sauber beendet,
-     * damit nach einem Filterwechsel nie die alte Liste weiterläuft oder die neue übersprungen wird.
-     * Läuft im Hintergrund-Thread, nicht im Hauptthread.
+     * Starts the detection for a (new) list. A running pass is first ended cleanly,
+     * so that after a filter change the old list never keeps running or the new one is skipped.
+     * Runs on a background thread, not on the main thread.
      */
     fun restart(ctx: Context, all: List<Item>) {
         val app = ctx.applicationContext
@@ -589,38 +656,42 @@ object Classifier {
         if (!MetaRepo.enabled() || !supported(items.size)) return
         running = true
         try {
-            // Gespeicherte Ergebnisse in einem Rutsch laden (statt eine Datei je Titel): nur wirklich neue Titel werden abgefragt
+            // Load stored results in one go (instead of one file per title): only really new titles are queried
             MetaRepo.loadIndex(ctx)
             phase = "Metadaten"
             val todo = items.filter { MetaRepo.cached(it) == null && !MetaRepo.missed(it) }
             total = items.size
             progress = items.size - todo.size
-            version++
+            if (todo.isNotEmpty()) version++   // nothing new: no home rebuild
             var n = 0
-            for (chunk in todo.chunked(24)) {
+            for (chunk in todo.chunked(12)) {
                 if (lowMemory()) { MetaRepo.trim(); if (lowMemory()) { version++; return } }
                 coroutineScope { chunk.map { async { MetaRepo.basic(ctx, it) } }.awaitAll() }
                 progress += chunk.size
                 n++
-                if (n % 4 == 0) version++
+                if (n % 8 == 0) version++
+                // Gentle on weak boxes: short pause between batches, and none at all while something plays
+                kotlinx.coroutines.delay(150)
+                while (AppNav.playing) kotlinx.coroutines.delay(2000)
                 if (n % 200 == 0) MetaRepo.saveIndex(ctx)
             }
-            version++
-            MetaRepo.saveIndex(ctx)
+            if (todo.isNotEmpty()) { version++; MetaRepo.saveIndex(ctx) }
             phase = "Länder"
             val need = items.filter { MetaRepo.cached(it)?.countries?.isEmpty() == true }
             total = need.size
             progress = 0
             n = 0
-            for (chunk in need.chunked(24)) {
+            for (chunk in need.chunked(12)) {
                 if (lowMemory()) { MetaRepo.trim(); if (lowMemory()) { version++; return } }
                 coroutineScope { chunk.map { async { MetaRepo.fillCountry(ctx, it) } }.awaitAll() }
                 progress += chunk.size
                 n++
-                if (n % 4 == 0) version++
+                if (n % 8 == 0) version++
+                kotlinx.coroutines.delay(150)
+                while (AppNav.playing) kotlinx.coroutines.delay(2000)
                 if (n % 100 == 0) MetaRepo.saveIndex(ctx)
             }
-            version++
+            if (need.isNotEmpty()) version++
         } finally {
             running = false
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { MetaRepo.saveIndex(ctx) }

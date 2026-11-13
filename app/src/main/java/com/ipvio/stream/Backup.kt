@@ -6,19 +6,27 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Sicherung der persönlichen Daten (Einstellungen, Favoriten, Verlauf, Profile) in eine Datei.
- * Playlists und Zugangsdaten sind absichtlich nicht enthalten: Sie bleiben auf dem Gerät.
+ * Backup of personal data (settings, favorites, history, profiles) into a file.
+ * Playlists and login data are deliberately not included: they stay on the device.
  */
 object Backup {
     private val NAMES = listOf(
         "ipvio_general", "ipvio_settings", "ipvio_lib", "ipvio_quality", "ipvio_hist", "ipvio_watch",
         "ipvio_catfavs", "ipvio_variants", "ipvio_guide", "ipvio_browse", "ipvio_cat", "ipvio_lang",
         "ipvio_chlists", "ipvio_tracks", "ipvio_eprog",
-        // Runde 20: Live-Puffer/Aufnahmen, Seitenleiste, Handy, Updates
-        "ipvio_livetv", "ipvio_side", "ipvio_mobile", "ipvio_upd"
+        // Round 20: live buffer/recordings, sidebar, phone, updates
+        "ipvio_livetv", "ipvio_side", "ipvio_mobile", "ipvio_upd",
+        // 1.2: sports (teams, notifications, leagues, channel correction), hidden/ignored groups, learned live quality
+        "ipvio_sportfavs", "ipvio_sportalerts", "ipvio_sportleagues", "ipvio_sporthub", "ipvio_sportfix", "ipvio_hidecats", "ipvio_browselang", "ipvio_ignored", "ipvio_livequal",
+        // Home block builder and Boomer mode
+        "ipvio_homelayout", "ipvio_boomerlayout", "ipvio_boomer",
+        // T-006: dual view, last live category, new episodes, imported lists, resume log (profile-scoped like the others)
+        "ipvio_dual", "ipvio_live", "ipvio_newep", "ipvio_importedlists", "ipvio_resumelog",
+        // 1.4: own order of categories (Live TV, movies, series)
+        "ipvio_catorder"
     )
 
-    /** Größer wird eine echte Sicherung nie; größere Dateien werden gar nicht erst gelesen. */
+    /** A real backup never gets bigger; larger files are not even read. */
     private const val MAX_BYTES = 4L * 1024 * 1024
 
     fun file(c: Context): File = File(c.getExternalFilesDir(null) ?: c.filesDir, "ipvio_backup.json")
@@ -28,7 +36,7 @@ object Backup {
         return listOf(Profiles.META) + Profiles.list.flatMap { p -> NAMES.map { Profiles.scopedName(it, p.id) } }
     }
 
-    /** Schreibt die Sicherung und gibt die Datei zurück (oder null bei Fehler). */
+    /** Writes the backup and returns the file (or null on error). */
     fun export(c: Context): File? = runCatching {
         val f = file(c)
         f.parentFile?.mkdirs()
@@ -37,8 +45,8 @@ object Backup {
     }.getOrNull()
 
     /**
-     * Sicherung als Text. [withPlaylists] = auch die Playlists mit Zugangsdaten (nur für die Übertragung auf ein
-     * anderes eigenes Gerät im WLAN oder in das eigene Google Drive; in der Datei auf dem Gerät nie).
+     * Backup as text. [withPlaylists] = also the playlists with login data (only for transfer to another
+     * own device on the Wi-Fi or into the own Google Drive; never in the file on the device).
      */
     fun exportText(c: Context, withPlaylists: Boolean): String? = runCatching {
         val root = JSONObject().put("v", 1).put("at", System.currentTimeMillis())
@@ -64,14 +72,14 @@ object Backup {
         root.toString()
     }.getOrNull()
 
-    /** Liest die Sicherung zurück. Gibt die Zahl der wiederhergestellten Dateien zurück, -1 bei Fehler. */
+    /** Reads the backup back. Returns the number of restored files, -1 on error. */
     fun restore(c: Context): Int = runCatching {
         val f = file(c)
         if (!f.exists() || f.length() > MAX_BYTES) return -1
         restoreText(c, f.readText())
     }.getOrDefault(-1)
 
-    /** Sicherung aus Text einspielen (WLAN, Google Drive). Playlists darin werden ergänzt, nicht ersetzt. */
+    /** Restore a backup from text (Wi-Fi, Google Drive). Playlists in it are added, not replaced. */
     fun restoreText(c: Context, text: String): Int = runCatching {
         if (text.length > MAX_BYTES) return -1
         val root = JSONObject(text)
@@ -79,7 +87,7 @@ object Backup {
         val files = root.getJSONObject("files")
         var count = 0
         for (n in files.keys()) {
-            // Nur bekannte Dateien zulassen
+            // Allow known files only
             if (n != Profiles.META && NAMES.none { n == it || n.startsWith(it + "_p") }) continue
             val o = files.getJSONObject(n)
             val e = c.applicationContext.getSharedPreferences(n, Context.MODE_PRIVATE).edit().clear()

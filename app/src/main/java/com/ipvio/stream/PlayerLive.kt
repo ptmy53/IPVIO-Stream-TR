@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -46,9 +47,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 
-/** Sender-Infoblock: Logo, Nummer, Name, laufende Sendung mit Fortschritt und "Danach". */
+/** Channel info block: logo, number, name, running show with progress and "Next". */
 @Composable
 fun LiveInfoBlock(item: Item?, title: String, number: Int, epg: List<EpgEntry>, modifier: Modifier = Modifier) {
     val nowE = Epg.current(epg)
@@ -91,8 +93,63 @@ fun LiveInfoBlock(item: Item?, title: String, number: Int, epg: List<EpgEntry>, 
 }
 
 /**
- * Senderliste (Links im Live-Player): optional Rubriken-Spalte, Sender-Spalte und rechts ein Infofenster
- * als flache Leiste unten im Bild. Das Verhalten ist 1:1 wie vorher – nur ausgelagert und neu gestaltet.
+ * Info bar when switching (1.2): across the full width at the bottom edge, soft dark gradient instead of a box.
+ * Logo, LIVE, number, channel, quality, running show with time and progress, "Next" on the right.
+ */
+@Composable
+fun LiveBanner(item: Item?, title: String, number: Int, epg: List<EpgEntry>, modifier: Modifier = Modifier) {
+    val nowE = Epg.current(epg)
+    val nextE = if (nowE != null) epg.firstOrNull { it.start >= nowE.end } else null
+    val logo = item?.logo
+    Box(modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = PT.MarginX, end = PT.MarginX, top = 56.dp, bottom = PT.MarginY),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)
+        ) {
+            Box(
+                Modifier.size(84.dp).clip(RoundedCornerShape(DS.RadiusM)).background(Color(0x33FFFFFF)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (logo != null) AsyncImage(logo, null, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
+                else Text(raw = true, text = title.take(2).uppercase(), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("LIVE", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFE5484D)).padding(horizontal = 12.dp, vertical = 3.dp))
+                    if (number > 0) Text("$number", color = Accent2, fontSize = 22.sp, fontWeight = FontWeight.Bold, style = TNUM)
+                    Text(raw = true, text = title, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    item?.quality?.takeIf { it.isNotBlank() }?.let {
+                        Text(raw = true, text = it, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0x40FFFFFF)).padding(horizontal = 8.dp, vertical = 2.dp))
+                    }
+                }
+                if (nowE != null) {
+                    val frac = ((System.currentTimeMillis() / 1000 - nowE.start).toFloat() / (nowE.end - nowE.start).coerceAtLeast(1)).coerceIn(0f, 1f)
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(raw = true, text = nowE.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        Text("${hhmm(nowE.start)}–${hhmm(nowE.end)}", color = PT.T2, fontSize = 17.sp, style = TNUM, maxLines = 1)
+                    }
+                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(50)).background(Color(0x40FFFFFF))) {
+                        Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(Accent1))
+                    }
+                } else {
+                    Text(if (item != null && Epg.supported(item)) "Kein Programm für diesen Sender" else "Kein Programm verfügbar", color = PT.T2, fontSize = 16.sp, maxLines = 1)
+                }
+            }
+            if (nextE != null) {
+                Column(Modifier.widthIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Danach", color = PT.T2, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(raw = true, text = "${hhmm(nextE.start)}  ${nextE.title}", color = Color.White, fontSize = 17.sp, style = TNUM, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Channel list (Left in the live player): optional category column, channel column and on the right an info window
+ * as a flat bar at the bottom of the picture. The behavior is exactly as before – only moved out and redesigned.
  */
 @Composable
 fun ChannelOverlay(
@@ -107,23 +164,34 @@ fun ChannelOverlay(
     val ctx = LocalContext.current
     val byId = remember(liveAll) { liveAll.associateBy { it.id } }
     val groups = remember(liveAll) { liveAll.groupBy { it.group } }
-    val favItems = Library.favs.mapNotNull { byId[it] }
-    val favCats = CatFavs.list.filter { it in groups }
-    val catNames = favCats + groups.keys.filter { it !in favCats }
-    // Eigene Senderlisten (angelegt im Live-TV-Bereich mit der Menü-Taste)
+    // Remembered: the overlay recomposes on every focus step (focusedCh), the lists only change with their sources
+    val favItems = remember(byId, Library.favs.size) { Library.favs.mapNotNull { byId[it] } }
+    val favCats = remember(groups, CatFavs.list.size) { CatFavs.list.filter { it in groups } }
+    val catNames = remember(groups, favCats) { favCats + groups.keys.filter { it !in favCats } }
+    // Own channel lists (created in the Live TV area with the menu key)
     val myLists = ChannelLists.lists.toList()
     val curList = ChannelLists.byKey(chanCat)
-    val chanList = when {
-        chanCat == FAV_CAT -> favItems
-        chanCat == "ALL" -> liveAll
-        curList != null -> ChannelListLogic.resolve(curList, byId)
-        else -> groups[chanCat].orEmpty()
+    val chanList = remember(chanCat, favItems, liveAll, curList, curList?.ids?.size, groups) {
+        when {
+            chanCat == FAV_CAT -> favItems
+            chanCat == "ALL" -> liveAll
+            curList != null -> ChannelListLogic.resolve(curList, byId)
+            else -> groups[chanCat].orEmpty()
+        }
     }
-    val startIdx = chanList.indexOfFirst { it.id == curId }
+    val startIdx = remember(chanList, curId) { chanList.indexOfFirst { it.id == curId } }
     val ls = rememberLazyListState()
     LaunchedEffect(chanCat) { ls.scrollToItem(maxOf(startIdx - 2, 0)) }
     val fc = focusedCh ?: curItem
-    val fe by produceState(emptyList<EpgEntry>(), fc?.id) { value = if (fc != null) EpgFull.get(fc) else emptyList() }
+    // Program of the highlighted channel: only after a short pause and not while Up/Down is held (before, every step started a request)
+    val fe by produceState(emptyList<EpgEntry>(), fc?.id) {
+        value = emptyList()
+        if (fc == null) return@produceState
+        EpgFull.peek(fc)?.let { value = it; return@produceState }
+        kotlinx.coroutines.delay(250)
+        while (LiveHold.active()) kotlinx.coroutines.delay(100)
+        value = EpgFull.get(fc)
+    }
     val panelShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
 
     Row(Modifier.fillMaxSize()) {
@@ -193,17 +261,28 @@ fun ChannelOverlay(
                 }
             }
             Text("OK = ansehen  ·  halten = Favorit  ·  Links = Kategorien", color = Muted, fontSize = 13.sp)
-            LazyColumn(state = ls) {
-                itemsIndexed(chanList) { i, it ->
+            val jumpScope = androidx.compose.runtime.rememberCoroutineScope()
+            LazyColumn(
+                state = ls,
+                // Held Up/Down: at most ~9 steps per second and no scroll animation per step (as in Live TV)
+                modifier = Modifier.onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && (e.key == Key.DirectionDown || e.key == Key.DirectionUp) && e.nativeKeyEvent.repeatCount > 0) {
+                        val now = android.os.SystemClock.uptimeMillis()
+                        LiveHold.lastRepeat = now
+                        if (now - LiveHold.lastStep < 110) true else { LiveHold.lastStep = now; false }
+                    } else false
+                }
+            ) {
+                itemsIndexed(chanList, contentType = { _, _ -> "ch" }) { i, it ->
                     ChannelRow(
                         it, it.id == curId,
                         if (i == startIdx || (startIdx < 0 && i == 0)) Modifier.focusRequester(chanFocus) else Modifier,
-                        onFocus = { onFocusedCh(it) }
+                        onFocus = { onFocusedCh(it); jumpScope.launch { holdJump(ls, i) } }
                     ) { onPick(it, chanList) }
                 }
             }
         }
-        // Programminfo: flache Leiste unten über dem Bild (statt großer Karte mitten im Video)
+        // Program info: flat bar at the bottom over the picture (instead of a big card in the middle of the video)
         Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 28.dp, vertical = 28.dp), contentAlignment = Alignment.BottomCenter) {
             if (fc != null) {
                 val nowE = Epg.current(fe)
@@ -277,9 +356,17 @@ private fun ChannelRow(item: Item, current: Boolean, modifier: Modifier, onFocus
     val ctx = LocalContext.current
     var f by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(DS.RadiusS)
-    val epg by produceState(emptyList<EpgEntry>(), item.id) { value = Epg.now(item) }
+    // Cached program at once; otherwise wait briefly and not while Up/Down is held (rows that fly past load nothing)
+    val epg by produceState(Epg.peek(item) ?: emptyList(), item.id) {
+        val cached = Epg.peek(item)
+        value = cached ?: emptyList()
+        if (cached != null) return@produceState
+        kotlinx.coroutines.delay(150)
+        while (LiveHold.active()) kotlinx.coroutines.delay(120)
+        value = Epg.now(item)
+    }
     val nowE = Epg.current(epg)
-    // Menü-Taste (falls vorhanden): Favorit und eigene Senderlisten. OK gedrückt halten = sofort Favorit (Wunsch des Nutzers).
+    // Menu key (if present): favorite and own channel lists. Holding OK = favorite immediately (user's wish).
     var menu by remember { mutableStateOf(false) }
     if (menu) Box { ChannelMenu(item, null, null) { menu = false } }
     Row(
@@ -287,7 +374,7 @@ private fun ChannelRow(item: Item, current: Boolean, modifier: Modifier, onFocus
             .background(if (f) Color.White else if (current) DS.Overlay2 else Color.Transparent)
             .onFocusChanged { f = it.isFocused; if (it.isFocused) onFocus() }
             .menuKeys(onMenu = { menu = true }, onLong = {
-                // Mit eigenen Senderlisten: Auswahl (Favoriten oder eine Liste); sonst sofort Favorit an/aus
+                // With own channel lists: choice (favorites or a list); otherwise favorite on/off immediately
                 if (ChannelLists.lists.isNotEmpty()) { menu = true; return@menuKeys }
                 val on = !Library.isFav(item.id)
                 Library.toggleFav(ctx, item.id)
@@ -320,5 +407,52 @@ private fun ChannelRow(item: Item, current: Boolean, modifier: Modifier, onFocus
         if (Catchup.version >= 0 && Catchup.has(item)) AppIcon(AIcon.Catchup, if (f) PT.InkSoft else Accent2, size = 18.dp)
         if (DeadLinks.isDead(item.url)) AppIcon(AIcon.Warning, if (f) PT.InkSoft else PT.Gold, size = 18.dp)
         if (Library.isFav(item.id)) AppIcon(AIcon.Star, if (f) PT.InkSoft else PT.Gold, size = 18.dp)
+    }
+}
+
+/**
+ * Recently watched channels (wish from the Wishbox): a row in the live controls (OK while watching) to switch back quickly.
+ * Uses the existing history ([History]); the current channel is left out. Resolved in one pass over the channels in the
+ * background, so opening the controls stays fast with very large playlists.
+ */
+@Composable
+fun RecentChannelsRow(liveAll: List<Item>, curId: String, onLabel: (String) -> Unit, onPick: (Item) -> Unit) {
+    val recent by produceState(emptyList<Item>(), liveAll, curId, History.ids.size) {
+        val want = History.ids.toList().filter { it != curId }.take(40)
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val pos = HashMap<String, Int>(want.size * 2)
+            want.forEachIndexed { i, id -> pos.putIfAbsent(id, i) }
+            val out = arrayOfNulls<Item>(want.size)
+            for (x in liveAll) { val p = pos[x.id] ?: continue; if (out[p] == null) out[p] = x }
+            out.filterNotNull().take(10)
+        }
+    }
+    if (recent.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Zuletzt gesehen", color = Muted, fontSize = 13.sp)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(recent, key = { it.id }) { ch -> RecentChannelChip(ch, onLabel) { onPick(ch) } }
+        }
+    }
+}
+
+@Composable
+private fun RecentChannelChip(item: Item, onLabel: (String) -> Unit, onClick: () -> Unit) {
+    var f by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(DS.RadiusS)
+    Row(
+        Modifier.height(44.dp).widthIn(max = 220.dp).clip(shape)
+            .background(if (f) Color.White else Color(0x24FFFFFF))
+            .onFocusChanged { f = it.isFocused; if (it.isFocused) onLabel(item.title) }
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
+            val lg = item.logo
+            if (lg != null) AsyncImage(lg, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            else Text(raw = true, text = item.title.take(2).uppercase(), color = if (f) Color.Black else Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Text(raw = true, text = item.title, color = if (f) Color.Black else Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

@@ -18,19 +18,26 @@ object ContentFocus {
 }
 
 /**
- * Zuletzt fokussiertes Element im Inhalt (Karten, Knöpfe). Rechts aus der Seitenleiste geht es dorthin zurück
- * statt zum Element, das zufällig neben dem gewählten Menüpunkt liegt (Runde 14).
+ * Last focused element in the content (cards, buttons). Right from the sidebar goes back there
+ * instead of to the element that happens to lie next to the chosen menu entry (round 14).
  */
 object ContentMemory {
     var last: FocusRequester? = null
     fun restore(): Boolean = last?.let { runCatching { it.requestFocus() }.getOrDefault(false) } ?: false
 }
 
-/** Merkt sich dieses Element als zuletzt fokussiert (siehe [ContentMemory]). */
+/** Remembers this element as last focused (see [ContentMemory]). */
 @Composable
 fun Modifier.trackFocus(): Modifier {
     val fr = remember { FocusRequester() }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (ContentMemory.last === fr) ContentMemory.last = null } }
+    return this.focusRequester(fr).onFocusChanged { if (it.isFocused) ContentMemory.last = fr }
+}
+
+/** Like [trackFocus], but uses the given requester so the element has only ONE focusRequester (two on one node break requestFocus). */
+@Composable
+fun Modifier.trackFocus(fr: FocusRequester): Modifier {
+    androidx.compose.runtime.DisposableEffect(fr) { onDispose { if (ContentMemory.last === fr) ContentMemory.last = null } }
     return this.focusRequester(fr).onFocusChanged { if (it.isFocused) ContentMemory.last = fr }
 }
 
@@ -39,8 +46,8 @@ object LastFocus {
 }
 
 /**
- * Zuletzt im Player gespielte Folge einer Serie. Die Detailseite öffnet beim Zurückkommen genau bei dieser Staffel/Folge und
- * markiert sie, damit man gleich eine andere wählen kann (statt wieder bei „Fortsetzen“ zu landen). Wird einmal gelesen und gelöscht.
+ * Episode of a series last played in the player. On coming back the detail page opens exactly at this season/episode and
+ * highlights it so you can pick another right away (instead of landing on "Resume" again). Read once and deleted.
  */
 object DetailReturn {
     private var id: String? = null
@@ -59,20 +66,26 @@ object NavState {
 }
 
 /**
- * App-weite Navigation, die nicht an einen Bildschirm gebunden ist:
- * - [homeSignal]: zählt hoch, wenn die App nach der Home-Taste (oder App-Wechsel) wieder geöffnet wird → zurück zur Startseite.
- * - [focusTab]: Tab, dessen Inhalt nach einem Wechsel den Fokus bekommen soll, wenn dabei der ganze Bildschirm ausgetauscht
- *   wurde (z. B. Start → Suche). Die Seitenleiste des alten Bildschirms ist dann schon weg und kann das nicht mehr erledigen.
+ * App-wide navigation not bound to a screen:
+ * - [homeSignal]: counts up when the app is opened again after the Home key (or app switch) → back to the home screen.
+ * - [focusTab]: tab whose content should get the focus after a switch when the whole screen was replaced
+ *   (e.g. Start → Search). The old screen's sidebar is already gone and can no longer do that.
  */
 object AppNav {
     var homeSignal by androidx.compose.runtime.mutableIntStateOf(0)
-    /** Player offen? Dann verschiebt die Hintergrund-Aktualisierung das Neuladen der Playlist (kein Ruckeln mitten im Film). */
+    /** The View settings ask the movie area to open its categories screen (counts up). */
+    var openCatsSignal by androidx.compose.runtime.mutableIntStateOf(0)
+    /** Same for the "All movies" grid (consumed by the movie area). */
+    var openBrowseSignal by androidx.compose.runtime.mutableIntStateOf(0)
+    /** View settings preview: scroll the home screen to the first of these block keys ("a|b"); "" = nothing, "top" = to the top. */
+    var homeScrollKey by androidx.compose.runtime.mutableStateOf("")
+    /** Player open? Then the background refresh postpones reloading the playlist (no stutter in the middle of a movie). */
     @Volatile var playing = false
-    /** Sender, der geöffnet werden soll (Tippen auf eine Erinnerungs-Benachrichtigung). */
+    /** Channel to be opened (tapping a reminder notification). */
     var openChannel by androidx.compose.runtime.mutableStateOf<String?>(null)
     @Volatile var leftByUser = false
     @Volatile var focusTab = -1
-    /** Beim nächsten Start des Players gleich den TV-Guide öffnen (Live TV > „TV-Guide“). */
+    /** Open the TV guide at the next start of the player (Live TV > "TV guide"). */
     @Volatile var openGuide = false
 }
 

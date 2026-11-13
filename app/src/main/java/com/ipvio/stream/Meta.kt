@@ -30,12 +30,12 @@ data class Meta(
     val lang: String? = null,
     val votes: Int = 0,
     val countries: List<String> = emptyList(),
-    /** Sprache, in der Beschreibung und Genres geladen wurden */
+    /** Language in which description and genres were loaded */
     val uiLang: String = "de",
-    /** Treffer beim Öffnen der Detailseite geprüft (Name/Staffeln, siehe [MatchLogic]). */
+    /** Match checked when opening the detail page (name/seasons, see [MatchLogic]). */
     val checked: Boolean = false
 ) {
-    /** Wertung für Sortierung und Filter (0 bis 10): zuerst IMDb, dann Rotten Tomatoes, dann TMDB, zuletzt die Angabe des Anbieters. */
+    /** Rating for sorting and filtering (0 to 10): first IMDb, then Rotten Tomatoes, then TMDB, last the provider's value. */
     fun score(): Double? =
         imdbRating?.replace(',', '.')?.toDoubleOrNull()?.takeIf { it > 0 }
             ?: rtRating?.trim()?.removeSuffix("%")?.toDoubleOrNull()?.takeIf { it > 0 }?.let { it / 10.0 }
@@ -56,10 +56,10 @@ private fun JSONObject.dbl(k: String): Double? =
 object MetaRepo {
     private val client = Net.base
     /**
-     * Zwischenspeicher in zwei Stufen, damit große Playlists den Arbeitsspeicher nicht füllen:
-     * - [mem]: nur die zuletzt benutzten vollständigen Einträge (mit Beschreibung, Trailer, Bewertungen)
-     * - [slim]: für JEDEN Titel nur das Schlanke (Cover, Genres, Land, Bewertung, Jahr) – das braucht die Sortierung nach Genres.
-     * Die vollständigen Daten liegen auf dem Gerät und werden bei Bedarf von dort nachgeladen.
+     * Cache in two levels so large playlists do not fill the working memory:
+     * - [mem]: only the most recently used complete entries (with description, trailer, ratings)
+     * - [slim]: for EVERY title only the slim part (cover, genres, country, rating, year) – sorting by genre needs that.
+     * The complete data lies on the device and is reloaded from there on demand.
      */
     private const val FULL_CAP = 400
     private val mem = object : LinkedHashMap<String, Meta>(64, 0.75f, true) {
@@ -71,16 +71,16 @@ object MetaRepo {
     private fun slimOf(m: Meta) = m.copy(overview = null, trailerKey = null, imdbId = null)
     private fun memGet(k: String): Meta? = synchronized(mem) { mem[k] }
     private fun memPut(k: String, m: Meta) { synchronized(mem) { mem[k] = m }; slim[k] = slimOf(m); slimTs[k] = System.currentTimeMillis(); dirty = true }
-    /** Zeitpunkt, an dem der schlanke Eintrag von TMDB kam (für die 30-Tage-Auffrischung) */
+    /** Time at which the slim entry came from TMDB (for the 30-day refresh) */
     private val slimTs = ConcurrentHashMap<String, Long>()
     private val missTs = ConcurrentHashMap<String, Long>()
     @Volatile private var dirty = false
     private val indexLoaded = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /**
-     * Schlanker Gesamtindex auf dem Gerät (eine Datei statt Tausender Einzeldateien). Ohne ihn las die App bei JEDEM Start für
-     * jeden Titel die Einzeldatei neu ein, um Genre/Land/Bewertung zu kennen. Mit dem Index ist das in Sekunden da, und bei einer
-     * aktualisierten Playlist werden nur wirklich neue Titel bei TMDB abgefragt.
+     * Slim overall index on the device (one file instead of thousands of single files). Without it the app re-read the single file for
+     * every title at EVERY start to know genre/country/rating. With the index this is there in seconds, and with an
+     * updated playlist only really new titles are queried at TMDB.
      */
     suspend fun loadIndex(c: Context) = withContext(Dispatchers.IO) {
         if (!indexLoaded.compareAndSet(false, true)) return@withContext
@@ -156,18 +156,18 @@ object MetaRepo {
     private val gate = Semaphore(6)
     private const val IMG = "https://image.tmdb.org/t/p/"
     private const val TTL = 30L * 24 * 3600 * 1000
-    /** Stand der Treffer-Suche. „Nicht gefunden“ aus älteren Ständen wird mit der besseren Suche neu versucht. */
+    /** State of the match search. "Not found" from older states is retried with the better search. */
     private const val MATCH_V = 2
 
-    fun enabled() = Config.TMDB_KEY.isNotBlank()
+    fun enabled() = !DemoMode.active && Config.TMDB_KEY.isNotBlank()
 
-    /** Infos gibt es für diesen Titel: über TMDB (Schlüssel eingetragen) oder direkt vom Xtream-Anbieter. */
+    /** Info exists for this title: via TMDB (key entered) or directly from the Xtream provider. */
     fun usable(i: Item): Boolean = enabled() || ProviderLogic.supports(i)
 
     private val provMem = ConcurrentHashMap<String, Meta>()
     private val provFail = ConcurrentHashMap<String, Long>()
 
-    /** Infos vom Anbieter (ohne TMDB-Schlüssel). Auf dem Gerät gemerkt, getrennt vom TMDB-Zwischenspeicher. */
+    /** Info from the provider (without a TMDB key). Remembered on the device, separate from the TMDB cache. */
     suspend fun providerMeta(ctx: Context, i: Item): Meta? {
         if (i.kind == Kind.LIVE || !ProviderLogic.supports(i)) return null
         val k = "P|" + key(i)
@@ -184,8 +184,8 @@ object MetaRepo {
     private val omdbTried: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /**
-     * IMDb- und Rotten-Tomatoes-Wertung auch ohne TMDB: OMDb wird dann über den Titel (und das Jahr) gefragt.
-     * Pro Titel und Start der App nur einmal; ein Treffer wird mit den Anbieter-Infos zusammen auf dem Gerät gemerkt.
+     * IMDb and Rotten Tomatoes rating also without TMDB: OMDb is then asked by title (and year).
+     * Only once per title and app start; a hit is remembered on the device together with the provider info.
      */
     private suspend fun withOmdbTitle(ctx: Context, k: String, i: Item, m: Meta): Meta {
         if (Config.OMDB_KEY.isBlank() || m.imdbRating != null || m.rtRating != null || !omdbTried.add(k)) return m
@@ -214,11 +214,11 @@ object MetaRepo {
         }
     }
     private fun key(i: Item) = i.mk
-    /** Bei Speicherknappheit: Zwischenspeicher im Arbeitsspeicher leeren (Daten liegen noch auf dem Gerät). */
+    /** When memory is tight: empty the cache in working memory (data still lies on the device). */
     fun trim() { synchronized(mem) { mem.clear() }; seasons.clear() }
 
     fun cached(i: Item): Meta? = key(i).let { k ->
-        memGet(k) ?: slim[k] ?: (if (!enabled() || k in misses) provMem["P|$k"] else null)   // Anbieter-Infos nur ohne TMDB-Treffer
+        memGet(k) ?: slim[k] ?: (if (!enabled() || k in misses) provMem["P|$k"] else null)   // provider info only without a TMDB hit
     }
     fun missed(i: Item): Boolean = key(i) in misses
 
@@ -262,7 +262,7 @@ object MetaRepo {
             if (!f.exists()) return@withContext null
             val j = JSONObject(f.readText())
             if (System.currentTimeMillis() - j.optLong("ts") > TTL) return@withContext null
-            // Früher nicht gefunden (oft wegen „DE - “ vor dem Titel): mit der verbesserten Suche noch einmal versuchen
+            // Not found earlier (often because of "DE - " before the title): try again with the improved search
             if (j.getInt("tmdbId") == -1 && j.optInt("v") < MATCH_V) return@withContext null
             Meta(
                 j.getInt("tmdbId"), j.getBoolean("isTv"), j.str("poster"), j.str("backdrop"), j.str("overview"),
@@ -298,7 +298,7 @@ object MetaRepo {
                 save(ctx, k, Meta(-1, tv, null, null, null, null, null))
                 return null
             }
-            // Nicht blind den ersten Treffer nehmen: ein gleichnamiger gewinnt (siehe MatchLogic)
+            // Do not blindly take the first hit: one with the same name wins (see MatchLogic)
             val cands = candidates(results, tv)
             val best = MatchLogic.pick(i.title, if (tv) null else i.year, cands) ?: return null
             val m = metaOf(results.getJSONObject(cands.indexOf(best)), tv)
@@ -310,7 +310,7 @@ object MetaRepo {
         }
     }
 
-    /** TMDB-Suche mit bereinigtem Titel (ohne „DE - “ & Co.); null = keine Antwort. */
+    /** TMDB search with a cleaned title (without "DE - " & co.); null = no response. */
     private suspend fun search(i: Item, tv: Boolean): org.json.JSONArray? {
         val q = URLEncoder.encode(MatchLogic.searchTitle(i.title), "UTF-8")
         val yr = if (!tv && i.year != null) "&year=${i.year}" else ""
@@ -348,8 +348,8 @@ object MetaRepo {
     }
 
     /**
-     * Gespeicherter Treffer passt nicht (anderer Name, weniger Staffeln als in der Playlist): neu suchen und nur zu einem
-     * gleichnamigen Treffer wechseln. Gibt den neuen Eintrag zurück oder null, wenn es keinen besseren gibt.
+     * Stored match does not fit (different name, fewer seasons than in the playlist): search again and only switch to a
+     * hit with the same name. Returns the new entry or null if there is no better one.
      */
     private suspend fun rematch(ctx: Context, i: Item, wrongId: Int): Meta? {
         val tv = i.kind == Kind.SERIES
@@ -370,10 +370,10 @@ object MetaRepo {
 
     suspend fun fillCountry(ctx: Context, i: Item) {
         val k = key(i)
-        val m = memGet(k) ?: load(ctx, k) ?: return   // vollständigen Eintrag nehmen, nie den schlanken (sonst ginge die Beschreibung auf dem Gerät verloren)
+        val m = memGet(k) ?: load(ctx, k) ?: return   // take the full entry, never the slim one (otherwise the description would be lost on the device)
         if (m.tmdbId <= 0) return
         if (m.countries.isNotEmpty()) {
-            // Land steht schon auf dem Gerät, fehlt aber im schlanken Zwischenspeicher: dort nachtragen (sonst käme der Titel bei jedem Start wieder dran)
+            // Country is already on the device but missing in the slim cache: add it there (otherwise the title would come up again at every start)
             if (slim[k]?.countries.isNullOrEmpty()) { slim[k] = slimOf(m); dirty = true }
             return
         }
@@ -403,8 +403,8 @@ object MetaRepo {
         var m = b
         try {
             val o = JSONObject(body)
-            // Treffer prüfen: Bei Serien mit mehr Staffeln in der Playlist als bei TMDB oder anderem Namen war es oft
-            // ein falscher Treffer (z. B. ein beliebter Ableger statt „Game of Thrones“). Dann neu suchen.
+            // Check the match: for series with more seasons in the playlist than at TMDB or a different name it was often
+            // a wrong match (e.g. a popular spin-off instead of "Game of Thrones"). Then search again.
             if (!rematched) {
                 val maxSeason = i.episodes.maxOfOrNull { it.season } ?: 0
                 val nameOk = MatchLogic.sameTitle(
@@ -435,7 +435,7 @@ object MetaRepo {
             }
             var ov = o.str("overview")?.takeIf { it.isNotBlank() }
             if (ov == null && Lang.code() != "en") {
-                // TMDB hat in dieser Sprache keinen Text: englischen Text als Ersatz holen (nie den Text einer anderen Sprache behalten)
+                // TMDB has no text in this language: fetch the English text as a fallback (never keep the text of another language)
                 ov = getNow("https://api.themoviedb.org/3/$type/${b.tmdbId}?api_key=${Config.TMDB_KEY}&language=en-US")
                     ?.let { runCatching { JSONObject(it).str("overview") }.getOrNull() }?.takeIf { it.isNotBlank() }
             }
@@ -470,8 +470,8 @@ object MetaRepo {
     private val tvSeasonMem = ConcurrentHashMap<String, List<EpisodeLogic.TmdbSeason>>()
 
     /**
-     * Staffeln einer Serie laut TMDB (Nummer, Folgenzahl, Name) – für lange Staffeln wie One Piece,
-     * die der Anbieter als eine einzige Staffel liefert. Auf dem Gerät 3 Tage gemerkt (laufende Serien bekommen neue Folgen).
+     * Seasons of a series according to TMDB (number, episode count, name) – for long seasons like One Piece,
+     * which the provider delivers as a single season. Remembered on the device for 3 days (running series get new episodes).
      */
     suspend fun tvSeasons(ctx: Context, tmdbId: Int): List<EpisodeLogic.TmdbSeason> {
         if (tmdbId <= 0 || !enabled()) return emptyList()
@@ -524,7 +524,7 @@ object MetaRepo {
         } catch (e: Exception) {
         }
         if (Lang.code() != "en" && out.any { it.overview.isNullOrBlank() }) {
-            // fehlende Folgentexte aus dem Englischen ergänzen
+            // fill in missing episode texts from English
             val eb = getNow("https://api.themoviedb.org/3/tv/$tmdbId/season/$season?api_key=${Config.TMDB_KEY}&language=en-US")
             val en = HashMap<Int, String>()
             try {

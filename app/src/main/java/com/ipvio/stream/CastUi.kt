@@ -55,14 +55,14 @@ fun PersonCard(p: Person, onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 /**
- * Merkt, welche Karte (Besetzung „c:ID“ / ähnlicher Titel „s:ID“) auf der Detailseite zuletzt angeklickt wurde, damit
- * Zurück dort landet statt wieder bei „Fortsetzen“. Wird beim Wiederöffnen der Seite einmal gelesen und gelöscht.
+ * Remembers which card (cast "c:ID" / similar title "s:ID") was last clicked on the detail page, so that
+ * Back lands there instead of on "Resume" again. Read once and deleted when the page is reopened.
  */
 object DetailFocus {
     val last = HashMap<String, String>()
 }
 
-// Innenabstand der Reihen: die vergrößerte markierte Karte wird sonst am Rand der Reihe angeschnitten
+// Row padding: otherwise the enlarged focused card is clipped at the edge of the row
 private val RowEdge = 16.dp
 
 @Composable
@@ -103,7 +103,7 @@ fun SimilarRow(
     }
 }
 
-/** Seite einer Person: Foto, Biografie und alle ihre Titel, die in der eigenen Playlist vorkommen. */
+/** Page of a person: photo, biography and all their titles that occur in the own playlist. */
 @Composable
 fun PersonScreen(ref: PersonRef, all: List<Item>, onOpen: (Item) -> Unit, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
@@ -113,7 +113,7 @@ fun PersonScreen(ref: PersonRef, all: List<Item>, onOpen: (Item) -> Unit, onBack
     val owned by produceState(emptyList<Item>(), info, all) {
         val i = info ?: return@produceState
         value = withContext(Dispatchers.Default) {
-            // Der Titel, von dem man kam, steht immer dabei (TMDB kennt bei manchen Personen nicht alle Arbeiten)
+            // The title they came from is always included (TMDB does not know every work for some people)
             val m = LibMatch.matches(all, i.titles, 80)
             val origin = ref.from?.let { id -> all.firstOrNull { it.id == id } }
             if (origin != null && m.none { it.id == origin.id }) listOf(origin) + m else m
@@ -158,7 +158,7 @@ fun PersonScreen(ref: PersonRef, all: List<Item>, onOpen: (Item) -> Unit, onBack
                         if (owned.isEmpty()) "Keine Titel in deiner Playlist" else "In deiner Playlist  ·  ${owned.size}",
                         color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 34.dp)
                     )
-                    // Seitlicher Innenabstand: das vergrößerte erste Cover wird links nicht mehr abgeschnitten
+                    // Side padding: the enlarged first cover is no longer clipped on the left
                     if (owned.isNotEmpty()) LazyRow(
                         Modifier.offset(x = (-14).dp),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)

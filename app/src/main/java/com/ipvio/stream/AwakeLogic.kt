@@ -1,33 +1,33 @@
 package com.ipvio.stream
 
 /**
- * Regeln dafür, wann der Bildschirm wach bleiben muss (ohne Android, testbar).
- * Pflicht: Während ein Stream läuft oder nachlädt, darf der Bildschirm nie ausgehen.
- * Bei Pause, Ende, Fehler und im Hintergrund wird freigegeben – kein Dauer-Lock im Leerlauf.
+ * Rules for when the screen must stay awake (without Android, testable).
+ * Mandatory: while a stream plays or reloads, the screen must never turn off.
+ * On pause, end, error and in the background it is released – no permanent lock when idle.
  */
 object AwakeLogic {
-    // Gleiche Werte wie androidx.media3.common.Player.STATE_*
+    // Same values as androidx.media3.common.Player.STATE_*
     const val STATE_IDLE = 1
     const val STATE_BUFFERING = 2
     const val STATE_READY = 3
     const val STATE_ENDED = 4
 
     /**
-     * true, solange die Wiedergabe läuft oder (auch nach einem Neuverbinden) gerade lädt.
-     * playWhenReady = false heißt Pause bzw. Sleep-Timer abgelaufen.
+     * true while playback runs or is loading (also after a reconnect).
+     * playWhenReady = false means pause or sleep timer expired.
      */
     fun playerNeedsScreen(playWhenReady: Boolean, state: Int, hasError: Boolean, foreground: Boolean): Boolean =
         foreground && playWhenReady && !hasError && (state == STATE_BUFFERING || state == STATE_READY)
 }
 
 /**
- * Mehrere Stellen können den Bildschirm wach halten (Player, Laden der Playlist).
- * Der Schalter bleibt an, solange mindestens eine davon es braucht; keine Stelle schaltet einer anderen das Licht aus.
+ * Several places can keep the screen awake (player, loading the playlist).
+ * The switch stays on as long as at least one of them needs it; no place turns off another's light.
  */
 class AwakeTags {
     private val tags = LinkedHashSet<String>()
 
-    /** Setzt oder entfernt einen Grund und liefert, ob der Bildschirm danach wach bleiben muss. */
+    /** Sets or removes a reason and returns whether the screen must stay awake afterwards. */
     fun set(tag: String, on: Boolean): Boolean {
         if (on) tags.add(tag) else tags.remove(tag)
         return tags.isNotEmpty()

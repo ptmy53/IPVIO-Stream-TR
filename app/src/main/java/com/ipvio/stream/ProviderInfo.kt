@@ -29,7 +29,7 @@ object ProviderInfo {
         extended = true, uiLang = Lang.code(), checked = true
     )
 
-    /** Infos zu einem Titel vom Anbieter; null = nicht erreichbar oder nichts vorhanden. */
+    /** Info about a title from the provider; null = unreachable or nothing available. */
     suspend fun fetch(ctx: Context, i: Item): Meta? = withContext(Dispatchers.IO) {
         try {
             when (i.kind) {
@@ -74,7 +74,7 @@ object ProviderInfo {
         return if (info.isEmpty()) null else toMeta(info, true, i.year)
     }
 
-    /** Liest die (große) Serienliste Eintrag für Eintrag, ohne sie ganz in den Speicher zu laden. */
+    /** Reads the (large) series list entry by entry without loading it fully into memory. */
     private fun findSeries(file: File, title: String): ProviderLogic.Info? {
         JsonReader(file.bufferedReader()).use { r ->
             r.beginArray()

@@ -43,35 +43,43 @@ import java.util.Locale
 
 data class BrowseReq(val title: String, val items: List<Item>, val sort: Int = 0)
 
-class BrowseState(val req: BrowseReq) {
+class BrowseState(req0: BrowseReq) {
+    /** Titles of the view; grows when a Stalker category is loaded further on opening ([StalkerMore]). */
+    var req by mutableStateOf(req0)
     var sort by mutableIntStateOf(req.sort.coerceIn(0, 8))
     var minRi by mutableIntStateOf(0)
     var year by mutableStateOf("Alle")
     var genre by mutableStateOf<String?>(null)
     var country by mutableStateOf<String?>(null)
-    /** Quelle bei mehreren Playlists: -1 = alle, sonst Index in [PlaylistStore.sourceNames]. */
+    /** Language filter (code from [LangTagLogic], "?" = untagged), null = all. Saved per type in [BrowseLangPrefs]. */
+    var lang by mutableStateOf<String?>(null)
+    internal var langInit = false
+    /** Source with several playlists: -1 = all, otherwise index into [PlaylistStore.sourceNames]. */
     var source by mutableIntStateOf(-1)
     var focused by mutableIntStateOf(0)
-    /** Stand der Genre-Erkennung, mit dem sortiert wurde. Neue Infos sortieren erst auf Wunsch neu (kein Umsortieren unter dem Cursor). */
+    /** State of the genre detection with which it was sorted. New info re-sorts only on request (no reordering under the cursor). */
     var ver by mutableIntStateOf(Classifier.version)
-    // Zuletzt berechnetes Ergebnis: Rückkehr von der Detailseite zeigt sofort wieder dieselbe Liste
+    // Last computed result: returning from the detail page shows the same list again immediately
     internal var lastKey: BrowseKey? = null
     internal var lastList: List<Item>? = null
     internal var lastFacets: Pair<Int, Facets>? = null
 }
 
-internal data class BrowseKey(val sort: Int, val minRi: Int, val year: String, val genre: String?, val country: String?, val ver: Int, val source: Int = -1)
+internal data class BrowseKey(val sort: Int, val minRi: Int, val year: String, val genre: String?, val country: String?, val ver: Int, val source: Int = -1, val lang: String? = null)
 
-/** Auswahl für die Filter (Genres, Länder, Jahre) – aus den Titeln der Liste. */
+/** Choices for the filters (genres, countries, years) – from the titles of the list. */
 internal class Facets(val genres: List<String>, val countries: List<Pair<String, String>>, val years: List<String>)
 
 object BrowsePrefs {
     var detail by mutableStateOf(true)
+    /** View settings preview of the grid tab: show the grid even if cinema is the saved view. */
+    var forceGrid by mutableStateOf(false)
+    val cinema: Boolean get() = detail && !forceGrid
     private var inited = false
     fun init(c: Context) {
         if (inited) return
         inited = true
-        // Runde 18: Kino ist die Standardansicht (neuer Schlüssel "detail2", damit die alte Voreinstellung "Raster" nicht festhängt)
+        // Round 18: cinema is the default view (new key "detail2" so the old preset "Grid" does not stick)
         detail = Profiles.sp(c, "ipvio_browse").getBoolean("detail2", true)
     }
     fun set(c: Context, v: Boolean) {
@@ -85,7 +93,7 @@ private val RATING_LABELS = listOf("Alle", "≥ 5", "≥ 6", "≥ 7", "≥ 8", "
 private val RATING_VALUES = listOf(0.0, 5.0, 6.0, 7.0, 8.0, 9.0)
 private val DECADES = listOf("2020er", "2010er", "2000er", "1990er", "vor 1990")
 
-/** Sortiert nach einem Schlüssel, der pro Titel nur EINMAL berechnet wird (nicht bei jedem Vergleich). */
+/** Sorts by a key computed only ONCE per title (not on every comparison). */
 private fun <K : Comparable<K>> List<Item>.sortedByCached(descending: Boolean, key: (Item) -> K): List<Item> {
     val keyed = map { it to key(it) }
     val sorted = if (descending) keyed.sortedByDescending { it.second } else keyed.sortedBy { it.second }
@@ -123,7 +131,7 @@ private fun facetsOf(items: List<Item>): Facets {
     )
 }
 
-/** Nur Titel einer Quelle; doppelte Filme werden durch die Fassung dieser Quelle ersetzt. */
+/** Only titles of one source; duplicate movies are replaced by the version of this source. */
 private fun ofSource(items: List<Item>, k: Int): List<Item> {
     if (k < 0) return items
     val seen = HashSet<String>()
@@ -138,7 +146,8 @@ private fun filterAndSort(items: List<Item>, k: BrowseKey): List<Item> {
         r >= minR &&
             (k.year == "Alle" || yearMatches(k.year, yearOf(i))) &&
             (k.genre == null || (m != null && Genres.categoriesOf(m).contains(k.genre))) &&
-            (k.country == null || (m != null && m.countries.contains(k.country)))
+            (k.country == null || (m != null && m.countries.contains(k.country))) &&
+            (k.lang == null || i.lang == k.lang)
     }
     return when (k.sort) {
         0 -> f.asReversed()
@@ -171,7 +180,7 @@ fun BrowseScreen(
     val filterFocus = remember { FocusRequester() }
     val restoreFocus = remember { FocusRequester() }
 var restoreIdx by remember { mutableIntStateOf(state.focused) }
-    // Runde 18: „Neue Infos · aktualisieren“ lädt die Liste neu und setzt den Fokus auf den ersten Titel (statt in die Seitenleiste)
+    // Round 18: "New info · refresh" reloads the list and puts the focus on the first title (instead of into the sidebar)
     var jumpFirst by remember { mutableStateOf(false) }
     var jumpTick by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
@@ -181,7 +190,7 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
     BackHandler(enabled = inSidebar || inFilters) { onBack() }
     BackHandler(enabled = !inFilters && !inSidebar) { runCatching { filterFocus.requestFocus() } }
 
-    // Filter-Auswahl und Ergebnisliste werden im Hintergrund berechnet ("Alle Filme" kann 60.000 Titel haben)
+    // Filter choices and result list are computed in the background ("All movies" can have 60,000 titles)
     val facets by produceState(state.lastFacets?.takeIf { it.first == ver }?.second, req, ver) {
         value = withContext(Dispatchers.Default) { facetsOf(req.items) }.also { state.lastFacets = ver to it }
     }
@@ -189,7 +198,11 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
     val countries = facets?.countries.orEmpty()
     val yearOptions = listOf("Alle") + DECADES + facets?.years.orEmpty()
 
-    val key = BrowseKey(state.sort, state.minRi, state.year, state.genre, state.country, ver, state.source)
+    val browseKind = remember(req) { req.items.firstOrNull()?.kind }
+    // Restore the saved language once, before the first list is computed
+    remember(state) { if (!state.langInit) { state.langInit = true; state.lang = BrowseLangPrefs.get(ctx, browseKind) }; 0 }
+    val langOptions = remember(req) { BrowseLangPrefs.available(req.items) }
+    val key = BrowseKey(state.sort, state.minRi, state.year, state.genre, state.country, ver, state.source, state.lang)
     val listOrNull by produceState(state.lastList?.takeIf { state.lastKey == key }, req, key) {
         value = withContext(Dispatchers.Default) { filterAndSort(req.items, key) }.also { state.lastKey = key; state.lastList = it }
     }
@@ -199,7 +212,7 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
     LaunchedEffect(ready) {
         if (!ready) return@LaunchedEffect
         LastFocus.pending = null
-        if (BrowsePrefs.detail) {
+        if (BrowsePrefs.cinema) {
             listState.scrollToItem(restoreIdx)
             withFrameNanos { }
             withFrameNanos { }
@@ -207,12 +220,17 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
         runCatching { restoreFocus.requestFocus() }
     }
 
+    // Stalker portal: near the end of the list fetch the next titles of the category (like IPTVnator when scrolling)
+    LaunchedEffect(state.focused, list.size) {
+        if (ready && list.isNotEmpty() && state.focused >= list.size - StalkerMore.AHEAD) StalkerMore.wantMore(state)
+    }
+
     LaunchedEffect(jumpFirst) {
         if (!jumpFirst) return@LaunchedEffect
-        // warten, bis die neu sortierte Liste fertig ist (höchstens 5 s), dann nach ganz oben und den ersten Titel markieren
+        // wait until the re-sorted list is ready (at most 5 s), then to the very top and highlight the first title
         var w = 0
         while (state.lastKey != key && w < 5000) { delay(50); w += 50 }
-        if (BrowsePrefs.detail) { listState.scrollToItem(0) } else { runCatching { gridState.scrollToItem(0) } }
+        if (BrowsePrefs.cinema) { listState.scrollToItem(0) } else { runCatching { gridState.scrollToItem(0) } }
         withFrameNanos { }
         withFrameNanos { }
         delay(150)
@@ -230,23 +248,22 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(req.title, color = Color.White, fontSize = spx(34), fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 Text(if (ready) "${list.size} Titel" else "Lade …", color = Muted, fontSize = 16.sp)
-                // Neue Infos aus der Genre-Erkennung: erst auf Wunsch neu sortieren, damit sich nichts unter dem Cursor verschiebt
+                // New info from the genre detection: re-sort only on request so nothing shifts under the cursor
                 if (newer && ready) SmallPill("Neue Infos · aktualisieren") {
                     state.ver = Classifier.version; state.focused = 0; restoreIdx = 0; jumpTick++; jumpFirst = true
                 }
                 Spacer(Modifier.weight(1f))
-                // Position und Hinweis sitzen jetzt dezent in der Kopfzeile statt über den Titeln
+                // Position and hint now sit discreetly in the header instead of above the titles
                 if (list.isNotEmpty()) {
                     Text("Zurück = Filter", color = Muted, fontSize = 13.sp)
-                    Text("${minOf(state.focused + 1, list.size)} / ${list.size}", color = Color.White, fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(50)).background(Surf2).padding(horizontal = 14.dp, vertical = 5.dp))
+                    FocusCounter(state, list.size)
                 }
-                // Platz für die Genre-Anzeige oben rechts, damit sie nichts verdeckt
+                // Space for the genre display at the top right so it covers nothing
                 if (Classifier.running) Spacer(Modifier.width(MetaBadgeWidth - 10.dp))
             }
             Spacer(Modifier.height(10.dp))
             Box(Modifier.onFocusChanged { inFilters = it.hasFocus }) {
-                // Innenabstand: der vergrößerte markierte Knopf wird sonst links/rechts/oben abgeschnitten
+                // Padding: the enlarged selected button would otherwise be cut off at the left/right/top
                 LazyRow(
                     Modifier.offset(x = (-14).dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
@@ -274,7 +291,16 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                             state.country = if (it == 0) null else countries[it - 1].first
                         }
                     }
-                    // Mehrere Playlists gleichzeitig: nach Quelle filtern
+                    // Language of the titles (saved per type)
+                    if (langOptions.size > 1) item {
+                        val lo = listOf("Alle") + langOptions.map { if (it == LangTagLogic.UNKNOWN) Lang.tr("Ohne Kennung") else LangTagLogic.name(it) }
+                        DropdownPill("Sprache", lo.getOrElse(langOptions.indexOf(state.lang) + 1) { "Alle" }, lo, langOptions.indexOf(state.lang) + 1,
+                            active = state.lang != null, icon = FIcon.Country) {
+                            state.lang = if (it == 0) null else langOptions[it - 1]
+                            BrowseLangPrefs.set(ctx, browseKind, state.lang)
+                        }
+                    }
+                    // Several playlists at once: filter by source
                     val srcNames = PlaylistStore.sourceNames
                     if (srcNames.size > 1) item {
                         val so = listOf("Alle") + srcNames
@@ -283,18 +309,18 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                     }
                     item {
                         FilterPill("Zurücksetzen", false, icon = FIcon.Reset) {
-                            state.minRi = 0; state.year = "Alle"; state.genre = null; state.country = null; state.source = -1; state.sort = req.sort.coerceIn(0, 8)
+                            state.minRi = 0; state.year = "Alle"; state.genre = null; state.country = null; state.lang = null; BrowseLangPrefs.set(ctx, browseKind, null); state.source = -1; state.sort = req.sort.coerceIn(0, 8)
                         }
                     }
-                    // Ansicht und Raster: selten gebraucht, deshalb ganz am Ende
+                    // View and grid: rarely needed, hence at the very end
                     item {
                         val views = listOf("Raster", "Kino")
-                        DropdownPill("Ansicht", views[if (BrowsePrefs.detail) 1 else 0], views, if (BrowsePrefs.detail) 1 else 0, icon = FIcon.View) { BrowsePrefs.set(ctx, it == 1) }
+                        DropdownPill("Ansicht", views[if (BrowsePrefs.cinema) 1 else 0], views, if (BrowsePrefs.cinema) 1 else 0, icon = FIcon.View) { BrowsePrefs.set(ctx, it == 1) }
                     }
                     item {
-                        // Titel pro Zeile: gilt nur hier (Raster und Kino) und in der Kategorien-Liste, nicht auf der Startseite
-                        // Raster und Kino haben je eine eigene Einstellung (Kino: Covern bleiben immer ganz sichtbar, höchstens kleiner)
-                        val kino = BrowsePrefs.detail
+                        // Titles per row: applies only here (grid and cinema) and in the categories list, not on the home screen
+                        // Grid and cinema each have their own setting (cinema: covers always stay fully visible, at most smaller)
+                        val kino = BrowsePrefs.cinema
                         val pr = if (kino) listOf(0, 5, 6, 7, 8, 10, 12) else listOf(0, 4, 5, 6, 8, 10, 12)
                         val prl = pr.map { if (it == 0) "Auto" else "$it" }
                         val curV = if (kino) General.kinoPerRow else General.perRow
@@ -310,11 +336,11 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                 if (ready && list.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     EmptyState(AIcon.Sliders, "Keine Treffer", "Mit diesen Filtern gibt es hier keine Titel.", action = "Filter zurücksetzen") {
                         runCatching { filterFocus.requestFocus() }
-                        state.minRi = 0; state.year = "Alle"; state.genre = null; state.country = null; state.source = -1; state.sort = req.sort.coerceIn(0, 8)
+                        state.minRi = 0; state.year = "Alle"; state.genre = null; state.country = null; state.lang = null; BrowseLangPrefs.set(ctx, browseKind, null); state.source = -1; state.sort = req.sort.coerceIn(0, 8)
                     }
                 }
                 if (!ready) {
-                    // Lade-Skelett in Form des Rasters, bis die Liste im Hintergrund berechnet ist
+                    // Loading skeleton in the shape of the grid until the list is computed in the background
                     val gap = 14.dp
                     val w = (maxWidth - gap * (cols - 1)) / cols
                     val h = ((maxHeight - 12.dp - gap * (rows - 1)) / rows - 42.dp).coerceAtLeast(60.dp)
@@ -326,11 +352,11 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                             }
                         }
                     }
-                } else if (BrowsePrefs.detail) {
+                } else if (BrowsePrefs.cinema) {
                     CinemaView(list, state, listState, restoreIdx, restoreFocus, all, onPlay, onPerson, onOpen, jumpTick)
                 } else {
-                    // Runde 15: wie auf der Startseite große Cover, bei längerem Markieren klappt die Karte zum Szenenbild mit
-                    // Infos auf (über die Nachbarn; in den rechten Spalten nach links). Spaltenzahl folgt „Ansicht“ oben.
+                    // Round 15: big covers as on the home screen, on longer highlight the card expands into a scene image with
+                    // info (over the neighbors; in the right columns to the left). Column count follows "View" above.
                     val g = cardGrid(maxWidth, perRow = General.perRow)
                     val land = General.cardArt == 1
                     val ncols = if (land) intArrayOf(8, 6, 5)[General.cardSize.coerceIn(0, 2)] else if (General.perRow > 0) General.perRow else intArrayOf(10, 8, 6)[General.cardSize.coerceIn(0, 2)]
@@ -345,7 +371,7 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                         contentPadding = PaddingValues(top = dpx(14), bottom = dpx(60)),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        itemsIndexed(list) { idx, item ->
+                        itemsIndexed(list, contentType = { _, x -> if (x.kind == Kind.LIVE) 0 else if (land) 1 else 2 }) { idx, item ->
                             val mod = Modifier
                                 .onFocusChanged { st -> if (st.hasFocus) state.focused = idx }
                                 .then(if (idx == restoreIdx) Modifier.focusRequester(restoreFocus) else Modifier)
@@ -365,8 +391,18 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
 }
 
 /**
- * Kino-Ansicht (Runde 16): oben die Filter (Kopfzeile), darunter EINE Reihe mit großen Covern wie auf der Startseite.
- * Die Markierung bleibt in der Mitte, die Reihe gleitet durch; bleibt ein Cover markiert, klappt es zum Szenenbild mit Infos auf.
+ * Position "12 / 3400" in the header. Own composable: the focused index changes on every step, and read in the header it
+ * recomposed the whole screen including the grid on every step.
+ */
+@Composable
+private fun FocusCounter(state: BrowseState, size: Int) {
+    Text("${minOf(state.focused + 1, size)} / $size", color = Color.White, fontSize = 15.sp,
+        fontWeight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(50)).background(Surf2).padding(horizontal = 14.dp, vertical = 5.dp))
+}
+
+/**
+ * Cinema view (round 16): filters on top (header), below ONE row of big covers as on the home screen.
+ * The highlight stays in the middle, the row slides through; if a cover stays selected, it expands into a scene image with info.
  */
 @Composable
 private fun CinemaView(
@@ -376,17 +412,17 @@ private fun CinemaView(
     jumpTick: Int = 0
 ) {
     BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
-        // Oben die Titelreihe, darunter der Detail-Screen (derselbe wie auf der Titelseite). Runter schiebt ihn nach oben,
-        // die Titel verschwinden nach oben; Hoch am Kopf schiebt sie zurück.
-        // Cover immer ganz sichtbar (2:3, nie beschnitten): die Breite ergibt sich aus „Titel pro Zeile (Kino)“, die Höhe ist
-        // nach oben begrenzt (40 % des Bildes), damit unter der Reihe viel Platz für Titel, Wertungen und Beschreibung bleibt.
+        // Title row on top, below it the detail screen (the same as on the title page). Down pushes it up,
+        // the titles disappear upward; Up at the header pushes them back.
+        // Covers always fully visible (2:3, never cropped): the width comes from "Titles per row (cinema)", the height is
+        // capped (40 % of the screen) so there is plenty of room under the row for title, ratings and description.
         val n = if (General.kinoPerRow > 0) General.kinoPerRow else 8
         val byWidth = (maxWidth - RowPadX * 2 - dpx(20) * (n - 1)) / n
         val posterH = minOf(byWidth * 1.5f, maxHeight * 0.40f).coerceAtLeast(dpx(160))
         val baseW = posterH / 1.5f
         val aspect = 1.5f
         val rowH = posterH + dpx(56)
-        val peekY = rowH - dpx(24)                       // Detail-Screen ragt so weit unter die Reihe
+        val peekY = rowH - dpx(24)                       // the detail screen reaches this far under the row
         var cur by remember(jumpTick) { mutableIntStateOf(state.focused.coerceIn(0, maxOf(list.lastIndex, 0))) }
         var open by remember { mutableStateOf(false) }
         val t by animateFloatAsState(
@@ -395,7 +431,7 @@ private fun CinemaView(
             label = "cin"
         )
         val scope = rememberCoroutineScope()
-        // Detail erst nach kurzem Verweilen laden (beim schnellen Durchblättern wird nichts geladen)
+        // Load the detail only after a short dwell (nothing is loaded while paging quickly)
         var shown by remember { mutableStateOf<Item?>(null) }
         LaunchedEffect(cur, list) {
             if (!open) { delay(380); shown = list.getOrNull(cur) }
@@ -415,7 +451,7 @@ private fun CinemaView(
                 }
             }
         }
-        // Hinweis: hier geht es mit Runter weiter
+        // Hint: Down continues here
         if (t < 0.99f) Row(
             Modifier.align(Alignment.BottomEnd).padding(end = dpx(28), bottom = dpx(18)).graphicsLayer { alpha = 1f - t }
                 .clip(RoundedCornerShape(dpx(20))).background(Tok.Glass).padding(horizontal = dpx(16), vertical = dpx(6)),
@@ -423,7 +459,7 @@ private fun CinemaView(
         ) {
             IconLabel(AIcon.Down, "Runter für Details und Abspielen", Muted, 14.sp, iconSize = 16.dp, maxLines = 1)
         }
-        // Titelreihe (liegt über dem Detail-Kopf), schiebt sich beim Öffnen nach oben aus dem Bild
+        // Title row (lies above the detail header), pushes itself up out of the picture when opened
         Box(Modifier.fillMaxWidth().height(rowH).offset { androidx.compose.ui.unit.IntOffset(0, -(rowH.toPx() * t).toInt()) }.background(Bg)) {
             CenterFollow(rowState, cur)
             Box(Modifier.fillMaxSize()) {
@@ -434,7 +470,9 @@ private fun CinemaView(
                 contentPadding = PaddingValues(horizontal = RowPadX, vertical = dpx(20)),
                 modifier = Modifier.fillMaxSize()
             ) {
-                itemsIndexed(list) { idx, item ->
+                itemsIndexed(list, contentType = { _, _ -> "poster" }) { idx, item ->
+                    // Only the card that gains or loses "current" recomposes (before every visible card did on every step)
+                    val isCur by remember(idx) { androidx.compose.runtime.derivedStateOf { idx == cur } }
                     val mod = Modifier
                         .onPreviewKeyEvent { ev ->
                             if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && ev.key == androidx.compose.ui.input.key.Key.DirectionDown) {
@@ -442,9 +480,9 @@ private fun CinemaView(
                             } else false
                         }
                         .onFocusChanged { st -> if (st.hasFocus) { cur = idx; state.focused = idx; if (open) open = false } }
-                        .then(if (idx == cur) Modifier.focusRequester(posterReq) else Modifier)
+                        .then(if (isCur) Modifier.focusRequester(posterReq) else Modifier)
                     RowPosterCard(item, baseW, mod, overlay = 0, aspect = aspect, expand = false) {
-                        // OK: Detail hochschieben, Fokus auf "Abspielen" (ein weiterer OK startet)
+                        // OK: push the detail up, focus on "Play" (another OK starts)
                         shown = item; open = true
                     }
                 }

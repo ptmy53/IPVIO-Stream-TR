@@ -7,17 +7,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.security.SecureRandom
 
-/** Jugendschutz: blendet Erwachsenen-Inhalte aus und schützt die Einstellung mit einer 4-stelligen PIN. */
+/** Parental control: hides adult content and protects the setting with a 4-digit PIN. */
 object Parental {
     private const val PREFS = "ipvio_general"
     var hideAdult by mutableStateOf(false)
         private set
     var pinSet by mutableStateOf(false)
         private set
-    /** Ändert sich bei jeder Umstellung, damit gefilterte Listen neu berechnet werden. */
+    /** Changes with every switch so filtered lists are recomputed. */
     var version by mutableIntStateOf(0)
         private set
-    /** Nur solange die Jugendschutz-Seite offen ist; wird beim Verlassen zurückgesetzt. */
+    /** Only while the parental control page is open; is reset on leaving. */
     var unlocked by mutableStateOf(false)
 
     private fun prefs(c: Context) = Profiles.sp(c, PREFS)
@@ -38,18 +38,18 @@ object Parental {
 
     private val guard = PinGuard()
 
-    /** Sekunden, bis nach zu vielen Fehlversuchen wieder eine PIN eingegeben werden darf (0 = sofort). */
+    /** Seconds until a PIN may be entered again after too many failed attempts (0 = immediately). */
     fun lockSec(): Long = guard.waitSec(System.currentTimeMillis())
 
     fun verify(c: Context, pin: String): Boolean = verifyFor(c, Profiles.active, pin)
 
-    /** Jugendschutz-Einstellungen eines beliebigen Profils (nicht nur des aktiven). */
+    /** Parental control settings of any profile (not only the active one). */
     private fun prefsOf(c: Context, profileId: Int) =
         c.applicationContext.getSharedPreferences(Profiles.scopedName(PREFS, profileId), Context.MODE_PRIVATE)
 
     /**
-     * Ein Profil ist gesperrt, wenn dort Erwachsenen-Inhalte ausgeblendet sind und eine PIN gesetzt ist (z. B. ein Kinderprofil).
-     * Aus einem gesperrten Profil kommt man nur mit dessen PIN heraus – sonst würde der Wechsel den Schutz aushebeln.
+     * A profile is locked if adult content is hidden there and a PIN is set (e.g. a kids profile).
+     * A locked profile can only be left with its PIN – otherwise switching would defeat the protection.
      */
     fun profileLocked(c: Context, profileId: Int): Boolean {
         val p = prefsOf(c, profileId)
@@ -66,7 +66,7 @@ object Parental {
         return ok
     }
 
-    /** Fehlertext nach einer falschen PIN (mit Wartezeit, wenn gesperrt). */
+    /** Error text after a wrong PIN (with waiting time if locked). */
     fun pinError(): String {
         val w = lockSec()
         return if (w > 0) "Zu viele Fehlversuche. Bitte in $w s erneut versuchen." else "Falsche PIN"

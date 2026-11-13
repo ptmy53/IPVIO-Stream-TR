@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Nederlandse vertalingen (deel 1/5): rijen Duits-Nederlands, aanvulling op de 9 talen in DictA–J
+// Dutch translations (part 1/5): German-Dutch rows, in addition to the 9 languages in DictA–J
 val DictNl1 = """
 Playlist hinzufügen¦Playlist toevoegen
 Dauert nur ein paar Sekunden.¦Duurt maar een paar seconden.
@@ -10,6 +10,17 @@ Benutzername¦Gebruikersnaam
 Passwort¦Wachtwoord
 Passwort verbergen¦Wachtwoord verbergen
 Passwort anzeigen¦Wachtwoord tonen
+Backup-Server {#0} (optional)¦Back-upserver {#0} (optioneel)
++ Backup-Server¦+ Back-upserver
+Fällt der Server aus, wechselt die App von selbst zu einem Backup-Server. Anbieter nennen sie oft als weitere Server- oder DNS-Adressen; Benutzername und Passwort bleiben gleich.¦Valt de server uit, dan schakelt de app vanzelf over naar een back-upserver. Aanbieders geven ze vaak op als extra server- of DNS-adressen; gebruikersnaam en wachtwoord blijven hetzelfde.
+Backup-Server ungültig: Adresse wie http://server.tld:8080 eingeben.¦Ongeldige back-upserver: voer een adres in zoals http://server.tld:8080.
+Backup-Server¦Back-upservers
+Backup-Server: {#0}¦Back-upservers: {#0}
+Backup-Server speichern¦Back-upservers opslaan
+Erreichbar¦Bereikbaar
+Nicht erreichbar seit {0}¦Niet bereikbaar sinds {0}
+Nicht erreichbar: {0}¦Niet bereikbaar: {0}
+Hauptserver: {0}¦Hoofdserver: {0}
 Hinzufügen¦Toevoegen
 Abbrechen¦Annuleren
 Alle¦Alles

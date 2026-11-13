@@ -2,12 +2,12 @@ package com.ipvio.stream
 
 import java.net.URLEncoder
 
-/** Eigene Fehlermeldung beim Laden der Playlist (Text ist für den Nutzer bestimmt und enthält nie die Adresse). */
+/** Own error message when loading the playlist (text is meant for the user and never contains the address). */
 class PlaylistError(msg: String) : Exception(msg)
 
-/** Prüfung von Playlist-Eingaben und verständliche Fehlertexte (ohne Android, testbar). */
+/** Validation of playlist inputs and understandable error texts (without Android, testable). */
 object PlaylistLogic {
-    /** Erstes Element je Schlüssel, Reihenfolge bleibt (z. B. derselbe Film in HD und 4K nur einmal in den Reihen). */
+    /** First element per key, order is kept (e.g. the same movie in HD and 4K only once in the rows). */
     fun <T> firstPerKey(list: List<T>, key: (T) -> String): List<T> {
         val seen = HashSet<String>(list.size * 2)
         val out = ArrayList<T>(list.size)
@@ -18,19 +18,19 @@ object PlaylistLogic {
     private val HTTP_URL = Regex("""^https?://[^\s/?#:@]+(:\d{1,5})?([/?#]\S*)?$""", RegexOption.IGNORE_CASE)
     private const val MAX_LEN = 4096
 
-    /** Bereinigte Adresse oder null, wenn sie keine gültige http(s)-Adresse ist. Zugangsdaten in der Adresse sind erlaubt. */
+    /** Cleaned address or null if it is not a valid http(s) address. Login data in the address is allowed. */
     fun normalizeUrl(raw: String): String? {
         val u = raw.trim()
         if (u.isEmpty() || u.length > MAX_LEN) return null
-        // Stalker-Portal (Portal-Adresse + MAC), siehe StalkerLogic
+        // Stalker portal (portal address + MAC), see StalkerLogic
         if (StalkerLogic.isSource(u)) return StalkerLogic.parse(u)?.encode()
-        // Hochgeladene Playlist-Datei im App-Ordner
+        // Uploaded playlist file in the app folder
         if (u.startsWith("file:///")) return u.takeIf { it.contains("/files/imports/") && it.endsWith(".m3u", true) && !it.contains("..") }
         val noCred = u.replaceFirst(Regex("""^(https?://)[^/@\s]*@""", RegexOption.IGNORE_CASE), "$1")
         return if (HTTP_URL.matches(noCred)) u else null
     }
 
-    /** Xtream-Adresse aus Server, Benutzer und Passwort (Sonderzeichen werden kodiert) oder null bei fehlenden Angaben. */
+    /** Xtream address from server, user and password (special characters are encoded) or null if details are missing. */
     fun xtreamUrl(host: String, user: String, pass: String): String? {
         var h = host.trim().trimEnd('/')
         val u = user.trim()
@@ -43,25 +43,26 @@ object PlaylistLogic {
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
-    /** Text zu einer HTTP-Fehlerantwort beim Laden der Playlist. */
+    /** Text for an HTTP error response when loading the playlist. */
     fun httpError(code: Int): String = when (code) {
         401, 403 -> "Zugang abgelehnt ($code). Benutzername, Passwort oder Abo prüfen."
         404 -> "Playlist nicht gefunden (404). Adresse prüfen."
         429, 458, 509 -> "Der Anbieter begrenzt gerade die Verbindungen ($code). Später erneut versuchen."
+        512 -> "Der Server des Anbieters lehnt die Verbindung ab (512). Meist ist die Server-Adresse nicht mehr aktuell oder gesperrt. Beim Anbieter nach der aktuellen Adresse fragen."
         in 500..599 -> "Der Anbieter hat gerade ein Problem ($code). Später erneut versuchen."
         else -> "Server antwortet mit Fehler $code."
     }
 
-    /** Fehlertext für den Nutzer. Gibt nie die Meldung fremder Bibliotheken weiter (die kann Adresse und Passwort enthalten). */
+    /** Error text for the user. Never passes on the message of third-party libraries (it can contain address and password). */
     const val NO_SPACE = "Zu wenig freier Speicherplatz auf dem Gerät. Bitte Platz schaffen (z. B. unbenutzte Apps löschen) und erneut versuchen."
 
-    /** Speicherplatz voll (Android meldet das als IOException mit „ENOSPC“ bzw. „No space left“). */
+    /** Storage full (Android reports this as an IOException with "ENOSPC" or "No space left"). */
     fun noSpace(e: Throwable): Boolean {
         val m = e.message ?: return false
         return m.contains("ENOSPC") || m.contains("No space left", ignoreCase = true)
     }
 
-    /** Lohnt ein neuer Versuch? Ja bei abgerissener Verbindung oder Zeitüberschreitung, nein bei falscher Adresse, Zertifikat, vollem Speicher. */
+    /** Is a retry worthwhile? Yes on a dropped connection or timeout, no on a wrong address, certificate, full storage. */
     fun retryable(e: Throwable): Boolean = when (e) {
         is PlaylistError -> false
         is java.net.UnknownHostException -> false
@@ -75,6 +76,7 @@ object PlaylistLogic {
         is java.net.UnknownHostException -> "Server nicht gefunden. Adresse und Internetverbindung prüfen."
         is java.net.SocketTimeoutException -> "Zeitüberschreitung: Der Server antwortet nicht."
         is java.net.ConnectException -> "Keine Verbindung zum Server."
+        is javax.net.ssl.SSLPeerUnverifiedException -> "Das Zertifikat des Anbieters passt nicht zur Server-Adresse. Beim Anbieter nach einer aktuellen Adresse fragen."
         is javax.net.ssl.SSLException -> "Sichere Verbindung fehlgeschlagen (Zertifikat)."
         is IllegalArgumentException -> "Ungültige Adresse."
         is OutOfMemoryError -> "Die Playlist ist zu groß für den Speicher dieses Geräts."
@@ -84,12 +86,12 @@ object PlaylistLogic {
 }
 
 /**
- * Anzeige-Titel aus der Playlist: HTML-Zeichen der Anbieter auflösen („Asterix &amp; Obelix“, „Christie&#039;s“)
- * und eine Sprachkennung mit senkrechtem Strich am Anfang entfernen („|EN| Titel“, „EN| Titel“, „[EN] Titel“).
- * Ohne Android, testbar. Schnell bei Titeln ohne „&“ bzw. „|“/„[“ (fast alle).
+ * Display title from the playlist: resolve the providers' HTML characters ("Asterix &amp; Obelix", "Christie&#039;s")
+ * and remove a language tag with a vertical bar at the start ("|EN| Title", "EN| Title", "[EN] Title").
+ * Without Android, testable. Fast for titles without "&" or "|"/"[" (almost all).
  */
 object TitleText {
-    /** Kurzfassung für das große Bild oben: höchstens [max] Zeichen, an einer Wortgrenze gekürzt, mit „…“. */
+    /** Short version for the big picture at the top: at most [max] characters, shortened at a word boundary, with "…". */
     fun short(s: String, max: Int = 250): String {
         val t = s.trim().replace(Regex("\\s+"), " ")
         if (t.length <= max) return t
@@ -107,7 +109,7 @@ object TitleText {
     )
     private val LEAD = Regex("""^\s*(?:\|\s*[A-Za-z]{2,3}\s*\||[A-Za-z]{2,3}\s*\||\[\s*[A-Za-z]{2,3}\s*])\s*""")
 
-    /** HTML-Zeichen auflösen (auch doppelt kodierte wie „&amp;#039;“). Unbekannte bleiben stehen. */
+    /** Resolve HTML characters (also double-encoded ones like "&amp;#039;"). Unknown ones stay. */
     fun decode(s: String): String {
         if (s.indexOf('&') < 0) return s
         var t = s
@@ -127,7 +129,7 @@ object TitleText {
 
     private fun cp(c: Int): String? = if (c in 32..0x10FFFF && c !in 0xD800..0xDFFF) String(Character.toChars(c)) else null
 
-    /** Titel für Filme und Serien: HTML-Zeichen auflösen, Kennung „|EN|“ am Anfang entfernen. */
+    /** Title for movies and series: resolve HTML characters, remove the tag "|EN|" at the start. */
     fun title(s: String): String {
         val d = decode(s)
         if (d.indexOf('|') < 0 && d.indexOf('[') < 0) return d

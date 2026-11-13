@@ -9,15 +9,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * Handy und Tablet (Runde 20). Die Oberfläche ist für den Fernseher gebaut (Querformat). Auf dem Handy steht sie
- * deshalb standardmäßig quer (dreht mit dem Gerät zwischen beiden Querlagen); abschaltbar unter Einstellungen > Allgemein.
+ * Phone and tablet (round 20). The UI is built for the TV (landscape). On the phone it is therefore
+ * landscape by default (rotates with the device between both landscape positions); can be switched off under Settings > General.
  */
 object MobilePrefs {
     private const val PREFS = "ipvio_mobile"
     var landscape by mutableStateOf(true)
         private set
 
-    /** Handy/Tablet statt Fernseher (kein Leanback, Touch vorhanden). */
+    /** Phone/tablet instead of TV (no Leanback, touch present). */
     fun isMobile(c: Context): Boolean {
         val pm = c.packageManager
         val tv = pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) || pm.hasSystemFeature("android.software.leanback_only") ||
