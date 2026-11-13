@@ -88,13 +88,16 @@ jobs:
           BRANCH="${{ steps.branch.outputs.name || steps.update_existing.outputs.name }}"
           EXISTING="${{ steps.update_existing.outputs.number }}"
           if [ -z "$EXISTING" ]; then
-            EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty')
+            EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty' || true)
           fi
           if [ -n "$EXISTING" ]; then
             echo "number=$EXISTING" >> "$GITHUB_OUTPUT"
+            echo "Açık PR zaten var: #$EXISTING"
             exit 0
           fi
-          gh pr create \
+
+          set +e
+          CREATE_OUTPUT=$(gh pr create \
             --base "$TARGET_BRANCH" \
             --head "$BRANCH" \
             --title "chore(upstream): $(date -u +%Y-%m-%d) senkronu" \
@@ -107,10 +110,27 @@ jobs:
 
           Otomatik oluşturuldu: `.github/workflows/sync-upstream.yml`
           EOF
-          )"
-          NUMBER=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number')
-          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+          )" 2>&1)
+          CREATE_STATUS=$?
+          set -e
 
+          if [ "$CREATE_STATUS" -ne 0 ]; then
+            echo "$CREATE_OUTPUT"
+            EXISTING=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty' || true)
+            if [ -n "$EXISTING" ]; then
+              echo "number=$EXISTING" >> "$GITHUB_OUTPUT"
+              echo "PR oluşturma başarısız oldu ancak açık PR mevcut: #$EXISTING"
+              exit 0
+            fi
+            echo "::error::PR oluşturulamadı ve açık PR bulunamadı. Repo Actions ayarlarında 'Allow GitHub Actions to create and approve pull requests' açık olmalı."
+            exit "$CREATE_STATUS"
+          fi
+
+          echo "$CREATE_OUTPUT"
+          NUMBER=$(gh pr list --head "$BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty' || true)
+          if [ -n "$NUMBER" ]; then
+            echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+          fi
       - name: Özet
         run: |
           {
