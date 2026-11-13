@@ -303,106 +303,106 @@ Auf diesem Gerät gibt es keine Dateiauswahl. Nutze „Sicherung erstellen“.¦
 Auf diesem Gerät gibt es keine Dateiauswahl.¦This device has no file picker.¦Bu cihazda dosya seçici yok.¦Ovaj uređaj nema izbornik datoteka.¦Ovaj uređaj nema izbornik datoteka.¦Овај уређај нема избор датотека.¦Este dispositivo no tiene selector de archivos.¦Cet appareil n'a pas de sélecteur de fichiers.¦Questo dispositivo non ha un selettore di file.
 „Speichern unter“ lässt dich den Ort wählen, zum Beispiel Google Drive, Downloads oder einen USB-Stick – so nimmst du die Sicherung auf ein anderes Gerät mit.¦“Save as” lets you choose the location, for example Google Drive, Downloads or a USB stick – so you can take the backup to another device.¦“Farklı kaydet” konumu seçmene izin verir, örneğin Google Drive, İndirilenler veya USB bellek – böylece yedeği başka bir cihaza taşıyabilirsin.¦„Spremi kao“ omogućuje odabir mjesta, npr. Google Drive, Preuzimanja ili USB stick – tako sigurnosnu kopiju možeš prenijeti na drugi uređaj.¦„Spremi kao“ omogućuje odabir mjesta, npr. Google Drive, Preuzimanja ili USB stick – tako sigurnosnu kopiju možeš prenijeti na drugi uređaj.¦„Сачувај као“ ти дозвољава да изабереш место, нпр. Google Drive, Преузимања или USB стик – тако резервну копију можеш пренети на други уређај.¦«Guardar como» te deja elegir el lugar, por ejemplo Google Drive, Descargas o un USB: así puedes llevar la copia a otro dispositivo.¦« Enregistrer sous » te laisse choisir l'emplacement, par exemple Google Drive, Téléchargements ou une clé USB – tu peux ainsi emporter la sauvegarde sur un autre appareil.¦«Salva con nome» ti lascia scegliere dove salvare, ad esempio Google Drive, Download o una chiavetta USB: così porti il backup su un altro dispositivo.
 # Builder kit, Boomer Mode v2 (texts English only for now; more languages later, empty columns fall back to English)
-Rot¦Red¦¦¦¦¦¦¦
-Blau¦Blue¦¦¦¦¦¦¦
-Dünn¦Thin¦¦¦¦¦¦¦
-Dick¦Thick¦¦¦¦¦¦¦
-Extra dick¦Extra thick¦¦¦¦¦¦¦
-Was möchtest du sehen?¦What would you like to watch?¦¦¦¦¦¦¦
-Die Inhalte werden geladen …¦Loading content …¦¦¦¦¦¦¦
-Hier gibt es noch nichts zu sehen. Bitte lass den Bildschirm einrichten.¦There is nothing to watch here yet. Please ask someone to set up this screen.¦¦¦¦¦¦¦
-Zum Beenden weiter halten …¦Keep holding to exit …¦¦¦¦¦¦¦
-Boomer Mode beenden¦Exit Boomer Mode¦¦¦¦¦¦¦
-Gib die PIN ein.¦Enter the PIN.¦¦¦¦¦¦¦
-Dieser Sender ist gerade nicht verfügbar¦This channel is not available right now¦¦¦¦¦¦¦
-Du kommst gleich wieder zur Auswahl.¦You will be back at the selection in a moment.¦¦¦¦¦¦¦
-So sieht es aus¦This is how it looks¦¦¦¦¦¦¦
-Der Boomer Mode ist mit deiner Kindersicherungs-PIN geschützt.¦Boomer Mode is protected by your parental-control PIN.¦¦¦¦¦¦¦
-Für den Boomer Mode brauchst du eine 4-stellige PIN. Sie schützt auch die Kindersicherung.¦Boomer Mode needs a 4-digit PIN. It also protects the parental controls.¦¦¦¦¦¦¦
-Eine ganz einfache Oberfläche für Eltern und Großeltern: große Kacheln mit Bild, kein Menü, keine Suche, keine Einstellungen. Du stellst hier alles ein, die Person davor muss nur noch auswählen.¦A very simple screen for parents and grandparents: big tiles with pictures, no menu, no search, no settings. You set everything up here, the person in front of the TV only has to choose.¦¦¦¦¦¦¦
-Boomer Mode jetzt starten¦Start Boomer Mode now¦¦¦¦¦¦¦
-Die App wechselt sofort zur einfachen Oberfläche. Stelle vorher alles ein. Zurück zur normalen App: Zurück-Taste 10 Sekunden halten, dann PIN.¦The app switches to the simple screen right away. Set everything up first. Back to the normal app: hold the Back button for 10 seconds, then enter the PIN.¦¦¦¦¦¦¦
-Automatischer Start nach dem Einschalten: bereit¦Automatic start after power-on: ready¦¦¦¦¦¦¦
-Automatischer Start: Berechtigung „Über anderen Apps einblenden“ fehlt¦Automatic start: the permission “Display over other apps” is missing¦¦¦¦¦¦¦
-Im Boomer Mode öffnet sich IPVIO Stream von selbst, sobald der Fernseher oder die Box eingeschaltet wird. Manche Geräte (z. B. einzelne Fire-TV-Modelle) blockieren das trotzdem.¦In Boomer Mode, IPVIO Stream opens by itself as soon as the TV or box is switched on. Some devices (e.g. certain Fire TV models) block this anyway.¦¦¦¦¦¦¦
-Was der Bildschirm zeigt¦What the screen shows¦¦¦¦¦¦¦
-Schalte Reihen ein oder aus und schiebe sie mit „Hoch“ und „Runter“. Reihen ohne Inhalt bleiben automatisch versteckt.¦Switch rows on or off and move them with “Up” and “Down”. Rows without content stay hidden automatically.¦¦¦¦¦¦¦
-Sender auswählen¦Choose channels¦¦¦¦¦¦¦
-Wähle aus deiner ganzen Senderliste mit Logos die Sender, die in der Reihe „Meine Sender“ erscheinen. Ohne Auswahl zeigt der Modus deine Live-Favoriten.¦Pick channels from your whole channel list, with logos. They appear in the “My channels” row. Without a selection, the mode shows your live favorites.¦¦¦¦¦¦¦
-Sender auswählen …¦Choose channels …¦¦¦¦¦¦¦
-Auswahl löschen¦Clear selection¦¦¦¦¦¦¦
-Filme und Serien auswählen¦Choose movies and series¦¦¦¦¦¦¦
-Wähle Filme und Serien aus, die in der Reihe „Meine Filme und Serien“ erscheinen. Ein Film startet sofort, bei einer Serie öffnet sich die Folgenliste.¦Pick movies and series for the “My movies and series” row. A movie starts right away; for a series, the episode list opens.¦¦¦¦¦¦¦
-Filme und Serien auswählen …¦Choose movies and series …¦¦¦¦¦¦¦
-Ausgewählt¦Selected¦¦¦¦¦¦¦
-Aussehen¦Appearance¦¦¦¦¦¦¦
-Größe der Kacheln¦Tile size¦¦¦¦¦¦¦
-Größe der Schrift¦Text size¦¦¦¦¦¦¦
-Markierung: Farbe des Rahmens¦Highlight: border color¦¦¦¦¦¦¦
-Markierung: Dicke des Rahmens¦Highlight: border thickness¦¦¦¦¦¦¦
-Zusätzliche helle Innenlinie¦Extra light inner line¦¦¦¦¦¦¦
-Macht die Markierung noch deutlicher, auch bei Farbschwäche.¦Makes the highlight even clearer, also for color blindness.¦¦¦¦¦¦¦
-Die markierte Kachel wird leicht größer. Ausschalten = alles bleibt ruhig.¦The highlighted tile grows slightly. Off = everything stays calm.¦¦¦¦¦¦¦
-Logos und Bilder zeigen¦Show logos and pictures¦¦¦¦¦¦¦
-Aus = nur der Name in großer Schrift.¦Off = only the name in large text.¦¦¦¦¦¦¦
-So kommst du wieder heraus¦How to get out again¦¦¦¦¦¦¦
-Zurück-Taste 10 Sekunden gedrückt halten, dann die PIN eingeben. Am Handy: die Überschrift „Was möchtest du sehen?“ lange berühren.¦Hold the Back button for 10 seconds, then enter the PIN. On a phone: long-press the heading “What would you like to watch?”.¦¦¦¦¦¦¦
-Gerade automatisch: deine Live-Favoriten. Sobald du eine Kachel unten mit OK wählst oder Sender auswählst, stellst du die Reihe selbst zusammen.¦Currently automatic: your live favorites. As soon as you pick a tile below with OK or choose channels, you build the row yourself.¦¦¦¦¦¦¦
-Du hast die Sender selbst zusammengestellt. OK auf einer Kachel: nach links oder rechts schieben, oder entfernen.¦You put the channels together yourself. OK on a tile: move it left or right, or remove it.¦¦¦¦¦¦¦
-Aus Favoriten übernehmen¦Take over from favorites¦¦¦¦¦¦¦
-Zuletzt gesehene dazu¦Add recently watched¦¦¦¦¦¦¦
-Aus Senderliste …¦From channel list …¦¦¦¦¦¦¦
-Noch keine Sender. Wähle oben Sender aus oder markiere sie in Live TV mit dem Stern.¦No channels yet. Choose channels above or mark them with the star in Live TV.¦¦¦¦¦¦¦
-Nach links schieben¦Move left¦¦¦¦¦¦¦
-Nach rechts schieben¦Move right¦¦¦¦¦¦¦
-OK wählt aus oder nimmt wieder heraus¦OK selects or removes¦¦¦¦¦¦¦
-Ausgewählte¦Selected items¦¦¦¦¦¦¦
-Noch nichts ausgewählt.¦Nothing selected yet.¦¦¦¦¦¦¦
-Hier gibt es nichts.¦There is nothing here.¦¦¦¦¦¦¦
-Große Slideshow¦Big slideshow¦¦¦¦¦¦¦
-Großes Bild oben mit aktuellen Filmen und Serien¦Big picture at the top with current movies and series¦¦¦¦¦¦¦
-Live TV, Filme, Serien, Favoriten und Meine Liste¦Live TV, Movies, Series, Favorites and My list¦¦¦¦¦¦¦
-Uhr und Datum¦Clock and date¦¦¦¦¦¦¦
-Große Uhr mit dem heutigen Datum¦Big clock with today’s date¦¦¦¦¦¦¦
-Dort weitermachen, wo du aufgehört hast¦Continue where you left off¦¦¦¦¦¦¦
-Meine Sender¦My channels¦¦¦¦¦¦¦
-Deine Live-Favoriten als Reihe¦Your live favorites as a row¦¦¦¦¦¦¦
-Live TV gerade¦Live TV right now¦¦¦¦¦¦¦
-Was jetzt auf deinen Sendern läuft¦What is on your channels right now¦¦¦¦¦¦¦
-Die beliebtesten Titel des Tages¦Today’s most popular titles¦¦¦¦¦¦¦
-Weil du etwas geschaut hast¦Because you watched something¦¦¦¦¦¦¦
-Ähnliche Titel zu deinem letzten Film oder deiner letzten Serie¦Titles similar to your last movie or series¦¦¦¦¦¦¦
-Titel, die du dir gemerkt hast¦Titles you saved¦¦¦¦¦¦¦
-Alles, was du zuletzt gestartet hast¦Everything you started recently¦¦¦¦¦¦¦
-Neue Filme¦New movies¦¦¦¦¦¦¦
-Zuletzt hinzugefügte Filme¦Recently added movies¦¦¦¦¦¦¦
-Beste Filme¦Best movies¦¦¦¦¦¦¦
-Die am besten bewerteten Filme¦The best-rated movies¦¦¦¦¦¦¦
-Neue Serien¦New series¦¦¦¦¦¦¦
-Zuletzt hinzugefügte Serien¦Recently added series¦¦¦¦¦¦¦
-Beste Serien¦Best series¦¦¦¦¦¦¦
-Die am besten bewerteten Serien¦The best-rated series¦¦¦¦¦¦¦
-Serien nach Genre¦Series by genre¦¦¦¦¦¦¦
-Reihen für die häufigsten Serien-Genres¦Rows for the most common series genres¦¦¦¦¦¦¦
-Filme nach Genre¦Movies by genre¦¦¦¦¦¦¦
-Reihen für die häufigsten Film-Genres¦Rows for the most common movie genres¦¦¦¦¦¦¦
-Große Uhr¦Big clock¦¦¦¦¦¦¦
-Uhrzeit und Datum, gut lesbar¦Time and date, easy to read¦¦¦¦¦¦¦
-Die Sender, die du ausgewählt hast (sonst die Live-Favoriten)¦The channels you chose (otherwise your live favorites)¦¦¦¦¦¦¦
-Filme und Serien dort fortsetzen, wo es aufgehört hat¦Continue movies and series where they stopped¦¦¦¦¦¦¦
-Meine Filme und Serien¦My movies and series¦¦¦¦¦¦¦
-Die Filme und Serien, die du ausgewählt hast¦The movies and series you chose¦¦¦¦¦¦¦
-Titel aus der Merkliste¦Titles from the watch list¦¦¦¦¦¦¦
-Was zuletzt gestartet wurde¦What was started recently¦¦¦¦¦¦¦
-Gezeigt¦Shown¦¦¦¦¦¦¦
-Versteckt¦Hidden¦¦¦¦¦¦¦
-Hoch¦Up¦¦¦¦¦¦¦
-Runter¦Down¦¦¦¦¦¦¦
-Auf Standard zurücksetzen¦Reset to default¦¦¦¦¦¦¦
-Baue dir deine Startseite: Schalte Reihen und Widgets ein oder aus und schiebe sie mit „Hoch“ und „Runter“ an die Stelle, die du möchtest. Die Änderung gilt sofort, schau danach auf der Startseite nach.¦Build your home screen: switch rows and widgets on or off and move them with “Up” and “Down” to where you want them. Changes apply immediately, check the home screen afterwards.¦¦¦¦¦¦¦
-Startseite anpassen¦Customize home¦¦¦¦¦¦¦
-Reihen und Widgets wählen und ordnen¦Choose and arrange rows and widgets¦¦¦¦¦¦¦
-Ganz einfach: große Kacheln zum Auswählen¦Super simple: big tiles to choose from¦¦¦¦¦¦¦
+Rot¦Red¦Kırmızı¦¦¦¦¦¦
+Blau¦Blue¦Mavi¦¦¦¦¦¦
+Dünn¦Thin¦İnce¦¦¦¦¦¦
+Dick¦Thick¦Kalın¦¦¦¦¦¦
+Extra dick¦Extra thick¦Ekstra kalın¦¦¦¦¦¦
+Was möchtest du sehen?¦What would you like to watch?¦Ne görmek istiyorsun?¦¦¦¦¦¦
+Die Inhalte werden geladen …¦Loading content …¦İçerikler yükleniyor…¦¦¦¦¦¦
+Hier gibt es noch nichts zu sehen. Bitte lass den Bildschirm einrichten.¦There is nothing to watch here yet. Please ask someone to set up this screen.¦Burada henüz gösterilecek bir şey yok. Lütfen ekranın ayarlanmasını bekleyin.¦¦¦¦¦¦
+Zum Beenden weiter halten …¦Keep holding to exit …¦Çıkmak için basılı tutmaya devam edin…¦¦¦¦¦¦
+Boomer Mode beenden¦Exit Boomer Mode¦Boomer Modundan çık¦¦¦¦¦¦
+Gib die PIN ein.¦Enter the PIN.¦PIN'i girin.¦¦¦¦¦¦
+Dieser Sender ist gerade nicht verfügbar¦This channel is not available right now¦Bu kanal şu anda kullanılamıyor¦¦¦¦¦¦
+Du kommst gleich wieder zur Auswahl.¦You will be back at the selection in a moment.¦Birazdan seçime geri döneceksin.¦¦¦¦¦¦
+So sieht es aus¦This is how it looks¦Böyle görünüyor¦¦¦¦¦¦
+Der Boomer Mode ist mit deiner Kindersicherungs-PIN geschützt.¦Boomer Mode is protected by your parental-control PIN.¦Boomer Modu ebeveyn kontrolü PIN’inizle korunur.¦¦¦¦¦¦
+Für den Boomer Mode brauchst du eine 4-stellige PIN. Sie schützt auch die Kindersicherung.¦Boomer Mode needs a 4-digit PIN. It also protects the parental controls.¦Boomer Modu için 4 haneli bir PIN gerekir. Bu PIN ebeveyn kontrolünü de korur.¦¦¦¦¦¦
+Eine ganz einfache Oberfläche für Eltern und Großeltern: große Kacheln mit Bild, kein Menü, keine Suche, keine Einstellungen. Du stellst hier alles ein, die Person davor muss nur noch auswählen.¦A very simple screen for parents and grandparents: big tiles with pictures, no menu, no search, no settings. You set everything up here, the person in front of the TV only has to choose.¦Ebeveynler ve büyükanne/büyükbabalar için çok basit bir arayüz: görselli büyük kutular, menü yok, arama yok, ayar yok. Her şeyi burada siz ayarlarsınız, karşıdaki kişinin sadece seçmesi gerekir.¦¦¦¦¦¦
+Boomer Mode jetzt starten¦Start Boomer Mode now¦Boomer Modunu şimdi başlat¦¦¦¦¦¦
+Die App wechselt sofort zur einfachen Oberfläche. Stelle vorher alles ein. Zurück zur normalen App: Zurück-Taste 10 Sekunden halten, dann PIN.¦The app switches to the simple screen right away. Set everything up first. Back to the normal app: hold the Back button for 10 seconds, then enter the PIN.¦Uygulama hemen basit arayüze geçer. Önce her şeyi ayarlayın. Normal uygulamaya dönmek için: Geri tuşunu 10 saniye basılı tutun, sonra PIN girin.¦¦¦¦¦¦
+Automatischer Start nach dem Einschalten: bereit¦Automatic start after power-on: ready¦Açılıştan sonra otomatik başlatma: hazır¦¦¦¦¦¦
+Automatischer Start: Berechtigung „Über anderen Apps einblenden“ fehlt¦Automatic start: the permission “Display over other apps” is missing¦Otomatik başlatma: "Diğer uygulamaların üzerinde göster" izni eksik¦¦¦¦¦¦
+Im Boomer Mode öffnet sich IPVIO Stream von selbst, sobald der Fernseher oder die Box eingeschaltet wird. Manche Geräte (z. B. einzelne Fire-TV-Modelle) blockieren das trotzdem.¦In Boomer Mode, IPVIO Stream opens by itself as soon as the TV or box is switched on. Some devices (e.g. certain Fire TV models) block this anyway.¦Boomer Modunda, televizyon veya kutu açılır açılmaz IPVIO Stream kendiliğinden açılır. Bazı cihazlar (ör. bazı Fire TV modelleri) bunu yine de engelleyebilir.¦¦¦¦¦¦
+Was der Bildschirm zeigt¦What the screen shows¦Ekranda ne görünsün¦¦¦¦¦¦
+Schalte Reihen ein oder aus und schiebe sie mit „Hoch“ und „Runter“. Reihen ohne Inhalt bleiben automatisch versteckt.¦Switch rows on or off and move them with “Up” and “Down”. Rows without content stay hidden automatically.¦Satırları açıp kapatın ve "Yukarı" / "Aşağı" ile taşıyın. İçeriği olmayan satırlar otomatik olarak gizli kalır.¦¦¦¦¦¦
+Sender auswählen¦Choose channels¦Kanalları seç¦¦¦¦¦¦
+Wähle aus deiner ganzen Senderliste mit Logos die Sender, die in der Reihe „Meine Sender“ erscheinen. Ohne Auswahl zeigt der Modus deine Live-Favoriten.¦Pick channels from your whole channel list, with logos. They appear in the “My channels” row. Without a selection, the mode shows your live favorites.¦Tüm kanal listenizden, logolarıyla birlikte "Kanallarım" satırında görünecek kanalları seçin. Seçim yapmazsanız bu mod canlı TV favorilerinizi gösterir.¦¦¦¦¦¦
+Sender auswählen …¦Choose channels …¦Kanalları seç…¦¦¦¦¦¦
+Auswahl löschen¦Clear selection¦Seçimi temizle¦¦¦¦¦¦
+Filme und Serien auswählen¦Choose movies and series¦Film ve dizileri seç¦¦¦¦¦¦
+Wähle Filme und Serien aus, die in der Reihe „Meine Filme und Serien“ erscheinen. Ein Film startet sofort, bei einer Serie öffnet sich die Folgenliste.¦Pick movies and series for the “My movies and series” row. A movie starts right away; for a series, the episode list opens.¦"Filmlerim ve Dizilerim" satırında görünecek film ve dizileri seçin. Bir film hemen başlar, dizide bölüm listesi açılır.¦¦¦¦¦¦
+Filme und Serien auswählen …¦Choose movies and series …¦Film ve dizileri seç…¦¦¦¦¦¦
+Ausgewählt¦Selected¦Seçildi¦¦¦¦¦¦
+Aussehen¦Appearance¦Görünüm¦¦¦¦¦¦
+Größe der Kacheln¦Tile size¦Kutucuk boyutu¦¦¦¦¦¦
+Größe der Schrift¦Text size¦Yazı boyutu¦¦¦¦¦¦
+Markierung: Farbe des Rahmens¦Highlight: border color¦Vurgu: çerçeve rengi¦¦¦¦¦¦
+Markierung: Dicke des Rahmens¦Highlight: border thickness¦Vurgu: çerçeve kalınlığı¦¦¦¦¦¦
+Zusätzliche helle Innenlinie¦Extra light inner line¦Ek açık iç çizgi¦¦¦¦¦¦
+Macht die Markierung noch deutlicher, auch bei Farbschwäche.¦Makes the highlight even clearer, also for color blindness.¦Vurguyu, renk görme zorluğu olanlar için bile daha belirgin yapar.¦¦¦¦¦¦
+Die markierte Kachel wird leicht größer. Ausschalten = alles bleibt ruhig.¦The highlighted tile grows slightly. Off = everything stays calm.¦Vurgulanan kutucuk hafifçe büyür. Kapatmak = her şey sabit kalır.¦¦¦¦¦¦
+Logos und Bilder zeigen¦Show logos and pictures¦Logoları ve resimleri göster¦¦¦¦¦¦
+Aus = nur der Name in großer Schrift.¦Off = only the name in large text.¦Kapalı = yalnızca büyük yazıyla ad.¦¦¦¦¦¦
+So kommst du wieder heraus¦How to get out again¦Nasıl geri çıkarsın¦¦¦¦¦¦
+Zurück-Taste 10 Sekunden gedrückt halten, dann die PIN eingeben. Am Handy: die Überschrift „Was möchtest du sehen?“ lange berühren.¦Hold the Back button for 10 seconds, then enter the PIN. On a phone: long-press the heading “What would you like to watch?”.¦Geri tuşunu 10 saniye basılı tut, sonra PIN'i gir. Telefonda: "Ne görmek istiyorsun?" başlığına uzun bas.¦¦¦¦¦¦
+Gerade automatisch: deine Live-Favoriten. Sobald du eine Kachel unten mit OK wählst oder Sender auswählst, stellst du die Reihe selbst zusammen.¦Currently automatic: your live favorites. As soon as you pick a tile below with OK or choose channels, you build the row yourself.¦Şu an otomatik: canlı TV favorilerin. Aşağıdan bir kutucuğu OK ile seçer veya kanalları seçersen satırı kendin oluşturursun.¦¦¦¦¦¦
+Du hast die Sender selbst zusammengestellt. OK auf einer Kachel: nach links oder rechts schieben, oder entfernen.¦You put the channels together yourself. OK on a tile: move it left or right, or remove it.¦Kanalları kendin oluşturdun. Bir kutucukta OK: sola/sağa taşı veya kaldır.¦¦¦¦¦¦
+Aus Favoriten übernehmen¦Take over from favorites¦Favorilerden aktar¦¦¦¦¦¦
+Zuletzt gesehene dazu¦Add recently watched¦Son izlenenleri ekle¦¦¦¦¦¦
+Aus Senderliste …¦From channel list …¦Kanal listesinden…¦¦¦¦¦¦
+Noch keine Sender. Wähle oben Sender aus oder markiere sie in Live TV mit dem Stern.¦No channels yet. Choose channels above or mark them with the star in Live TV.¦Henüz kanal yok. Yukarıdan kanal seç veya Canlı TV'de yıldızla işaretle.¦¦¦¦¦¦
+Nach links schieben¦Move left¦Sola taşı¦¦¦¦¦¦
+Nach rechts schieben¦Move right¦Sağa taşı¦¦¦¦¦¦
+OK wählt aus oder nimmt wieder heraus¦OK selects or removes¦OK seçer veya seçimi kaldırır¦¦¦¦¦¦
+Ausgewählte¦Selected items¦Seçilenler¦¦¦¦¦¦
+Noch nichts ausgewählt.¦Nothing selected yet.¦Henüz bir şey seçilmedi.¦¦¦¦¦¦
+Hier gibt es nichts.¦There is nothing here.¦Burada hiçbir şey yok.¦¦¦¦¦¦
+Große Slideshow¦Big slideshow¦Büyük slayt gösterisi¦¦¦¦¦¦
+Großes Bild oben mit aktuellen Filmen und Serien¦Big picture at the top with current movies and series¦Üstte güncel film ve dizilerle büyük görsel¦¦¦¦¦¦
+Live TV, Filme, Serien, Favoriten und Meine Liste¦Live TV, Movies, Series, Favorites and My list¦Canlı TV, Filmler, Diziler, Favoriler ve Listem¦¦¦¦¦¦
+Uhr und Datum¦Clock and date¦Saat ve tarih¦¦¦¦¦¦
+Große Uhr mit dem heutigen Datum¦Big clock with today’s date¦Bugünün tarihiyle büyük saat¦¦¦¦¦¦
+Dort weitermachen, wo du aufgehört hast¦Continue where you left off¦Kaldığın yerden devam et¦¦¦¦¦¦
+Meine Sender¦My channels¦Kanallarım¦¦¦¦¦¦
+Deine Live-Favoriten als Reihe¦Your live favorites as a row¦Canlı TV favorilerin bir satırda¦¦¦¦¦¦
+Live TV gerade¦Live TV right now¦Şimdi Canlı TV¦¦¦¦¦¦
+Was jetzt auf deinen Sendern läuft¦What is on your channels right now¦Kanallarında şu an ne var¦¦¦¦¦¦
+Die beliebtesten Titel des Tages¦Today’s most popular titles¦Günün en popüler başlıkları¦¦¦¦¦¦
+Weil du etwas geschaut hast¦Because you watched something¦Bir şey izlediğin için¦¦¦¦¦¦
+Ähnliche Titel zu deinem letzten Film oder deiner letzten Serie¦Titles similar to your last movie or series¦Son filmin veya dizine benzer başlıklar¦¦¦¦¦¦
+Titel, die du dir gemerkt hast¦Titles you saved¦Kaydettiğin başlıklar¦¦¦¦¦¦
+Alles, was du zuletzt gestartet hast¦Everything you started recently¦Son başlattığın her şey¦¦¦¦¦¦
+Neue Filme¦New movies¦Yeni filmler¦¦¦¦¦¦
+Zuletzt hinzugefügte Filme¦Recently added movies¦Son eklenen filmler¦¦¦¦¦¦
+Beste Filme¦Best movies¦En iyi filmler¦¦¦¦¦¦
+Die am besten bewerteten Filme¦The best-rated movies¦En yüksek puanlı filmler¦¦¦¦¦¦
+Neue Serien¦New series¦Yeni diziler¦¦¦¦¦¦
+Zuletzt hinzugefügte Serien¦Recently added series¦Son eklenen diziler¦¦¦¦¦¦
+Beste Serien¦Best series¦En iyi diziler¦¦¦¦¦¦
+Die am besten bewerteten Serien¦The best-rated series¦En yüksek puanlı diziler¦¦¦¦¦¦
+Serien nach Genre¦Series by genre¦Türe göre diziler¦¦¦¦¦¦
+Reihen für die häufigsten Serien-Genres¦Rows for the most common series genres¦En yaygın dizi türleri için satırlar¦¦¦¦¦¦
+Filme nach Genre¦Movies by genre¦Türe göre filmler¦¦¦¦¦¦
+Reihen für die häufigsten Film-Genres¦Rows for the most common movie genres¦En yaygın film türleri için satırlar¦¦¦¦¦¦
+Große Uhr¦Big clock¦Büyük saat¦¦¦¦¦¦
+Uhrzeit und Datum, gut lesbar¦Time and date, easy to read¦Saat ve tarih, kolay okunur¦¦¦¦¦¦
+Die Sender, die du ausgewählt hast (sonst die Live-Favoriten)¦The channels you chose (otherwise your live favorites)¦Seçtiğin kanallar (aksi halde canlı TV favorilerin)¦¦¦¦¦¦
+Filme und Serien dort fortsetzen, wo es aufgehört hat¦Continue movies and series where they stopped¦Film ve dizileri kaldığı yerden sürdür¦¦¦¦¦¦
+Meine Filme und Serien¦My movies and series¦Filmlerim ve Dizilerim¦¦¦¦¦¦
+Die Filme und Serien, die du ausgewählt hast¦The movies and series you chose¦Seçtiğin film ve diziler¦¦¦¦¦¦
+Titel aus der Merkliste¦Titles from the watch list¦İzleme listesinden başlıklar¦¦¦¦¦¦
+Was zuletzt gestartet wurde¦What was started recently¦Son başlatılanlar¦¦¦¦¦¦
+Gezeigt¦Shown¦Gösteriliyor¦¦¦¦¦¦
+Versteckt¦Hidden¦Gizli¦¦¦¦¦¦
+Hoch¦Up¦Yukarı¦¦¦¦¦¦
+Runter¦Down¦Aşağı¦¦¦¦¦¦
+Auf Standard zurücksetzen¦Reset to default¦Varsayılana sıfırla¦¦¦¦¦¦
+Baue dir deine Startseite: Schalte Reihen und Widgets ein oder aus und schiebe sie mit „Hoch“ und „Runter“ an die Stelle, die du möchtest. Die Änderung gilt sofort, schau danach auf der Startseite nach.¦Build your home screen: switch rows and widgets on or off and move them with “Up” and “Down” to where you want them. Changes apply immediately, check the home screen afterwards.¦Ana sayfanı oluştur: satırları ve widget'ları açıp kapat, "Yukarı" / "Aşağı" ile istediğin yere taşı. Değişiklik hemen uygulanır, ardından ana sayfaya bak.¦¦¦¦¦¦
+Startseite anpassen¦Customize home¦Ana sayfayı özelleştir¦¦¦¦¦¦
+Reihen und Widgets wählen und ordnen¦Choose and arrange rows and widgets¦Satırları ve widget'ları seçip düzenle¦¦¦¦¦¦
+Ganz einfach: große Kacheln zum Auswählen¦Super simple: big tiles to choose from¦Çok basit: seçmek için büyük kutucuklar¦¦¦¦¦¦
 Spende¦Donate¦Bağış¦Donacija¦Donacija¦Donacija¦Donar¦Faire un don¦Dona
 Hallo, ich bin der nigerianische Prinz und brauche dringend deine Hilfe! Spaß beiseite: Die App kostet dich nichts, mich aber ein paar Nächte Schlaf und sehr viel Kaffee. Wenn du mir ein paar Euro schicken möchtest, tanzt mein Kontostand vor Freude. Kein Zwang: Die App bleibt kostenlos, werbefrei und GPL-lizenziert.¦Hello, I’m the Nigerian prince and I urgently need your help! Jokes aside: the app costs you nothing, but it cost me a few nights of sleep and a LOT of coffee. If you’d like to send me a few euros, my bank account will dance for joy. No pressure: the app stays free, ad-free and GPL-licensed.¦Merhaba, ben Nijeryalı prensim ve acilen yardımına ihtiyacım var! Şaka bir yana: Uygulama sana hiçbir şeye mal olmuyor ama bana birkaç gece uykuya ve bir sürü kahveye mal oldu. Bana birkaç euro göndermek istersen banka hesabım sevinçten dans eder. Zorunluluk yok: Uygulama ücretsiz, reklamsız ve GPL lisanslı kalır.¦Zdravo, ja sam nigerijski princ i hitno mi treba tvoja pomoć! Šalu na stranu: aplikacija te ne košta ništa, a mene je koštala nekoliko neprospavanih noći i puno kafe. Ako mi želiš poslati nekoliko eura, moj bankovni račun će zaplesati od sreće. Bez obaveze: aplikacija ostaje besplatna, bez reklama i pod GPL licencom.¦Bok, ja sam nigerijski princ i hitno mi treba tvoja pomoć! Šalu na stranu: aplikacija te ne košta ništa, a mene je koštala nekoliko neprospavanih noći i puno kave. Ako mi želiš poslati nekoliko eura, moj bankovni račun će zaplesati od sreće. Bez obveze: aplikacija ostaje besplatna, bez reklama i pod GPL licencom.¦Zdravo, ja sam nigerijski princ i hitno mi treba tvoja pomoć! Šalu na stranu: aplikacija te ne košta ništa, a mene je koštala nekoliko neprospavanih noći i puno kafe. Ako želiš da mi pošalješ nekoliko evra, moj bankovni račun će zaplesati od sreće. Bez obaveze: aplikacija ostaje besplatna, bez reklama i pod GPL licencom.¦¡Hola, soy el príncipe nigeriano y necesito tu ayuda urgentemente! Bromas aparte: la app no te cuesta nada, pero a mí me costó unas cuantas noches sin dormir y MUCHO café. Si quieres enviarme unos euros, mi cuenta bancaria bailará de alegría. Sin presión: la app sigue siendo gratuita, sin anuncios y con licencia GPL.¦Bonjour, je suis le prince nigérian et j’ai urgemment besoin de ton aide ! Blague à part : l’appli ne te coûte rien, mais à moi elle a coûté quelques nuits blanches et BEAUCOUP de café. Si tu veux m’envoyer quelques euros, mon compte en banque dansera de joie. Aucune obligation : l’appli reste gratuite, sans pub et sous licence GPL.¦Ciao, sono il principe nigeriano e ho urgente bisogno del tuo aiuto! Scherzi a parte: l’app non ti costa nulla, ma a me è costata qualche notte insonne e MOLTO caffè. Se vuoi mandarmi qualche euro, il mio conto in banca ballerà di gioia. Nessun obbligo: l’app resta gratuita, senza pubblicità e con licenza GPL.
 Mit der Handy-Kamera scannen¦Scan with your phone camera¦Telefon kamerasıyla tara¦Skeniraj kamerom telefona¦Skeniraj kamerom mobitela¦Skeniraj kamerom telefona¦Escanea con la cámara del móvil¦Scanne avec l’appareil photo du téléphone¦Scansiona con la fotocamera del telefono
@@ -475,7 +475,7 @@ Mit dem Handy suchen¦Search with your phone¦Telefonla ara¦Traži mobitelom¦T
 Handy¦Phone¦Telefon¦Telefon¦Telefon¦Telefon¦Teléfono¦Téléphone¦Telefono
 Zuletzt gesucht (OK lange gedrückt = Eintrag entfernen)¦Recent searches (hold OK = remove entry)¦Son aramalar (Tamam’a uzun bas = girişi kaldır)¦Nedavna pretraga (dugi OK = ukloni unos)¦Nedavna pretraga (dugi OK = ukloni unos)¦Nedavna pretraga (dugi OK = ukloni unos)¦Búsquedas recientes (OK largo = quitar entrada)¦Recherches récentes (OK long = supprimer l’entrée)¦Ricerche recenti (OK lungo = rimuovi voce)
 Zuletzt gesucht¦Recent searches¦Son aramalar¦Nedavne pretrage¦Nedavne pretrage¦Nedavne pretrage¦Búsquedas recientes¦Recherches récentes¦Ricerche recenti
-Suche nach einem Titel: hier erscheinen Beschreibung, Bewertung und Format des markierten Treffers.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.
+Suche nach einem Titel: hier erscheinen Beschreibung, Bewertung und Format des markierten Treffers.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Bir başlık arayın: vurgulanan sonucun açıklaması, puanı ve biçimi burada görünür.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.¦Search for a title: description, rating and format of the highlighted hit appear here.
 SportsHub¦Sports Hub¦Spor Merkezi¦Sports Hub¦Sports Hub¦Sports Hub¦Sports Hub¦Sports Hub¦Sports Hub
 Sports Hub öffnen¦Open Sports Hub¦Spor Merkezini aç¦Otvori Sports Hub¦Otvori Sports Hub¦Otvori Sports Hub¦Abrir Sports Hub¦Ouvrir Sports Hub¦Apri Sports Hub
 Alle¦All¦Tümü¦Sve¦Sve¦Sve¦Todos¦Tous¦Tutti
@@ -508,34 +508,34 @@ Einer groß, drei klein¦One large, three small¦Biri büyük, üçü küçük¦
 OK = Ton hierher, OK lange = Sender wechseln¦OK = sound here, long OK = change channel¦Tamam = ses buraya, uzun Tamam = kanal değiştir¦OK = sound here, long OK = change channel¦OK = sound here, long OK = change channel¦OK = sound here, long OK = change channel¦OK = sound here, long OK = change channel¦OK = sound here, long OK = change channel¦OK = sound here, long OK = change channel
 So sieht die Reihenfolge aus¦This is the resulting order¦Sonuçta sıralama böyle olur¦This is the resulting order¦This is the resulting order¦This is the resulting order¦This is the resulting order¦This is the resulting order¦This is the resulting order
 Nichts gezeigt¦Nothing shown¦Hiçbir şey gösterilmiyor¦Nothing shown¦Nothing shown¦Nothing shown¦Nothing shown¦Nothing shown¦Nothing shown
-Listen importieren¦Import lists¦Import lists¦Import lists¦Import lists¦Import lists¦Import lists¦Import lists¦Import lists
+Listen importieren¦Import lists¦Listeleri içe aktar¦Import lists¦Import lists¦Import lists¦Import lists¦Import lists¦Import lists
 Letterboxd, MyAnimeList, Trakt¦Letterboxd, MyAnimeList, Trakt¦Letterboxd, MyAnimeList, Trakt¦Letterboxd, MyAnimeList, Trakt¦Letterboxd, MyAnimeList, Trakt¦Letterboxd, MyAnimeList, Trakt¦Letterboxd, MyAnimeList, Trakt¦Letterboxd, MyAnimeList, Trakt¦Letterboxd, MyAnimeList, Trakt
-Hole deine Listen von Letterboxd, MyAnimeList oder Trakt in die App. Die Titel werden mit deiner Playlist abgeglichen: Merkliste und Gesehen werden übernommen.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.
+Hole deine Listen von Letterboxd, MyAnimeList oder Trakt in die App. Die Titel werden mit deiner Playlist abgeglichen: Merkliste und Gesehen werden übernommen.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Letterboxd, MyAnimeList veya Trakt listelerini uygulamaya aktar. Başlıklar oynatma listenle eşleştirilir: izleme listesi ve izlenenler alınır.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.¦Bring your lists from Letterboxd, MyAnimeList or Trakt into the app. Titles are matched with your playlist: watchlist and watched are imported.
 Letterboxd: ZIP oder CSV · MyAnimeList: XML · Trakt: JSON¦Letterboxd: ZIP or CSV · MyAnimeList: XML · Trakt: JSON¦Letterboxd: ZIP or CSV · MyAnimeList: XML · Trakt: JSON¦Letterboxd: ZIP or CSV · MyAnimeList: XML · Trakt: JSON¦Letterboxd: ZIP or CSV · MyAnimeList: XML · Trakt: JSON¦Letterboxd: ZIP or CSV · MyAnimeList: XML · Trakt: JSON¦Letterboxd: ZIP or CSV · MyAnimeList: XML · Trakt: JSON¦Letterboxd: ZIP or CSV · MyAnimeList: XML · Trakt: JSON¦Letterboxd: ZIP or CSV · MyAnimeList: XML · Trakt: JSON
 Dieses Gerät hat keinen sicheren Schlüsselspeicher: Playlist-Adressen mit Zugangsdaten werden unverschlüsselt gespeichert.¦This device has no secure key store: playlist addresses with login data are stored unencrypted.¦Bu cihazda güvenli anahtar deposu yok: oturum bilgili liste adresleri şifrelenmeden saklanır.¦This device has no secure key store: playlist addresses with login data are stored unencrypted.¦This device has no secure key store: playlist addresses with login data are stored unencrypted.¦This device has no secure key store: playlist addresses with login data are stored unencrypted.¦This device has no secure key store: playlist addresses with login data are stored unencrypted.¦This device has no secure key store: playlist addresses with login data are stored unencrypted.¦This device has no secure key store: playlist addresses with login data are stored unencrypted.
-Datei vom Gerät wählen¦Choose file from device¦Choose file from device¦Choose file from device¦Choose file from device¦Choose file from device¦Choose file from device¦Choose file from device¦Choose file from device
-Auf diesem Gerät gibt es keine Dateiauswahl. Nutze den Import im WLAN.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.
-Import im WLAN starten¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi
-Import beenden¦Stop import¦Stop import¦Stop import¦Stop import¦Stop import¦Stop import¦Stop import¦Stop import
-Am Handy „Liste importieren“ wählen, den Code eingeben und die Exportdatei hochladen.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.
-Direkt auf der Startseite bearbeiten¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen
-Öffnet die echte Startseite mit deinen Titeln. Über jeder Reihe erscheint eine Leiste zum Verschieben und Ein- oder Ausblenden.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.
-Oder hier in der Liste: Schalte Reihen und Widgets ein oder aus und schiebe sie mit „Hoch“ und „Runter“ an die Stelle, die du möchtest. Die Änderung gilt sofort.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.
-Immer oben¦Always on top¦Always on top¦Always on top¦Always on top¦Always on top¦Always on top¦Always on top¦Always on top
-Ausblenden¦Hide¦Hide¦Hide¦Hide¦Hide¦Hide¦Hide¦Hide
-Einblenden¦Show¦Show¦Show¦Show¦Show¦Show¦Show¦Show
-Fertig¦Done¦Done¦Done¦Done¦Done¦Done¦Done¦Done
-Bearbeiten: Über jeder Reihe kannst du sie verschieben oder ausblenden.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.
-Auf der echten Startseite ansehen¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen
-Live-Vorschau¦Live preview¦Live preview¦Live preview¦Live preview¦Live preview¦Live preview¦Live preview¦Live preview
-Eine Auswahl wirkt sofort, ohne OK.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.
+Datei vom Gerät wählen¦Choose file from device¦Cihazdan dosya seç¦Choose file from device¦Choose file from device¦Choose file from device¦Choose file from device¦Choose file from device¦Choose file from device
+Auf diesem Gerät gibt es keine Dateiauswahl. Nutze den Import im WLAN.¦This device has no file picker. Use the Wi-Fi import.¦Bu cihazda dosya seçici yok. Wi-Fi üzerinden içe aktarmayı kullan.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.¦This device has no file picker. Use the Wi-Fi import.
+Import im WLAN starten¦Start import over Wi-Fi¦Wi-Fi üzerinden içe aktarmayı başlat¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi¦Start import over Wi-Fi
+Import beenden¦Stop import¦İçe aktarmayı durdur¦Stop import¦Stop import¦Stop import¦Stop import¦Stop import¦Stop import
+Am Handy „Liste importieren“ wählen, den Code eingeben und die Exportdatei hochladen.¦On the phone choose "Import list", enter the code and upload the export file.¦Telefonda "Listeyi içe aktar"ı seç, kodu gir ve dışa aktarılan dosyayı yükle.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.¦On the phone choose "Import list", enter the code and upload the export file.
+Direkt auf der Startseite bearbeiten¦Edit directly on the home screen¦Doğrudan ana sayfada düzenle¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen¦Edit directly on the home screen
+Öffnet die echte Startseite mit deinen Titeln. Über jeder Reihe erscheint eine Leiste zum Verschieben und Ein- oder Ausblenden.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Başlıklarınla gerçek ana sayfayı açar. Her satırın üzerinde taşıma ve göster/gizle çubuğu görünür.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.¦Opens the real home screen with your titles. A bar above each row lets you move it or show/hide it.
+Oder hier in der Liste: Schalte Reihen und Widgets ein oder aus und schiebe sie mit „Hoch“ und „Runter“ an die Stelle, die du möchtest. Die Änderung gilt sofort.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Ya da burada listede: satırları ve widget'ları açıp kapatın, "Yukarı" / "Aşağı" ile istediğiniz yere taşıyın. Değişiklik hemen uygulanır.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.¦Or here in the list: switch rows and widgets on or off and move them with "Up" and "Down" to where you want them. The change applies immediately.
+Immer oben¦Always on top¦Her zaman üstte¦Always on top¦Always on top¦Always on top¦Always on top¦Always on top¦Always on top
+Ausblenden¦Hide¦Gizle¦Hide¦Hide¦Hide¦Hide¦Hide¦Hide
+Einblenden¦Show¦Göster¦Show¦Show¦Show¦Show¦Show¦Show
+Fertig¦Done¦Bitti¦Done¦Done¦Done¦Done¦Done¦Done
+Bearbeiten: Über jeder Reihe kannst du sie verschieben oder ausblenden.¦Editing: above each row you can move or hide it.¦Düzenle: her satırın üzerinden taşıyabilir veya gizleyebilirsin.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.¦Editing: above each row you can move or hide it.
+Auf der echten Startseite ansehen¦See it on the real home screen¦Gerçek ana sayfada görüntüle¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen¦See it on the real home screen
+Live-Vorschau¦Live preview¦Canlı önizleme¦Live preview¦Live preview¦Live preview¦Live preview¦Live preview¦Live preview
+Eine Auswahl wirkt sofort, ohne OK.¦A choice takes effect immediately, no OK needed.¦Bir seçim OK'a basmadan hemen uygulanır.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.¦A choice takes effect immediately, no OK needed.
 Weiter nach unten wechselt den Bereich, die App dahinter springt mit.¦Moving further down switches the area and the app behind follows.¦Aşağı gittikçe bölüm değişir, arkadaki uygulama da onunla gider.¦Kretanje prema dolje mijenja područje, a aplikacija iza prati.¦Kretanje prema dolje menja oblast, a aplikacija iza prati.¦Kretanje prema dolje mijenja područje, a aplikacija iza prati.¦Al bajar cambia el área y la app de fondo la sigue.¦En descendant, la zone change et l’appli derrière suit.¦Scendendo cambia l’area e l’app dietro la segue.
-Raster: Wie viele Spalten und Zeilen die Rasteransicht (zum Beispiel „Alle Filme“) zeigt.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.
+Raster: Wie viele Spalten und Zeilen die Rasteransicht (zum Beispiel „Alle Filme“) zeigt.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Izgara: ızgara görünümünün (ör. "Tüm filmler") kaç sütun ve satır göstereceği.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.¦Grid: how many columns and rows the grid view (for example “All movies”) shows.
 Score-Overlay: An¦Score overlay: On¦Skor katmanı: Açık¦Prikaz rezultata: Uključen¦Prikaz rezultata: Uključen¦Prikaz rezultata: Uključen¦Marcador flotante: Sí¦Score incrusté : Oui¦Punteggio sovrapposto: Sì
 Score-Overlay: Aus¦Score overlay: Off¦Skor katmanı: Kapalı¦Prikaz rezultata: Isključen¦Prikaz rezultata: Isključen¦Prikaz rezultata: Isključen¦Marcador flotante: No¦Score incrusté : Non¦Punteggio sovrapposto: No
-Setzt Ansicht, Menü, Player, Ton und Start auf die Standardwerte. Playlists, Favoriten und Verlauf bleiben erhalten. Das Design hat einen eigenen Knopf.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.
-Live-Vorschau starten¦Start live preview¦Start live preview¦Start live preview¦Start live preview¦Start live preview¦Start live preview¦Start live preview¦Start live preview
-Zeigt die echte App mit deinen Titeln; unten erscheinen die Einstellungen. Jede Auswahl wirkt sofort, ohne OK.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.
+Setzt Ansicht, Menü, Player, Ton und Start auf die Standardwerte. Playlists, Favoriten und Verlauf bleiben erhalten. Das Design hat einen eigenen Knopf.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Görünüm, menü, oynatıcı, ses ve başlangıç ayarlarını varsayılanlara sıfırlar. Oynatma listeleri, favoriler ve geçmiş korunur. Tasarımın ayrı bir düğmesi vardır.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.¦Resets view, menu, player, sound and start to the defaults. Playlists, favorites and history are kept. Design has its own button.
+Live-Vorschau starten¦Start live preview¦Canlı önizlemeyi başlat¦Start live preview¦Start live preview¦Start live preview¦Start live preview¦Start live preview¦Start live preview
+Zeigt die echte App mit deinen Titeln; unten erscheinen die Einstellungen. Jede Auswahl wirkt sofort, ohne OK.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Başlıklarınla gerçek uygulamayı gösterir; altta ayarlar görünür. Her seçim OK'a basmadan hemen uygulanır.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.¦Shows the real app with your titles; the settings appear at the bottom. Every choice takes effect immediately, no OK needed.
 Letterboxd · Gesehen¦Letterboxd · Watched¦Letterboxd · Watched¦Letterboxd · Watched¦Letterboxd · Watched¦Letterboxd · Watched¦Letterboxd · Watched¦Letterboxd · Watched¦Letterboxd · Watched
 Letterboxd · Merkliste¦Letterboxd · Watchlist¦Letterboxd · Watchlist¦Letterboxd · Watchlist¦Letterboxd · Watchlist¦Letterboxd · Watchlist¦Letterboxd · Watchlist¦Letterboxd · Watchlist¦Letterboxd · Watchlist
 Trakt · Gesehen¦Trakt · Watched¦Trakt · Watched¦Trakt · Watched¦Trakt · Watched¦Trakt · Watched¦Trakt · Watched¦Trakt · Watched¦Trakt · Watched
