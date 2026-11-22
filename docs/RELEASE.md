@@ -1,6 +1,7 @@
 # Releasing a new version
 
 IPVIO Stream checks the latest GitHub release once a day and offers the update in the bell at the top right.
+It reads `update.json`, a small file you attach to every release (section 3). Without that file it falls back to the GitHub API.
 Android installs an update **over** the old app (and keeps playlists, favorites, history and settings) only if
 both APKs are signed with **the same key**. Lose the key and every user has to uninstall and start from scratch.
 
@@ -37,26 +38,79 @@ Users of an APK signed with a different key have to uninstall once (Settings > S
 
 ## 2. Every release
 
+Since 15 Nov 2026, `.github/workflows/release.yml` does steps 1 to 6 after a merge from `dev` into `main`. It runs the tests first and publishes only if they pass. It refuses to overwrite an existing tag, and it writes `update.json` with the SHA-256 itself. If `docs/release-notes/v<versionName>.md` exists, it is the release text and its first four highlight lines become the `notes` in `update.json`; without it, GitHub lists the merged pull requests and the update dialog shows no notes. The manual steps below are the fallback and still define the file format.
+
+**Required before the first automatic release:** the GitHub secrets `ANDROID_KEYSTORE_BASE64` (base64 of the keystore file), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` must hold the **same key** that signed 1.4.2. A different key means that no user can install the update over the app.
+
 1. In `app/build.gradle.kts` raise `versionCode` (by 1) and `versionName` (e.g. `"1.2"`).
 2. Build the signed APK: `gradlew assembleRelease` (or Build > Generate Signed App Bundle / APK).
    The file is `app/build/outputs/apk/release/app-release.apk`.
 3. Rename it to **`IPVIO-Stream.apk`**.
-4. On GitHub: **Releases > Draft a new release**
+4. Create `update.json` for exactly this APK (section 3).
+5. On GitHub: **Releases > Draft a new release**
    - Tag: `v` + versionName, e.g. `v1.2` (the app compares this tag with its own version)
-   - Title and notes: what is new (the first lines appear in the app)
-   - Attach `IPVIO-Stream.apk`
+   - Title: `IPVIO Stream ` + versionName, e.g. `IPVIO Stream 1.2`
+   - Notes: paste `docs/release-notes/v<versionName>.md` (written from `CHANGELOG.md` with `docs/release-notes/TEMPLATE.md`).
+     If the app falls back to the GitHub API, it shows the first four non-heading lines of this text, so the highlights come first
+   - Attach **both** `IPVIO-Stream.apk` and `update.json`
    - **Publish release** (not "pre-release", the app ignores those)
+6. Check: open `https://github.com/ptmy53/IPVIO-Stream-TR/releases/latest/download/update.json` in a browser. It must show your JSON.
 
 The download link in the README and the Downloader code always point to the newest release:
-`https://github.com/Emrodev/IPVIO-Stream/releases/latest/download/IPVIO-Stream.apk`
+`https://github.com/ptmy53/IPVIO-Stream-TR/releases/latest/download/IPVIO-Stream.apk`
 
-## 3. What users see
+## 3. update.json (Windows)
+
+The app downloads `https://github.com/ptmy53/IPVIO-Stream-TR/releases/latest/download/update.json` first. It contains the
+SHA-256 of the APK, so the app can reject a damaged download before the installer opens.
+
+1. Put the final `IPVIO-Stream.apk` in a folder, open **Command Prompt** there (type `cmd` in the folder's address bar).
+2. Run `certutil -hashfile IPVIO-Stream.apk SHA256`.
+   The second line is the hash: 64 characters `0-9 a-f`. Older Windows versions print it with spaces; the app ignores spaces and upper/lower case.
+3. Create `update.json` with Notepad (save as **UTF-8**, file type "All files", name exactly `update.json`):
+
+```json
+{
+  "versionCode": 5,
+  "versionName": "1.4",
+  "apk": "IPVIO-Stream.apk",
+  "sha256": "PASTE-THE-64-CHARACTER-HASH-HERE",
+  "minSupportedCode": 0,
+  "mandatory": false,
+  "notes": "What is new, one short line"
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `versionCode` | Must equal `versionCode` in `app/build.gradle.kts` for this APK. The app refuses an APK with another number. |
+| `versionName` | Shown to the user; use the same as the tag without `v`. |
+| `apk` | Name of the APK asset in the same release (a full `https://` address also works). |
+| `sha256` | Hash from step 2. **Required** for the built-in source. |
+| `minSupportedCode` | Installed apps with a lower `versionCode` get a required update (no "Later" button). `0` = off. |
+| `mandatory` | `true` = this update is required for everybody. Back still closes the dialog, so nobody is locked out. |
+| `notes` | Optional text under the version in the update dialog (max 300 characters). |
+
+4. Attach `update.json` to the release together with the APK (step 5 of section 2).
+
+Rules:
+- **Every time you rebuild the APK, calculate the hash again** and update `versionCode` and `sha256`. A wrong hash makes every user see "Checksum mismatch".
+- Use `"mandatory": true` or `minSupportedCode` only for real emergencies (a broken release). Both are visible to all users.
+- If `update.json` is missing or broken, the app falls back to the GitHub API. That path has **no hash**; the signature check still applies.
+- A custom update address (Settings > App update) may point to an `update.json` without `sha256`; if present it is checked.
+
+## 4. What users see
 
 - Within a day the bell shows a red dot and "Update available: version 1.2". One click downloads and opens the installer.
 - Settings > About > App update: check now, install, or turn off the automatic check.
 - The first time, Android asks to allow "Install unknown apps" for IPVIO Stream.
 
 Version 1.0 has no update check yet, so 1.0 users install 1.1 once by hand (Downloader code or link). From 1.1 on it works from inside the app.
+
+Before the installer opens, the app checks the download and shows a clear text instead of Android's "App not installed":
+wrong checksum, incomplete download, not an app file, another app, version not newer, version number differs from `update.json`,
+or a signature that does not match the installed app (for example a debug build over a release build).
+
 # Kişisel GitHub Release
 
 Bu fork, isteğe bağlı olarak GitHub Actions ile **kişisel, imzalı APK** üretebilir.

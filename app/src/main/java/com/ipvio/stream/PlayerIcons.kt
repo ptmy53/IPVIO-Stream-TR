@@ -20,7 +20,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Alle Player-Symbole. Sie sind auf einem 24×24-Raster gezeichnet und skalieren sauber auf jede Größe. */
+/** All player icons. They are drawn on a 24×24 grid and scale cleanly to any size. */
 enum class PIcon {
     Play, Pause, Replay, Forward, PrevEp, NextEp, AudioSubs, Speed, Episodes, Settings,
     Channels, Guide, StarOn, StarOff, Aspect, External, Check, Chevron, Close
@@ -41,7 +41,7 @@ private fun DrawScope.strokeShape(c: Color, u: Float, w: Float = 2f, build: Path
     drawPath(p, c, style = Stroke(width = w * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
 }
 
-/** Gefüllte Form mit leicht abgerundeten Ecken (Füllung + dünne runde Kontur). */
+/** Filled shape with slightly rounded corners (fill + thin round outline). */
 private fun DrawScope.fillShape(c: Color, u: Float, round: Float = 1.4f, build: Path.(Float) -> Unit) {
     val p = Path()
     p.build(u)

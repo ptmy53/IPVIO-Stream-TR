@@ -1,9 +1,9 @@
 package com.ipvio.stream
 
 
-/** Regeln für Besetzungslisten (ohne Android, testbar). */
+/** Rules for cast lists (without Android, testable). */
 object CastLogic {
-    /** Fasst Einträge mit gleicher ID zusammen (Reihenfolge des ersten Auftretens bleibt). */
+    /** Merges entries with the same ID (order of first occurrence is kept). */
     fun <T> mergeById(list: List<T>, id: (T) -> Int, merge: (T, T) -> T): List<T> {
         val out = LinkedHashMap<Int, T>()
         for (x in list) { val k = id(x); val prev = out[k]; out[k] = if (prev == null) x else merge(prev, x) }
@@ -11,10 +11,10 @@ object CastLogic {
     }
 }
 
-/** Verweis auf einen Titel bei TMDB (Empfehlung oder Filmografie). [alt] ist der Originaltitel. */
+/** Reference to a title at TMDB (recommendation or filmography). [alt] is the original title. */
 data class Ref(val tmdbId: Int, val isTv: Boolean, val title: String, val alt: String?, val year: String?, val poster: String?)
 
-/** Ordnet TMDB-Titel den Einträgen der eigenen Playlist zu (Titel normalisiert, Jahr ±1, Film/Serie getrennt). */
+/** Maps TMDB titles to entries of the own playlist (title normalized, year ±1, movie/series separate). */
 object LibMatch {
     fun norm(s: String): String = s.lowercase().filter { it.isLetterOrDigit() }
 
@@ -46,7 +46,7 @@ object LibMatch {
     private var lastList: List<Item>? = null
     private var lastIndex: Index? = null
 
-    /** Index der gesamten Playlist, einmal pro geladener Liste aufgebaut. */
+    /** Index of the whole playlist, built once per loaded list. */
     @Synchronized
     fun indexFor(items: List<Item>): Index {
         val li = lastIndex
@@ -54,11 +54,11 @@ object LibMatch {
         return Index(items).also { lastList = items; lastIndex = it }
     }
 
-    /** Beim Neuladen der Playlist aufrufen: sonst bliebe die alte Liste samt Index im Speicher. */
+    /** Call when reloading the playlist: otherwise the old list and its index would stay in memory. */
     @Synchronized
     fun reset() { lastList = null; lastIndex = null }
 
-    /** Alle Treffer in der Playlist, ohne Doppelte, in der Reihenfolge der Verweise. */
+    /** All hits in the playlist, without duplicates, in the order of the references. */
     fun matches(items: List<Item>, refs: List<Ref>, limit: Int = 60): List<Item> {
         val idx = indexFor(items)
         val seen = HashSet<String>()

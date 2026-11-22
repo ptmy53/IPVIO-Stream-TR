@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
 import coil.Coil
@@ -35,25 +36,39 @@ import coil.memory.MemoryCache
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Einstellungen früh laden, damit Farben und Größe schon im ersten Bild stimmen.
+        // Load settings early so colors and size are right in the very first frame.
         Profiles.init(this)
+        SublistStore.clearActiveOnce(this)   // T-035: the sublist tab is gone; drop active filters once
+        Profiles.prewarm(this)
+        TlsFallback.init(this)   // #69: hosts the user agreed to (ipvio_tls)
         val pick = Profiles.needsPicker(this)
         if (!pick) AppSettings.init(this)
         General.init(this)
+        AppDns.init(this)   // T-049f: before the first connection
+        // T-047: read the stored playlist while the first screen is built (not with the profile picker: the profile is not chosen yet)
+        if (!pick) Thread({ runCatching { PlaylistStore.preread(applicationContext) } }, "list-preread").start()
+        // T-047: parse the dictionary of the UI language off the main thread while the first screen is built (German: nothing to do)
+        Thread({ runCatching { Lang.prewarm() } }, "lang-prewarm").start()
+        Boomer.init(this)
+        HomeLayout.init(this); BoomerLayout.init(this)
         SidebarPrefs.init(this)
         Config.init(this)
+        Config.initSubs(this)
         LiveSettings.init(this)
         Recorder.attach(this)
         MobilePrefs.apply(this)
-        // Frischer Start (nicht nur gedrehter/neu erstellter Bildschirm): "Zuletzt Geschautes beim Start fortsetzen" darf wieder greifen.
-        // Der Prozess lebt nach Beenden oft weiter; das Merker-Flag blieb deshalb vom ersten Start stehen und nichts wurde mehr geöffnet.
+        // Fresh start (not just a rotated/recreated screen): "Resume last watched at start" may apply again.
+        // The process often lives on after quitting; the marker flag therefore stayed set from the first start and nothing was opened any more.
         if (savedInstanceState == null) General.startupHandled = false
-        Updater.apply(this)
+        // WorkManager sets up its database on first use: off the main thread, so the first screen is not delayed
+        val app = applicationContext
+        Thread({ runCatching { Updater.apply(app) } }, "updater-apply").start()
         CrashLog.install(this)
         Coil.setImageLoader(
             ImageLoader.Builder(this)
                 .memoryCache { MemoryCache.Builder(this).maxSizePercent(Mem.imageCachePercent(Mem.tier(this))).build() }
                 .allowRgb565(true)
+                .bitmapFactoryMaxParallelism(Mem.imageDecoders(Mem.tier(this)))
                 .crossfade(false)
                 .build()
         )
@@ -62,7 +77,17 @@ class MainActivity : ComponentActivity() {
         setContent { App(pick) }
     }
 
-    /** Erinnerung angetippt, während die App schon läuft: Sender öffnen. */
+    /** T-049a: OK on a sports alert (goal, kick-off) jumps to a channel that shows the game; every other key as usual. */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val ok = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+        if (ok && SportAlerts.current?.game != null && SportAlerts.jumpTarget(SportAlerts.current) != null) {
+            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) SportAlerts.jump()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    /** Reminder tapped while the app is already running: open the channel. */
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra(Reminders.EXTRA_CH)?.let { AppNav.openChannel = it }
@@ -71,20 +96,24 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         Reminders.foreground = true
+        // W-010b: fetch changes from the other devices (only once AppContent has started the live sync)
+        LiveSync.onForeground()
     }
 
     override fun onStop() {
         Reminders.foreground = false
+        // W-010b: upload pending changes when leaving the app
+        LiveSync.onBackground()
         super.onStop()
     }
 
-    /** Home-Taste (oder App-Wechsel) durch den Nutzer – nicht beim Bildschirmschoner und nicht bei Trailer/externem Player. */
+    /** Home key (or app switch) by the user – not on the screensaver and not on trailer/external player. */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         AppNav.leftByUser = true
     }
 
-    /** Zurück in der App nach der Home-Taste: zur Startseite (siehe AppContent). */
+    /** Back in the app after the Home key: to the home screen (see AppContent). */
     override fun onRestart() {
         super.onRestart()
         if (AppNav.leftByUser) { AppNav.leftByUser = false; AppNav.homeSignal++ }
@@ -92,7 +121,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Nach Standby oder App-Wechsel das Fenster-Flag erneut setzen, falls das System es verworfen hat
+        // After standby or app switch set the window flag again in case the system dropped it
         ScreenAwake.apply()
     }
 
@@ -134,22 +163,45 @@ val SmoothSpec = object : BringIntoViewSpec {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun App(pick: Boolean = false) {
-    // Anzeigegröße: Entwurf ist für 960 dp Breite. Auf Geräten mit mehr dp (z. B. Fire TV) wird automatisch hochskaliert.
+    // Display size: the design is for 960 dp width. On devices with more dp (e.g. Fire TV) it is scaled up automatically.
     val cfg = LocalConfiguration.current
     val base = LocalDensity.current
-    val factor = ThemeMath.uiFactor(Look.uiScale, cfg.screenWidthDp)
+    val factor = ThemeMath.uiFactor(Look.uiScale, cfg.screenWidthDp, cfg.screenHeightDp)
     val tf = General.textFactor()
     val scaled = remember(base.density, base.fontScale, factor, tf) { Density(base.density * factor, base.fontScale * tf) }
     CompositionLocalProvider(
         LocalDensity provides scaled,
         LocalBringIntoViewSpec provides SmoothSpec,
-        LocalOverscrollFactory provides null
+        LocalOverscrollFactory provides null,
+        // T-029: Arabic is laid out right to left (the other languages stay left to right)
+        androidx.compose.ui.platform.LocalLayoutDirection provides
+            (if (Lang.code() == "ar") androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr)
     ) {
         val c = LocalContext.current
         var picked by remember { mutableStateOf(!pick) }
-        if (!picked) ProfilePicker { id -> Profiles.select(c, id); AppSettings.init(c); Parental.init(c); LangFilter.init(c); picked = true }
-        else AppContent()
+        if (!picked) ProfilePicker { id -> Profiles.select(c, id); AppSettings.init(c); Parental.init(c); LangFilter.init(c); Boomer.init(c); HomeLayout.init(c); BoomerLayout.init(c); picked = true }
+        else {
+            LaunchedEffect(Unit) { delay(10_000); runCatching { SportAlerts.run(c.applicationContext) } }   // after the start: the playlist and the home screen come first
+            Box(Modifier.fillMaxSize()) { AppContent(); SportAlertHost() }
+        }
+        // New version available: dialog with one button (above every screen)
+        UpdatePromptHost()
+        // Provider certificate does not match its address: ask once per host before an unencrypted connection (#69)
+        TlsConsentDialog()
+        // #95: keep the screen awake while the app is open, if the user switched it on (default off)
+        KeepScreenOn("browse", General.keepAwakeBrowse)
+        // First start without a playlist: one non-blocking card that checks for updates (T-014)
+        if (picked) UpdateCardHost()
     }
+}
+
+/** "Adjust screen": margin all around (in percent of width/height) in case the TV cuts off edges. */
+fun Modifier.fitScreenInset(on: Boolean): Modifier = if (!on || (General.fitX == 0 && General.fitY == 0)) this else this.layout { m, c ->
+    val dx = (c.maxWidth * General.fitX / 100f).toInt()
+    val dy = (c.maxHeight * General.fitY / 100f).toInt()
+    val inner = c.copy(maxWidth = (c.maxWidth - 2 * dx).coerceAtLeast(0), maxHeight = (c.maxHeight - 2 * dy).coerceAtLeast(0), minWidth = 0, minHeight = 0)
+    val pl = m.measure(inner)
+    layout(c.maxWidth, c.maxHeight) { pl.place(dx, dy) }
 }
 
 private val SE_RE = Regex("""S(\d+)E(\d+)""")
@@ -158,13 +210,15 @@ private val SE_RE = Regex("""S(\d+)E(\d+)""")
 private fun AppContent() {
     val ctx = LocalContext.current
     remember {
-        AppSettings.init(ctx); WatchStore.init(ctx); History.init(ctx); Library.init(ctx); QualityStore.init(ctx)
-        PlaybackPrefs.init(ctx); DeadLinks.init(ctx); ChannelLists.init(ctx); Reminders.init(ctx); Reminders.schedule(ctx); 0
+        AppSettings.init(ctx); WatchStore.init(ctx); History.init(ctx); Library.init(ctx); QualityStore.init(ctx); PrivateCats.init(ctx)
+        PlaybackPrefs.init(ctx); PlayerSync.init(ctx); loadWishboxTexts(); DeadLinks.init(ctx); ChannelLists.init(ctx); Reminders.init(ctx); Reminders.schedule(ctx)
+        // W-010b: live sync of favorites and history (silent; only when Google Drive is connected)
+        LiveSync.start(ctx); 0
     }
-    // Beim letzten Mal mitten im Hinzufügen unterbrochen (Absturz, Stromausfall): der Hinzufügen-Bildschirm lädt automatisch weiter
+    // Interrupted in the middle of adding last time (crash, power loss): the add screen automatically continues loading
     val resumeAdd = remember { PlaylistStore.pending(ctx)?.autoResume == true }
     var adding by remember { mutableStateOf(PlaylistStore.savedUrl(ctx) == null || resumeAdd) }
-    // Oberste Detailseite (Item oder PersonRef) plus Rückwärts-Stapel, damit Zurück Film → Person → Film nachvollzieht
+    // Top detail page (Item or PersonRef) plus back stack, so Back retraces Movie → Person → Movie
     var top by remember { mutableStateOf<Any?>(null) }
     val trail = remember { mutableStateListOf<Any>() }
     val detail = top as? Item
@@ -172,9 +226,13 @@ private fun AppContent() {
     fun pushTop(x: Any) { top?.let { trail.add(it) }; top = x }
     fun popTop() { top = trail.removeLastOrNull() }
     var browse by remember { mutableStateOf<BrowseState?>(null) }
+    // Stalker portal: load the opened category on demand, stop when leaving
+    LaunchedEffect(browse) { browse?.let { StalkerMore.attach(ctx, it) } ?: StalkerMore.detach() }
     var cats by remember { mutableStateOf<CatReq?>(null) }
     var playing by remember { mutableStateOf<PlayReq?>(null) }
     var tab by remember { mutableStateOf(SettingsLogic.resolveStartTab(General.startTab, AppSettings.menuOrder.toList(), AppSettings.menuHidden.toList())) }
+    // W-002: the start page is the movie or series area: open its categories as well
+    LaunchedEffect(Unit) { if (General.vodCats && (tab == 1 || tab == 2)) AppNav.pendingVodCats = tab }
     val gridState = remember(browse) { LazyGridState() }
     val states = listOf(
         rememberLazyListState(), rememberLazyListState(), rememberLazyListState(),
@@ -182,23 +240,29 @@ private fun AppContent() {
         rememberLazyListState(), rememberLazyListState(), rememberLazyListState(), rememberLazyListState()
     )
 
-    // Neue App-Version auf GitHub? Einmal am Tag still prüfen; ein Fund erscheint in der Glocke oben rechts.
+    // W-004: "What's new" once after an update to a new version
+    LaunchedEffect(Unit) { runCatching { WhatsNew.check(ctx) } }
+    // New app version on GitHub? Check silently once a day; a find appears in the bell at the top right.
     LaunchedEffect(Unit) {
-        delay(8_000)   // erst nach dem Start, die Playlist hat Vorrang
-        runCatching { AppUpdate.autoCheck(ctx) }
+        delay(3_000)   // only after the start, the playlist takes priority
+        runCatching { AppUpdate.startCheck(ctx) }
     }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { General.cleanupLegacy(ctx) }
         if (resumeAdd) return@LaunchedEffect
         PlaylistStore.savedUrl(ctx)?.let { u ->
-            val skip = !SettingsLogic.refreshDue(General.plan(), General.lastRefresh, System.currentTimeMillis(), General.zone())
-            val ok = PlaylistStore.load(ctx, u, false, skip)
-            if (ok && !skip) General.markRefreshed(ctx)
+            // T-048b: the plan of this playlist (its own, otherwise the general one)
+            val skip = !SettingsLogic.refreshDue(PlaylistRefresh.effective(ctx, u), PlaylistRefresh.lastFor(ctx, u), System.currentTimeMillis(), General.zone())
+            val ok = PlaylistStore.load(ctx, u, false, skip, startup = true)
+            if (ok && !skip) PlaylistRefresh.markFor(ctx, u)
+            // Other playlists with their own plan that is due: in the background, after the first screens
+            delay(20_000)
+            runCatching { PlaylistStore.refreshOthersDue(ctx) }
         }
     }
 
-    // Nach der Home-Taste zurück in der App: zur Startseite (eine laufende Wiedergabe und das Hinzufügen bleiben, wie sie sind)
+    // Back in the app after the Home key: to the home screen (a running playback and adding stay as they are)
     LaunchedEffect(AppNav.homeSignal) {
         if (AppNav.homeSignal > 0 && playing == null && !adding) {
             val changed = top != null || browse != null || cats != null || tab != 0
@@ -208,10 +272,11 @@ private fun AppContent() {
         }
     }
 
-    // Hinzufügen verlassen, ohne dass etwas geladen ist (z. B. Fortsetzen abgebrochen): die gespeicherte Playlist laden
+    // Left the add screen without anything loaded (e.g. resuming cancelled): load the saved playlist.
+    // Not when a list was already shown and is only empty because of the playlist mode (see AddFlowLogic).
     var wasAdding by remember { mutableStateOf(adding) }
     LaunchedEffect(adding) {
-        if (wasAdding && !adding && PlaylistStore.channels.isEmpty() && !PlaylistStore.loading) {
+        if (AddFlowLogic.shouldReloadAfterAddClosed(wasAdding, adding, PlaylistStore.channels.isEmpty(), PlaylistStore.loading, PlaylistStore.shownUrl != null)) {
             PlaylistStore.savedUrl(ctx)?.let { PlaylistStore.load(ctx, it, false, true) }
         }
         wasAdding = adding
@@ -219,12 +284,16 @@ private fun AppContent() {
 
     val all = PlaylistStore.channels
     val liveAll = remember(all) { all.filter { it.kind == Kind.LIVE } }
-    // Beim Herunterladen und Einlesen der Playlist nicht in den Bildschirmschoner fallen
+    SideEffect { SportAlerts.liveChannels = liveAll }
+    // Do not fall into the screensaver while downloading and parsing the playlist
     KeepScreenOn("playlist", PlaylistStore.loading)
-    // Genre-Erkennung im Hintergrund; startet bei jeder neuen Liste (Neuladen, Sprachfilter, Jugendschutz) sauber neu
-    LaunchedEffect(all) { Classifier.restart(ctx, all) }
+    // Genre detection in the background; restarts cleanly with every new list (reload, language filter, parental control)
+    LaunchedEffect(all) { kotlinx.coroutines.delay(8_000); if (!DemoMode.active) Classifier.restart(ctx, all) }
+    // Private categories (T-028): ids of their titles, so history and resume can skip them
+    LaunchedEffect(all) { PrivateCats.reload(all) }   // after the first screen is up, and debounced while the list is still changing
 
     fun start(item: Item, title: String, url: String, startMs: Long = 0L) {
+        if (DemoMode.active) return   // sample entries have no stream address
         History.add(ctx, item.id)
         val sm = SE_RE.find(title)
         val season = sm?.groupValues?.get(1)?.toIntOrNull() ?: 0
@@ -234,7 +303,7 @@ private fun AppContent() {
         var alts = emptyList<Variant>()
         var note: String? = null
         if (item.kind == Kind.MOVIE && !item.id.startsWith("rec:")) {
-            // Gleicher Film in anderen Qualitäten (eigene Einträge des Anbieters): passend zum Gerät wählen, Rest zum Ausweichen
+            // Same movie in other qualities (own entries of the provider): choose to suit the device, the rest as fallbacks
             val list = Sources.alternatives(item, all)
             if (list.size > 1) {
                 alts = Sources.asVariants(list)
@@ -242,9 +311,9 @@ private fun AppContent() {
                 val cap = PlaybackPrefs.cap(ctx)
                 val best = QualityLogic.order(alts.map { it.quality }, cap).first()
                 val rc = QualityLogic.rank(alts[chosen].quality)
-                // Auf der Detailseite fest gewählte Qualität hat Vorrang vor der Automatik
+                // Quality chosen explicitly on the detail page takes precedence over the automatic mode
                 val vp = VariantPref.get(ctx, item.id)
-                // Fest gewählte Quelle (Detailseite, Runde 14) vor fest gewählter Qualität vor Automatik
+                // Explicitly chosen source (detail page, round 14) before explicitly chosen quality before automatic
                 val fixedSrc = vp.third?.let { l -> alts.indexOfFirst { it.label == l } }?.takeIf { it >= 0 }
                 val fixed = vp.first?.let { q -> alts.indexOfFirst { it.quality == q } }?.takeIf { it >= 0 }
                 if (fixedSrc != null && !DeadLinks.isDead(alts[fixedSrc].url)) {
@@ -255,7 +324,7 @@ private fun AppContent() {
                     playUrl = alts[best].url
                     note = (alts[chosen].quality ?: "Diese Qualität") + " passt nicht zu diesem Gerät – spiele " + (alts[best].quality ?: "SD")
                 } else if (DeadLinks.isDead(url)) {
-                    // gewählte Quelle ist als gestört bekannt: gleich eine andere nehmen
+                    // chosen source is known to be broken: take another one right away
                     alts.indices.firstOrNull { it != chosen && !DeadLinks.isDead(alts[it].url) }?.let { playUrl = alts[it].url; note = "Quelle gestört – spiele eine andere" }
                 }
             }
@@ -263,7 +332,7 @@ private fun AppContent() {
         playing = PlayReq(title, playUrl, item.id, item.kind == Kind.LIVE, startMs, tmdb, season, ep, alts, note)
     }
 
-    /** EPG (Seitenleiste/Kachel): zuletzt gesehenen Sender (sonst den ersten) starten und gleich den TV-Guide zeigen. */
+    /** EPG (sidebar/tile): start the last watched channel (otherwise the first) and show the TV guide right away. */
     fun openEpg() {
         val ch = History.ids.firstNotNullOfOrNull { id -> liveAll.firstOrNull { it.id == id } } ?: liveAll.firstOrNull() ?: return
         AppNav.focusTab = -1
@@ -272,9 +341,9 @@ private fun AppContent() {
         start(ch, ch.title, ch.url)
     }
 
-    /** Bereich wechseln; „EPG“ ist kein eigener Bildschirm, sondern öffnet den TV-Guide im Player. */
-    // Bereich gewechselt (Kachel, „Alle anzeigen“, Seitenleiste): den Fokus in den neuen Inhalt setzen.
-    // Sonst fällt er auf das erste Element zurück, und das ist die Seitenleiste – sie klappt von selbst auf (Runde 15).
+    /** Switch area; "EPG" is not a screen of its own but opens the TV guide in the player. */
+    // Area switched (tile, "Show all", sidebar): put the focus into the new content.
+    // Otherwise it falls back to the first element, which is the sidebar – it expands by itself (round 15).
     var jumpTick by remember { mutableIntStateOf(0) }
     LaunchedEffect(jumpTick) {
         if (jumpTick == 0) return@LaunchedEffect
@@ -288,6 +357,8 @@ private fun AppContent() {
     fun goTab(id: Int) {
         if (id == MenuLogic.EPG) { openEpg(); return }
         tab = id; CatMemory.reset()
+        // W-002: movies/series straight to their categories (the area opens them when its data is ready)
+        AppNav.pendingVodCats = if (General.vodCats && !ViewLive.active && (id == 1 || id == 2)) id else -1
         jumpTick++
     }
 
@@ -297,7 +368,7 @@ private fun AppContent() {
         if (i.kind == Kind.LIVE) start(i, i.title, i.url) else pushTop(i)
     }
 
-    // Erinnerungs-Benachrichtigung angetippt: Sender öffnen, sobald die Liste geladen ist
+    // Reminder notification tapped: open the channel as soon as the list is loaded
     LaunchedEffect(AppNav.openChannel, liveAll) {
         val id = AppNav.openChannel ?: return@LaunchedEffect
         val ch = liveAll.firstOrNull { it.id == id } ?: return@LaunchedEffect
@@ -306,7 +377,34 @@ private fun AppContent() {
         top = null; browse = null; cats = null; adding = false
         start(ch, ch.title, ch.url)
     }
-    // Erinnerungen, während die App offen ist: Karte mit „Umschalten“ (statt Benachrichtigung)
+    // Phone search: title the phone wants to start (movie, episode, channel), as soon as the playlist is loaded
+    LaunchedEffect(RemoteHub.playReq, all) {
+        val r = RemoteHub.playReq ?: return@LaunchedEffect
+        val it = all.firstOrNull { x -> x.id == r.id } ?: return@LaunchedEffect
+        RemoteHub.playReq = null
+        RemoteUi.show = false
+        General.startupHandled = true
+        top = null; trail.clear(); browse = null; cats = null; adding = false
+        when (it.kind) {
+            Kind.LIVE -> { ZapContext.list = emptyList(); ZapContext.key = null; start(it, it.title, it.url) }
+            Kind.MOVIE -> {
+                // Already started? Then continue where you left off (as on the TV)
+                val we = WatchStore.entries.firstOrNull { w -> w.itemId == it.id && !w.next }
+                start(it, it.title, it.url, we?.pos ?: 0L)
+            }
+            Kind.SERIES -> {
+                val ep = LazySeries.full(it).episodes.firstOrNull { e -> e.season == r.season && e.num == r.ep }
+                if (ep != null) {
+                    // Same episode already started: continue at the remembered position
+                    val we = WatchStore.entries.firstOrNull { w -> w.itemId == it.id && !w.next && w.season == ep.season && w.ep == ep.num }
+                    start(it, it.title + " S" + ep.season + "E" + ep.num, pickVariant(ep, null, null, null, PlaybackPrefs.cap(ctx)).url, we?.pos ?: 0L)
+                }
+            }
+        }
+    }
+    // "Stop" on the phone: close the player
+    LaunchedEffect(RemoteHub.closeTick) { if (RemoteHub.closeTick > 0 && playing != null) playing = null }
+    // Reminders while the app is open: card with "Switch" (instead of a notification)
     var remindNow by remember { mutableStateOf<Reminder?>(null) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -317,8 +415,8 @@ private fun AppContent() {
         }
     }
 
-    // Einstellungen "Letzten Sender / letzten Film bzw. Serie beim Start abspielen" (einmal pro App-Start).
-    // Maßgeblich ist, was zuletzt lief: ein Sender oder ein Film / eine Serie.
+    // Settings "Play last channel / last movie or series at start" (once per app start).
+    // What counts is what ran last: a channel or a movie / series.
     LaunchedEffect(all.isNotEmpty()) {
         if (all.isNotEmpty() && !General.startupHandled) {
             General.startupHandled = true
@@ -329,7 +427,7 @@ private fun AppContent() {
             if (lastLive != null && General.resumeLive) start(lastLive, lastLive.title, lastLive.url)
             else if (lastLive == null && General.resumeLive && firstLive != null) start(firstLive, firstLive.title, firstLive.url)
             else if (last != null && last.kind != Kind.LIVE && General.resumeVod) {
-                // nur mit gemerkter Stelle (fertig geschaute Filme starten nicht von vorn; bei Serien ggf. die nächste Folge)
+                // only with a remembered position (fully watched movies do not start from the beginning; for series possibly the next episode)
                 val e = WatchStore.entries.firstOrNull { it.itemId == last.id }
                 if (e != null) {
                     pushTop(last)
@@ -340,8 +438,8 @@ private fun AppContent() {
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Bg)) {
-        // Maßstab des Entwurfs aus der verfügbaren Breite (siehe Design)
+    BoxWithConstraints(Modifier.fillMaxSize().background(Bg).fitScreenInset(playing == null)) {
+        // Scale of the design from the available width (see Design)
         val dk = maxWidth.value / Design.WIDTH
         SideEffect { if (Design.k != dk) Design.k = dk }
         val p = playing
@@ -361,22 +459,26 @@ private fun AppContent() {
                 val seriesBase = remember(p.itemId, all) {
                     if (p.live || p.archive != null) null else all.firstOrNull { it.id == p.itemId }?.let { LazySeries.full(it) }
                 }
-                // Serie mit Platzhalter (z. B. Fortsetzen von der Startseite): Folgen im Hintergrund holen, der Player nutzt sie sofort danach
+                // Series with a placeholder (e.g. Resume from the home screen): fetch episodes in the background, the player uses them right after
                 val seriesItem by produceState(seriesBase, seriesBase) {
                     value = seriesBase
                     val b = seriesBase
                     if (b != null && LazySeries.isStub(b)) LazySeries.load(ctx, b)?.let { value = it }
                 }
-                // Neuer Start von außen (z. B. Erinnerung „Umschalten“) während der Wiedergabe: Player neu aufbauen
+                // New start from outside (e.g. reminder "Switch") during playback: rebuild the player
                 key(p) {
                     PlayerScreen(p, zap, liveAll, seriesItem) {
-                        // Live: zurück in Live TV auf den zuletzt gesehenen Sender (auch nach Umschalten im Player)
-                        if (p.live || p.archive != null) LastFocus.pending = History.ids.firstOrNull { id -> liveAll.any { it.id == id } }
+                        // Live: back in Live TV on the last watched channel (also after switching in the player)
+                        // Live TV tab is 3 (see LiveTab: ContentFocus.tab = 3). Without this, a stream started from Home returns to Home.
+                        if (p.live || p.archive != null) {
+                            LastFocus.pending = History.ids.firstOrNull { id -> liveAll.any { it.id == id } }
+                            tab = 3
+                        }
                         playing = null
                     }
                 }
             }
-            // Runde 17: jeder Bildschirm blendet weich ein (screenEnter); der Player bewusst ohne Effekt
+            // Round 17: every screen fades in softly (screenEnter); the player deliberately without an effect
             personTop != null -> key(personTop.id) { Box(Modifier.fillMaxSize().screenEnter()) { PersonScreen(personTop, all, onOpen = { pushTop(it) }, onBack = { popTop() }) } }
             d != null -> key(d.id) { Box(Modifier.fillMaxSize().screenEnter()) {
                 DetailScreen(
@@ -388,7 +490,7 @@ private fun AppContent() {
                 b, gridState, tab, onOpen = open,
                 onBack = { browse = null },
                 onGoTab = { if (it != MenuLogic.EPG) { browse = null; cats = null }; goTab(it) },
-                // Aus der Kino-Ansicht gestartet: die Detailseite des Titels darunterlegen, damit „Zurück“ dort landet (nicht wieder in der Kino-Ansicht)
+                // Started from the cinema view: put the title's detail page underneath so "Back" lands there (not in the cinema view again)
                 all = all, onPlay = { i, t, url, pos -> if (i.kind != Kind.LIVE) pushTop(i); start(i, t, url, pos) }, onPerson = { pushTop(it) }
             ) }
             c != null -> Box(Modifier.fillMaxSize().screenEnter()) { CategoriesScreen(
@@ -399,6 +501,25 @@ private fun AppContent() {
                 onGoTab = { if (it != MenuLogic.EPG) cats = null; goTab(it) }
             ) }
             adding -> Box(Modifier.fillMaxSize().screenEnter()) { AddPlaylistScreen { adding = false } }
+            // Boomer mode: very simple home screen with big channel tiles instead of the normal UI
+            Boomer.enabled -> BoomerHome(
+                all, PlaylistStore.loading,
+                onPlay = { ch, list ->
+                    ZapContext.list = list; ZapContext.key = null
+                    start(ch, ch.title, ch.url)
+                },
+                // Movie: starts immediately (Back leads to the detail page underneath); series: episode list
+                onVod = { i ->
+                    LastFocus.pending = i.id
+                    if (i.kind == Kind.SERIES) pushTop(i) else { pushTop(i); start(i, i.title, i.url) }
+                },
+                onResume = { e, i ->
+                    LastFocus.pending = i.id
+                    pushTop(i)
+                    val t = WatchStore.target(ctx, i, e)
+                    start(i, t.first, t.second, e.pos)
+                }
+            )
             tab == 4 && all.isNotEmpty() -> Box(Modifier.fillMaxSize().screenEnter()) { SearchScreen(
                 tab = tab, state = states[4],
                 onOpen = open,
@@ -412,16 +533,25 @@ private fun AppContent() {
                 onResume = { e, i ->
                     LastFocus.pending = i.id
                     if (i.kind != Kind.LIVE) pushTop(i)
-                    // aktuelle Adresse aus der geladenen Playlist statt der gespeicherten (Anbieter ändern Adressen)
+                    // current address from the loaded playlist instead of the stored one (providers change addresses)
                     val t = WatchStore.target(ctx, i, e)
                     start(i, t.first, t.second, e.pos)
                 },
                 onBrowse = { browse = BrowseState(it) },
                 onCategories = { cats = it },
-                onAdd = { adding = true }
+                onAdd = { DemoMode.exit(); adding = true }
             ) }
         }
-        // Genre-Erkennung im Hintergrund: dezent oben rechts, nie im Player
+        if (RemoteUi.show) RemoteOverlay(Modifier.align(Alignment.Center))
+        // W-004: not over the player or the add screen, and not at the same time as the update dialog
+        if (p == null && !adding && (AppUpdate.available == null || AppUpdate.promptDismissed)) WhatsNewHost()
+        // Live preview of the View settings: bar at the bottom, the real app stays visible
+        if (ViewLive.active) ViewLivePanel(ctx, goTab = { goTab(it) }, closeCats = { cats = null; browse = null }) {
+            ViewLive.active = false
+            SettingsNav.openPage = 2
+            goTab(MenuLogic.SETTINGS)
+        }
+        // Genre detection in the background: unobtrusive at the top right, never in the player
         if (p == null && !adding) MetaBadge(Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 22.dp))
         remindNow?.let { r ->
             ReminderCard(r, Modifier.align(Alignment.TopCenter).padding(top = 24.dp), onClose = { remindNow = null }) {

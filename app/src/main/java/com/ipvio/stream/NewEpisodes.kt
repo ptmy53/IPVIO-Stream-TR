@@ -1,11 +1,19 @@
 package com.ipvio.stream
 
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.runtime.mutableStateListOf
 
 /**
- * Neue Folgen bei Favoriten-Serien melden (Glocke oben rechts). Der Stand je Serie wird auf dem Gerät gemerkt;
- * geprüft wird, wenn die Playlist geladen ist. Öffnet man die Serie, ist die Meldung erledigt.
+ * Report new episodes for favorite series (bell at the top right). The state per series is remembered on the device;
+ * it is checked when the playlist is loaded. Opening the series dismisses the notice.
  */
 object NewEpisodes {
     val list = mutableStateListOf<NewEpisodeLogic.Notice>()
@@ -33,10 +41,10 @@ object NewEpisodes {
             .apply()
     }
 
-    /** Favoriten-Serien prüfen (nach dem Laden der Playlist und wenn sich die Favoriten ändern). */
+    /** Check favorite series (after loading the playlist and when the favorites change). */
     fun check(c: Context, favSeries0: List<Item>) {
         init(c)
-        // Serien mit Platzhalter kennen ihre Folgen noch nicht: kein Vergleich (sonst falsche Meldungen)
+        // Series with a placeholder do not know their episodes yet: no comparison (otherwise false notices)
         val favSeries = favSeries0.filter { !XtreamLogic.isLazy(it) }
         if (favSeries.isEmpty()) return
         val r = NewEpisodeLogic.detect(known, favSeries.map { s -> NewEpisodeLogic.Show(s.id, s.title, s.episodes.map { it.season to it.num }) })
@@ -45,14 +53,41 @@ object NewEpisodes {
         for (n in r.notices) {
             val old = list.firstOrNull { it.id == n.id }
             if (old != null) list.remove(old)
-            list.add(0, if (old != null) n.copy(added = n.added + old.added) else n)
+            val shown = if (old != null) n.copy(added = n.added + old.added) else n
+            list.add(0, shown)
+            // #105: a system notification as well as the bell ("Serie XY hat eine neue Folge")
+            systemNotice(c, shown)
         }
-        // Meldungen zu Serien, die keine Favoriten mehr sind, entfernen
+        // Remove notices for series that are no longer favorites
         list.removeAll { it.id !in ids }
         save(c)
     }
 
-    /** Serie geöffnet: Meldung erledigt. */
+    private const val CHANNEL = "ipvio_newep"
+
+    /** Android notification for a new episode of a favorite series (#105). Skipped without the permission (Android 13+). */
+    private fun systemNotice(c: Context, n: NewEpisodeLogic.Notice) {
+        runCatching {
+            val nm = c.getSystemService(NotificationManager::class.java) ?: return
+            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(
+                NotificationChannel(CHANNEL, Lang.tr("Neue Folgen"), NotificationManager.IMPORTANCE_DEFAULT)
+            )
+            if (Build.VERSION.SDK_INT >= 33 && c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+            val open = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            val pi = PendingIntent.getActivity(c, n.id.hashCode(), open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            @Suppress("DEPRECATION")
+            val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL) else Notification.Builder(c)
+            val note = b.setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setContentTitle(n.title)
+                .setContentText(Lang.tr(NewEpisodeLogic.text(n)))
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .build()
+            nm.notify(("newep:" + n.id).hashCode(), note)
+        }
+    }
+
+    /** Series opened: notice dismissed. */
     fun dismiss(c: Context, id: String) {
         init(c)
         if (list.removeAll { it.id == id }) save(c)

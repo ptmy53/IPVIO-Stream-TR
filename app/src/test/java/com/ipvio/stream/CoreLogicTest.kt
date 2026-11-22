@@ -1,13 +1,12 @@
 package com.ipvio.stream
 
-import androidx.media3.common.PlaybackException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Tests für Kernlogik ohne Oberfläche: Playlist-Einlesen, Farben/Kontrast, Menü-Regeln, Fehlertexte. */
+/** Tests for core logic without UI: playlist parsing, colors/contrast, menu rules, error texts. */
 class CoreLogicTest {
 
     // ---------------------------------------------------------------- Playlist
@@ -40,7 +39,7 @@ http://h/x
         assertEquals(1, items.count { it.kind == Kind.LIVE })
         assertEquals(1, items.count { it.kind == Kind.MOVIE })
         assertEquals(1, items.count { it.kind == Kind.SERIES })
-        assertEquals(3, items.size) // der Trenner "*** Trenner ***" fällt weg
+        assertEquals(3, items.size) // the separator "*** Trenner ***" is dropped
     }
 
     @Test fun playlist_folgenSortiert() {
@@ -60,7 +59,7 @@ http://h/x
         assertEquals(m.mk, m.copy(logo = "x").mk)
     }
 
-    // ---------------------------------------------------------------- Farben
+    // ---------------------------------------------------------------- Colors
     @Test fun farben_weissAufSchwarzIst21() = assertEquals(21.0, ThemeMath.contrast(0xFFFFFF, 0x000000), 0.01)
 
     @Test fun farben_voreinstellungenSindLesbar() {
@@ -92,11 +91,11 @@ http://h/x
     @Test fun farben_firmenfarbenSindStandard() {
         assertEquals(Look.BRAND_GREEN, Look.ACCENTS[0].fill)
         assertEquals(0x0B0F19, Look.BGS[0].bg)
-        // Neon-Grün bekommt dunkle Schrift, dunkle Flächen weiterhin weiße
+        // Neon green gets dark text, dark surfaces still get white
         assertEquals(ThemeMath.INK, ThemeMath.onAccent(Look.BRAND_GREEN))
         assertEquals(0xFFFFFF, ThemeMath.onAccent(0x7C5CFF))
         assertTrue(ThemeMath.contrast(ThemeMath.onAccent(Look.BRAND_GREEN), Look.BRAND_GREEN) >= 7.0)
-        assertTrue(ThemeMath.contrast(Look.BRAND_GREEN, 0x0B0F19) >= 7.0)   // Grün als Schrift auf Navy
+        assertTrue(ThemeMath.contrast(Look.BRAND_GREEN, 0x0B0F19) >= 7.0)   // green as text on navy
         for (rgb in Look.SWATCHES) assertTrue(ThemeMath.hexOf(rgb), ThemeMath.contrast(ThemeMath.onAccent(rgb), rgb) >= 3.0)
     }
 
@@ -129,7 +128,7 @@ http://h/x
         assertEquals(1f, ThemeMath.uiFactor(2, 1280), 0f)
     }
 
-    // ---------------------------------------------------------------- Menü
+    // ---------------------------------------------------------------- Menu
     @Test fun menue_standard() = assertEquals(listOf(0, 3, 1, 2, 10, 6, 7, 8, 9, 4, 5), MenuLogic.parseOrder(null))
 
     @Test fun menue_alteReihenfolge_neueBereicheVorEinstellungen() {
@@ -166,7 +165,7 @@ http://h/x
         assertEquals(emptyList<Int>(), MenuLogic.toggle(h, 3))
     }
 
-    // ---------------------------------------------------------------- Fehlertexte
+    // ---------------------------------------------------------------- Error texts
     @Test fun fehler_zugangAbgelehnt() {
         assertTrue(playbackErrorText(0, 401, true).contains("Zugang abgelehnt"))
         assertTrue(isPermanentHttp(403))
@@ -179,8 +178,8 @@ http://h/x
     }
 
     @Test fun fehler_keineVerbindungUndFormat() {
-        assertTrue(playbackErrorText(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, 0, true).contains("Keine Verbindung"))
-        assertTrue(playbackErrorText(PlaybackException.ERROR_CODE_DECODING_FAILED, 0, false).contains("Videoformat"))
+        assertTrue(playbackErrorText(PlaybackErrorCodes.IO_NETWORK_CONNECTION_FAILED, 0, true).contains("Keine Verbindung"))
+        assertTrue(playbackErrorText(PlaybackErrorCodes.DECODING_FAILED, 0, false).contains("Videoformat"))
         assertEquals("Wiedergabe nicht möglich.", playbackErrorText(-1, 0, false))
     }
 

@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.delay
 
-/** „Technik-Info“ (Runde 15, Nachtrag 17): Codec, Bitrate, Bildrate, verworfene Bilder, Puffer. Oben links im Bild. */
+/** "Technik-Info" (technical info; round 15, addendum 17): codec, bitrate, frame rate, dropped frames, buffer. Top left of the picture. */
 @Composable
 fun BoxScope.PTechOverlay(player: ExoPlayer) {
     var lines by remember { mutableStateOf(listOf("…")) }
@@ -50,6 +50,6 @@ fun BoxScope.PTechOverlay(player: ExoPlayer) {
         Modifier.align(Alignment.TopStart).padding(16.dp).clip(RoundedCornerShape(10.dp))
             .background(Color(0xB3000000)).padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
-        lines.forEach { androidx.compose.foundation.text.BasicText(it, style = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace)) }
+        lines.forEach { androidx.compose.foundation.text.BasicText(Lang.tr(it), style = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace)) }
     }
 }

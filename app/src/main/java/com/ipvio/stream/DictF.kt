@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Übersetzungen Teil F: Metadaten-Anzeige, Hinweise zu großen Bibliotheken
+// Translations part F: metadata display, notes for large libraries
 val DictF = """
 Genres werden erkannt¦Detecting genres¦Türler algılanıyor¦Prepoznavanje žanrova¦Prepoznavanje žanrova¦Prepoznavanje žanrova¦Detectando géneros¦Détection des genres¦Rilevamento generi
 Länder werden ergänzt¦Adding countries¦Ülkeler ekleniyor¦Dodavanje zemalja¦Dodavanje zemalja¦Dodavanje zemalja¦Añadiendo países¦Ajout des pays¦Aggiunta paesi

@@ -3,25 +3,25 @@ package com.ipvio.stream
 import java.util.Calendar
 import java.util.TimeZone
 
-/** Eine Sendung im Programm (Zeiten in Sekunden seit 1970, UTC). */
+/** A show in the program (times in seconds since 1970, UTC). */
 data class EpgEntry(val title: String, val desc: String, val start: Long, val end: Long)
 
 /**
- * Archiv (Catchup) eines Senders: wie die Adresse einer vergangenen Sendung gebaut wird und wie viele Tage zurück es geht.
- * [mode] siehe [CatchupLogic] (XC, DEFAULT, APPEND, SHIFT, FLUSSONIC), [source] = Vorlage des Anbieters (catchup-source).
+ * Archive (catchup) of a channel: how the address of a past show is built and how many days back it goes.
+ * [mode] see [CatchupLogic] (XC, DEFAULT, APPEND, SHIFT, FLUSSONIC), [source] = template of the provider (catchup-source).
  */
 data class CatchupInfo(val mode: Int, val days: Int, val source: String = "")
 
-/** Ein Xtream-Sender aus seiner Live-Adresse: Server, Zugang, Sender-Nummer, Dateiendung. */
+/** An Xtream channel from its live address: server, login, channel number, file extension. */
 data class XtreamLive(val host: String, val user: String, val pass: String, val id: String, val ext: String)
 
 /**
- * Catchup ohne Android (testbar). Unterstützt:
- * - Xtream-Server (tv_archive aus der API oder catchup="xc"): /timeshift/user/pass/Minuten/Startzeit/id.ts
- * - M3U-Angaben wie in Kodi/TiviMate: catchup="default|append|shift|flussonic|xc", catchup-days, catchup-source,
- *   dazu die älteren Schreibweisen timeshift="3" und tvg-rec="3".
- * Platzhalter in catchup-source: {utc} {start} {utcend} {end} {lutc} {now} {timestamp} {duration} {offset},
- * mit Teiler ({duration:60}) oder Format ({utc:Y-m-d H:M:S}), {Y} {m} {d} {H} {M} {S} sowie die ${start}-Schreibweise.
+ * Catchup without Android (testable). Supports:
+ * - Xtream servers (tv_archive from the API or catchup="xc"): /timeshift/user/pass/minutes/starttime/id.ts
+ * - M3U attributes as in Kodi/TiviMate: catchup="default|append|shift|flussonic|xc", catchup-days, catchup-source,
+ *   plus the older spellings timeshift="3" and tvg-rec="3".
+ * Placeholders in catchup-source: {utc} {start} {utcend} {end} {lutc} {now} {timestamp} {duration} {offset},
+ * with divisor ({duration:60}) or format ({utc:Y-m-d H:M:S}), {Y} {m} {d} {H} {M} {S} and the ${start} spelling.
  */
 object CatchupLogic {
     const val XC = 1
@@ -31,7 +31,7 @@ object CatchupLogic {
     const val FLUSSONIC = 5
 
     const val MAX_DAYS = 14
-    /** Ohne Angabe der Tage (catchup="…" allein): so weit zurück wird angeboten. */
+    /** Without a number of days (catchup="…" alone): offered this far back. */
     const val DEFAULT_DAYS = 3
 
     private val LIVE_RE = Regex("""^(https?://[^/]+)/(?:live/)?([^/]+)/([^/]+)/(\d+)(?:\.(\w+))?(?:\?.*)?$""")
@@ -39,7 +39,7 @@ object CatchupLogic {
     fun xtreamLive(url: String): XtreamLive? {
         val m = LIVE_RE.find(url.trim()) ?: return null
         val g = m.groupValues
-        // Film-/Serien-Adressen haben dieselbe Form, sind aber kein Live-Sender
+        // Movie/series addresses have the same form but are not live channels
         if (g[2] == "movie" || g[2] == "series" || g[2] == "timeshift") return null
         return XtreamLive(g[1], g[2], g[3], g[4], g[5].ifEmpty { "ts" })
     }
@@ -60,13 +60,13 @@ object CatchupLogic {
         return re.find(line)?.groupValues?.get(1)
     }
 
-    /** Schnelle Vorprüfung, bevor Attribute gesucht werden (die meisten Zeilen haben keine). */
+    /** Quick pre-check before attributes are searched (most lines have none). */
     fun mentions(line: String): Boolean =
         line.contains("catchup", true) || line.contains("timeshift=", true) || line.contains("tvg-rec=", true)
 
     /**
-     * Catchup aus einer #EXTINF-Zeile (oder der #EXTM3U-Kopfzeile). [header] = Vorgaben aus dem Kopf der Liste.
-     * null = kein Archiv.
+     * Catchup from an #EXTINF line (or the #EXTM3U header line). [header] = defaults from the head of the list.
+     * null = no archive.
      */
     fun fromInfo(line: String, url: String, header: CatchupInfo? = null): CatchupInfo? {
         val has = mentions(line)
@@ -88,9 +88,9 @@ object CatchupLogic {
         return finish(mode, days ?: header?.days ?: DEFAULT_DAYS, source.ifEmpty { header?.source.orEmpty() }, url)
     }
 
-    /** Fehlende Art aus der Adresse ableiten und offensichtlich unbrauchbare Angaben verwerfen. */
+    /** Derive a missing kind from the address and discard obviously unusable details. */
     private fun finish(mode: Int, days: Int, source: String, url: String): CatchupInfo? {
-        // Kopfzeile der Liste: Art kann offen bleiben (-1), sie ergibt sich je Sender aus dessen Adresse
+        // Header line of the list: the kind may stay open (-1), it results per channel from its address
         if (url.isEmpty()) return CatchupInfo(mode, days.coerceIn(1, MAX_DAYS), source)
         val xt = xtreamLive(url) != null
         val m = when {
@@ -103,14 +103,14 @@ object CatchupLogic {
         return CatchupInfo(m, days.coerceIn(1, MAX_DAYS), source)
     }
 
-    /** Lässt sich die Sendung (Beginn [start], Ende [end], Sekunden) aus dem Archiv abspielen? Laufende Sendungen: „Von Anfang an“. */
+    /** Can the show (start [start], end [end], seconds) be played from the archive? Running shows: "From the beginning". */
     fun canPlay(info: CatchupInfo?, start: Long, end: Long, now: Long): Boolean {
         if (info == null || info.days <= 0 || end <= start) return false
         if (start > now - 60) return false
         return start >= now - info.days * 86400L - 1800
     }
 
-    /** Adresse der Sendung im Archiv oder null, wenn sie sich nicht bauen lässt. [zone] = Zeitzone des Servers (Xtream). */
+    /** Address of the show in the archive or null if it cannot be built. [zone] = time zone of the server (Xtream). */
     fun url(info: CatchupInfo, live: String, start: Long, end: Long, now: Long, zone: TimeZone): String? {
         val dur = (end - start).coerceAtLeast(60)
         return when (info.mode) {
@@ -138,7 +138,7 @@ object CatchupLogic {
     private fun shift(live: String, start: Long, now: Long): String =
         live + (if (live.contains('?')) "&" else "?") + "utc=$start&lutc=$now"
 
-    /** Flussonic: …/index.m3u8 → …/index-START-DAUER.m3u8, …/mpegts → …/timeshift_abs-START.ts */
+    /** Flussonic: …/index.m3u8 → …/index-START-DURATION.m3u8, …/mpegts → …/timeshift_abs-START.ts */
     private fun flussonic(live: String, start: Long, dur: Long): String? {
         val q = live.indexOf('?')
         val path = if (q >= 0) live.substring(0, q) else live
@@ -154,12 +154,12 @@ object CatchupLogic {
         }
     }
 
-    /** Startzeit für Xtream: "2024-05-01:20-15" in der Zeitzone des Servers. */
+    /** Start time for Xtream: "2024-05-01:20-15" in the server's time zone. */
     fun stamp(sec: Long, zone: TimeZone): String = format(sec, zone, "Y-m-d:H-M")
 
     private val PH = Regex("""\$?\{(\w+)(?::([^}]*))?\}""")
 
-    /** Platzhalter einer Vorlage füllen (siehe Klassenbeschreibung). Unbekannte Platzhalter bleiben stehen. */
+    /** Fill the placeholders of a template (see class description). Unknown placeholders stay. */
     fun fill(template: String, start: Long, end: Long, now: Long, zone: TimeZone): String =
         PH.replace(template) { m ->
             val name = m.groupValues[1]
@@ -182,7 +182,7 @@ object CatchupLogic {
             }
         }
 
-    /** Uhrzeit nach einem Muster aus Y m d H M S (alles andere bleibt, wie es ist). */
+    /** Time according to a pattern of Y m d H M S (everything else stays as it is). */
     fun format(sec: Long, zone: TimeZone, pattern: String): String {
         val c = Calendar.getInstance(zone)
         c.timeInMillis = sec * 1000
@@ -203,9 +203,9 @@ object CatchupLogic {
 
     private fun two(n: Int) = if (n < 10) "0$n" else n.toString()
 
-    // ---------------------------------------------------------------- Speichern
+    // ---------------------------------------------------------------- Saving
 
-    /** Eine Zeile je Sender: id TAB art TAB tage TAB vorlage. */
+    /** One line per channel: id TAB kind TAB days TAB template. */
     fun encode(m: Map<String, CatchupInfo>): String = buildString {
         for ((id, i) in m) append(id).append('\t').append(i.mode).append('\t').append(i.days).append('\t')
             .append(i.source.replace('\t', ' ').replace('\n', ' ')).append('\n')
@@ -225,8 +225,8 @@ object CatchupLogic {
     }
 
     /**
-     * Xtream-API (get_live_streams): Sender-Nummer → Archiv-Tage. Ordnet die Sender der Playlist ([live] = id → Adresse) zu.
-     * Angaben aus der M3U ([m3u]) haben Vorrang, sie sind genauer (eigene Vorlage).
+     * Xtream API (get_live_streams): channel number → archive days. Assigns the channels of the playlist ([live] = id → address).
+     * Details from the M3U ([m3u]) take precedence, they are more exact (own template).
      */
     fun merge(live: Map<String, String>, archive: Map<String, Int>, m3u: Map<String, CatchupInfo>): Map<String, CatchupInfo> {
         val out = HashMap<String, CatchupInfo>()
@@ -239,10 +239,10 @@ object CatchupLogic {
         return out
     }
 
-    /** Angabe der API ("1", 1, "7", 7, true) als Zahl. */
+    /** API value ("1", 1, "7", 7, true) as a number. */
     fun apiInt(v: String?): Int = v?.trim()?.let { it.toIntOrNull() ?: if (it.equals("true", true)) 1 else 0 } ?: 0
 
-    /** Nächste/vorige Sendung im Archiv (für „Nächste Sendung“ und automatisches Weiterspielen). */
+    /** Next/previous show in the archive (for "Next show" and automatic continued playback). */
     fun neighbour(list: List<EpgEntry>, start: Long, d: Int): EpgEntry? {
         val sorted = list.sortedBy { it.start }
         val i = sorted.indexOfFirst { it.start == start }
@@ -250,7 +250,7 @@ object CatchupLogic {
         return sorted.getOrNull(i + d)
     }
 
-    /** Sendungen im Archiv-Fenster, neueste zuerst (für die Archiv-Liste im Player). */
+    /** Shows in the archive window, newest first (for the archive list in the player). */
     fun archived(info: CatchupInfo?, list: List<EpgEntry>, now: Long): List<EpgEntry> =
         list.filter { canPlay(info, it.start, it.end, now) && it.end <= now }.sortedByDescending { it.start }
 }

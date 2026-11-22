@@ -2,24 +2,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Erkennt, wann das Netz nach einem Abbruch zurück ist, damit der Stream sofort neu verbindet -->
+    <!-- Detects when the network is back after a drop, so the stream reconnects immediately -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Hält CPU und WLAN während der Wiedergabe wach -->
+    <!-- Keeps CPU and Wi-Fi awake during playback -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Nötig, damit die App sich ab Android 10 nach dem Start des Geräts im Vordergrund öffnen darf -->
+    <!-- Needed so the app may open in the foreground after the device starts, on Android 10 and later -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- Erinnerungen an Sendungen: Benachrichtigung (Android 13+ fragt einmal) und pünktlicher Wecker -->
+    <!-- Reminders for shows: notification (Android 13+ asks once) and punctual alarm -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- Aufnahmen im Live TV: Dienst im Vordergrund, damit Android die App während der Aufnahme nicht beendet -->
+    <!-- Recordings in live TV: foreground service, so Android does not stop the app during a recording -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <!-- App-Aktualisierung aus der App heraus (Einstellungen > Über): erlaubt, die heruntergeladene APK zur Installation zu öffnen -->
+    <!-- In-app update (Settings > About): allows opening the downloaded APK for installation -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
-    <!-- Sprachsuche: ab Android 11 muss die App angeben, dass sie die Spracherkennung des Systems sucht -->
+    <!-- Voice search: from Android 11 the app must declare that it looks for the system speech recognition -->
     <queries>
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
@@ -28,7 +28,7 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
     <application
-        android:label="IPVIO Stream"
+        android:label="${appLabel}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:banner="@drawable/banner"

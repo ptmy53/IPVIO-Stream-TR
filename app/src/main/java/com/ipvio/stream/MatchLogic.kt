@@ -1,20 +1,20 @@
 package com.ipvio.stream
 
 /**
- * Abgleich eines Playlist-Titels mit TMDB-Treffern (ohne Android, testbar).
+ * Matching a playlist title with TMDB hits (without Android, testable).
  *
- * Früher wurde immer der erste Treffer genommen. TMDB sortiert aber auch nach Beliebtheit: Bei „Game of Thrones“ kann so ein
- * beliebter Ableger mit einer einzigen Staffel vorne stehen – dann zeigt die Serie falsche Bilder und ab Staffel 2 gar nichts.
- * Jetzt gewinnt ein Treffer mit genau gleichem Namen; gibt es keinen, bleibt es beim ersten Treffer von TMDB.
+ * Formerly the first hit was always taken. But TMDB also sorts by popularity: for "Game of Thrones" a popular
+ * spin-off with a single season can be at the front – then the series shows wrong images and nothing at all from season 2.
+ * Now a hit with exactly the same name wins; if there is none, the first TMDB hit remains.
  */
 object MatchLogic {
-    /** Ein Suchtreffer von TMDB (Serie oder Film). */
+    /** A search hit from TMDB (series or movie). */
     data class Candidate(val id: Int, val name: String?, val original: String?, val year: String?, val votes: Int)
 
     private val MARKS = Regex("""\p{Mn}+""")
     private val NON_ALNUM = Regex("""[^\p{L}\p{N}]+""")
 
-    /** Vergleichsform: klein, ohne Akzente und Satzzeichen, „&“ = „and“. */
+    /** Comparison form: lowercase, without accents and punctuation, "&" = "and". */
     fun norm(t: String?): String {
         if (t.isNullOrBlank()) return ""
         val s = java.text.Normalizer.normalize(t.lowercase(), java.text.Normalizer.Form.NFD).replace(MARKS, "")
@@ -22,18 +22,18 @@ object MatchLogic {
         return s.replace(NON_ALNUM, " ").trim()
     }
 
-    /** Gleicher Titel (Name oder Originalname)? */
+    /** Same title (name or original name)? */
     fun sameTitle(title: String, name: String?, original: String? = null): Boolean {
         val n = norm(searchTitle(title))
         return n.isNotEmpty() && (n == norm(name) || n == norm(original))
     }
 
-    // Sprach-/Länderkennung am Anfang: "DE - ", "DE: ", "|DE| ", "[DE] ", "(GER) ", "DE | "
+    // Language/country tag at the start: "DE - ", "DE: ", "|DE| ", "[DE] ", "(GER) ", "DE | "
     private val LEAD = Regex("""^\s*[\[(|]?\s*([A-Za-z]{2,4})\s*(?:[\])|]\s*[-–|:]?|\s*[-–|:])\s*""")
 
     /**
-     * Titel für die TMDB-Suche: ohne Sprachkennung des Anbieters am Anfang (auch „DE - “, das im angezeigten Titel bleibt).
-     * „DE - Game of Thrones“ fand bei TMDB sonst andere Serien.
+     * Title for the TMDB search: without the provider's language tag at the start (also "DE - ", which stays in the displayed title).
+     * "DE - Game of Thrones" otherwise found other series at TMDB.
      */
     fun searchTitle(title: String): String {
         var t = title.trim()
@@ -47,8 +47,8 @@ object MatchLogic {
     }
 
     /**
-     * Bester Treffer: genau gleicher Name (bei Filmen mit passendem Jahr bevorzugt), unter mehreren gleichen der mit den meisten
-     * Stimmen. Ohne gleichnamigen Treffer der erste Treffer von TMDB (wie bisher).
+     * Best hit: exactly the same name (for movies with a matching year preferred), among several equal ones the one with the most
+     * votes. Without a hit of the same name the first TMDB hit (as before).
      */
     fun pick(title: String, year: Int?, results: List<Candidate>): Candidate? {
         if (results.isEmpty()) return null
@@ -60,8 +60,8 @@ object MatchLogic {
     }
 
     /**
-     * Passt ein gespeicherter Treffer noch? Nein, wenn die Playlist mehr Staffeln hat als die Serie bei TMDB
-     * (typisch für einen falschen Treffer), oder wenn weder Name noch Originalname zum Titel passen und es einen besseren gibt.
+     * Does a stored hit still fit? No if the playlist has more seasons than the series at TMDB
+     * (typical for a wrong hit), or if neither name nor original name matches the title and there is a better one.
      */
     fun seasonsFit(playlistMaxSeason: Int, tmdbSeasons: Int): Boolean =
         playlistMaxSeason <= 0 || tmdbSeasons <= 0 || playlistMaxSeason <= tmdbSeasons

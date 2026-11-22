@@ -30,7 +30,7 @@ class NewEpisodeLogicTest {
     @Test fun nochNichtGeladenBehaeltStand() {
         val r = NewEpisodeLogic.detect(mapOf("a" to 5), listOf(show("a")))
         assertTrue(r.notices.isEmpty()); assertEquals(5, r.known["a"])
-        // weniger Folgen (Anbieter räumt auf): kein Alarm, Stand sinkt
+        // fewer episodes (provider cleans up): no alarm, the stored count drops
         val r2 = NewEpisodeLogic.detect(mapOf("a" to 5), listOf(show("a", 1 to 1)))
         assertTrue(r2.notices.isEmpty()); assertEquals(1, r2.known["a"])
     }

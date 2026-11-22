@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Übersetzungen Teil G (Runde 10): lange Staffeln, Weiterschauen, Player, Senderlisten, Erinnerungen, Sprachsuche
+// Translations part G (round 10): long seasons, continue watching, player, channel lists, reminders, voice search
 val DictG = """
 Folgen {0}¦Episodes {0}¦Bölümler {0}¦Epizode {0}¦Epizode {0}¦Epizode {0}¦Episodios {0}¦Épisodes {0}¦Episodi {0}
 {#0} Abschnitte¦{#0} sections¦{#0} kısım¦{#0} dijelova¦{#0} dijelova¦{#0} delova¦{#0} secciones¦{#0} sections¦{#0} sezioni

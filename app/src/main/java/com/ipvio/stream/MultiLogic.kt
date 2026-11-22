@@ -1,28 +1,28 @@
 package com.ipvio.stream
 
 /**
- * Mehrere Playlists gleichzeitig (Runde 20). Ohne Android, testbar.
+ * Several playlists at once (round 20). Without Android, testable.
  *
- * - Sender: alle bleiben (jede Quelle hat eigene Adressen); im Live-TV lässt sich nach Quelle filtern.
- * - Filme: gleicher Titel + Jahr aus einer späteren Quelle wird in „Alle“ ausgeblendet ([Merged.shadow]),
- *   ist aber über den Quellen-Filter weiter erreichbar.
- * - Serien: gleiche Serie aus mehreren Quellen wird zu EINER Serie; dieselbe Folge aus der zweiten Quelle wird eine
- *   weitere Quelle der Folge (wie mehrere Qualitäten) mit dem Playlist-Namen in der Beschriftung. Die Serien-ID bleibt,
- *   damit Weiterschauen, Meine Liste und Verlauf erhalten bleiben.
- * - Gleiche ID zweimal (z. B. dieselbe Playlist doppelt): nur der erste Eintrag zählt.
+ * - Channels: all stay (each source has its own addresses); in Live TV you can filter by source.
+ * - Movies: the same title + year from a later source is hidden in "All" ([Merged.shadow]),
+ *   but is still reachable via the source filter.
+ * - Series: the same series from several sources becomes ONE series; the same episode from the second source becomes a
+ *   further source of the episode (like several qualities) with the playlist name in the label. The series ID stays,
+ *   so Continue watching, My list and history are preserved.
+ * - Same ID twice (e.g. the same playlist twice): only the first entry counts.
  */
 object MultiLogic {
     class Merged(
         val items: List<Item>,
-        /** IDs, die in „Alle“ nicht gezeigt werden (doppelte Filme späterer Quellen). */
+        /** IDs not shown in "All" (duplicate movies of later sources). */
         val shadow: Set<String>,
-        /** Serien aus mehreren Quellen: ID → Bitmaske der Quellen (Bit k = Quelle k). */
+        /** Series from several sources: ID → bit mask of the sources (bit k = source k). */
         val seriesSrc: Map<String, Int>
     ) {
-        /** Alles, was „Alle“ zeigt. */
+        /** Everything "All" shows. */
         fun visible(): List<Item> = if (shadow.isEmpty()) items else items.filter { it.id !in shadow }
 
-        /** Gehört der Titel zur Quelle [k]? */
+        /** Does the title belong to source [k]? */
         fun inSource(i: Item, k: Int): Boolean {
             if (i.src == k) return true
             val m = seriesSrc[i.id] ?: return false
@@ -51,9 +51,9 @@ object MultiLogic {
                             out.add(if (k == 0) it0 else it0.copy(src = k))
                         } else {
                             val a = out[at]
-                            // Platzhalter (Folgen erst beim Öffnen) nie als „Folge“ zu echten Folgen mischen: dann gilt die Quelle mit echten Folgen
-                            val la = XtreamLogic.isLazy(a)
-                            val lb = XtreamLogic.isLazy(it0)
+                            // Never mix placeholders (episodes only on opening) as an "episode" with real episodes: then the source with real episodes counts
+                            val la = XtreamLogic.isLazy(a) || StalkerLogic.isLazy(a)
+                            val lb = XtreamLogic.isLazy(it0) || StalkerLogic.isLazy(it0)
                             out[at] = a.copy(episodes = when {
                                 la && !lb -> it0.episodes
                                 !la && lb -> a.episodes
@@ -66,7 +66,7 @@ object MultiLogic {
                         if (!ids.add(it0.id)) continue
                         val it = if (k == 0) it0 else it0.copy(src = k)
                         if (it.kind == Kind.MOVIE) {
-                            // Doppelt innerhalb derselben Quelle bleibt wie bisher sichtbar; nur Doppelte späterer Quellen
+                            // Duplicates within the same source stay visible as before; only duplicates of later sources
                             if (k > 0 && it.mk in movieKeys) shadow.add(it.id)
                             kMovies.add(it.mk)
                         }
@@ -80,7 +80,7 @@ object MultiLogic {
         return Merged(out, shadow, seriesSrc)
     }
 
-    /** Folgen zweier Quellen zusammenführen: gleiche Staffel/Folge → eine Folge mit mehreren Quellen. */
+    /** Merge the episodes of two sources: same season/episode → one episode with several sources. */
     fun mergeEpisodes(a: List<Episode>, b: List<Episode>, nameB: String, pool: StringPool? = null): List<Episode> {
         if (b.isEmpty()) return a
         val byKey = LinkedHashMap<Long, MutableList<Variant>>()
@@ -110,7 +110,7 @@ object MultiLogic {
         return EpisodeTable.of(out, pool)
     }
 
-    /** Kategorie-Reihenfolge: zuerst die der Haupt-Playlist, dann neue Namen der weiteren in ihrer Reihenfolge. */
+    /** Category order: first that of the main playlist, then new names of the further ones in their order. */
     fun mergeOrder(orders: List<Map<String, Int>>): Map<String, Int> {
         if (orders.size <= 1) return orders.firstOrNull() ?: emptyMap()
         val out = LinkedHashMap<String, Int>()
@@ -122,7 +122,7 @@ object MultiLogic {
         return out
     }
 
-    /** Gespeicherte Auswahl „gleichzeitig zeigen“ als Schlüssel (Hash der Adresse – die Adresse selbst enthält Zugangsdaten). */
+    /** Saved selection "show at the same time" as keys (hash of the address – the address itself contains login data). */
     fun encodeKeys(keys: Collection<Int>): String = keys.sorted().joinToString(",")
     fun decodeKeys(s: String?): Set<Int> = s?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.toSet() ?: emptySet()
 }

@@ -1,25 +1,25 @@
 package com.ipvio.stream
 
 /**
- * Lange Staffeln (z. B. One Piece: über 1.000 Folgen, vom Anbieter alle in „Staffel 1“) in Abschnitte teilen,
- * damit niemand bis Folge 1000 scrollen muss. Kennt TMDB die echten Staffeln, werden sie als Abschnitte genommen
- * (mit Namen wie „Alabasta“) und die Folgen-Infos kommen aus der richtigen TMDB-Staffel. Sonst gleich große Blöcke mit höchstens 30 Folgen.
- * Ohne Android, testbar.
+ * Split long seasons (e.g. One Piece: over 1,000 episodes, all in "Season 1" at the provider) into sections,
+ * so nobody has to scroll to episode 1000. If TMDB knows the real seasons, they are used as sections
+ * (with names like "Alabasta") and the episode info comes from the right TMDB season. Otherwise equally sized blocks of at most 30 episodes.
+ * Without Android, testable.
  */
 object EpisodeLogic {
-    /** Ab so vielen Folgen in einer Staffel wird aufgeteilt. */
+    /** From this many episodes in a season it is split. */
     const val LONG = 60
-    /** Höchstgröße eines Abschnitts, wenn TMDB nicht hilft (gleichmäßig verteilt: 62 Folgen = 21 + 21 + 20). */
+    /** Maximum size of a section when TMDB does not help (evenly distributed: 62 episodes = 21 + 21 + 20). */
     const val BLOCK = 30
-    /** Größere TMDB-Staffeln werden zusätzlich in Blöcke geteilt. */
+    /** Larger TMDB seasons are additionally split into blocks. */
     const val MAX_GROUP = 100
 
-    /** Eine Staffel laut TMDB: Nummer, Zahl der Folgen, Name (oder null). Staffel 0 = Specials, wird nicht genutzt. */
+    /** A season according to TMDB: number, count of episodes, name (or null). Season 0 = specials, not used. */
     data class TmdbSeason(val num: Int, val count: Int, val name: String?)
 
     /**
-     * Abschnitt einer Staffel der Playlist: Folgen [from]..[to] (Index in der Folgenliste der Staffel, einschließlich).
-     * Infos kommen aus TMDB-Staffel [tmdbSeason] (-1 = keine, z. B. neuer als TMDB), TMDB-Folgennummer = Nummer − [offset].
+     * Section of a playlist season: episodes [from]..[to] (index in the season's episode list, inclusive).
+     * Info comes from TMDB season [tmdbSeason] (-1 = none, e.g. newer than TMDB), TMDB episode number = number − [offset].
      */
     data class Group(
         val from: Int, val to: Int, val firstNum: Int, val lastNum: Int,
@@ -31,12 +31,12 @@ object EpisodeLogic {
 
     private val GENERIC = Regex("""^\s*(season|staffel|temporada|saison|sezon|sezona|stagione|serie)\s*\d+\s*$""", RegexOption.IGNORE_CASE)
 
-    /** TMDB-Name nur, wenn er mehr sagt als „Season 3“. */
+    /** TMDB name only if it says more than "Season 3". */
     fun niceName(n: String?): String? = n?.trim()?.takeIf { it.isNotEmpty() && !GENERIC.matches(it) }
 
     private fun real(tmdb: List<TmdbSeason>) = tmdb.filter { it.num >= 1 && it.count > 0 }.sortedBy { it.num }
 
-    /** Erste (fortlaufende) Folgennummer jeder TMDB-Staffel: Staffel 1 → 1, Staffel 2 → 1 + Folgen von Staffel 1 … */
+    /** First (continuous) episode number of each TMDB season: season 1 → 1, season 2 → 1 + episodes of season 1 … */
     fun starts(tmdb: List<TmdbSeason>): Map<Int, Int> {
         val out = LinkedHashMap<Int, Int>()
         var n = 1
@@ -45,8 +45,8 @@ object EpisodeLogic {
     }
 
     /**
-     * Zählt der Anbieter fortlaufend (alles in einer Staffel, Nummern weit über Staffel 1 von TMDB hinaus)?
-     * Nur dann werden die Folgen auf die TMDB-Staffeln verteilt.
+     * Does the provider count continuously (everything in one season, numbers far beyond TMDB's season 1)?
+     * Only then are the episodes distributed over the TMDB seasons.
      */
     fun absolute(eps: List<Episode>, providerSeasons: Int, tmdb: List<TmdbSeason>): Boolean {
         val r = real(tmdb)
@@ -56,8 +56,8 @@ object EpisodeLogic {
     }
 
     /**
-     * Abschnitte einer Staffel. [eps] = Folgen dieser Staffel, nach Nummer sortiert.
-     * Kurze Staffeln: ein Abschnitt (die Liste sieht aus wie bisher).
+     * Sections of a season. [eps] = episodes of this season, sorted by number.
+     * Short seasons: one section (the list looks as before).
      */
     fun groups(eps: List<Episode>, season: Int, providerSeasons: Int, tmdb: List<TmdbSeason>): List<Group> {
         if (eps.isEmpty()) return emptyList()
@@ -65,7 +65,7 @@ object EpisodeLogic {
         if (absolute(eps, providerSeasons, tmdb)) {
             val r = real(tmdb)
             val out = ArrayList<Group>()
-            // TMDB-Staffel je Folge (null = neuer als TMDB weiß), gleiche hintereinander werden ein Abschnitt
+            // TMDB season per episode (null = newer than TMDB knows), equal ones in a row become one section
             fun seasonOf(n: Int): TmdbSeason? = r.firstOrNull { s -> val a = st.getValue(s.num); n >= a && n < a + s.count }
             var i = 0
             while (i < eps.size) {
@@ -78,7 +78,7 @@ object EpisodeLogic {
             }
             return out
         }
-        // Anbieter mit eigenen Staffeln, aber fortlaufender Nummer (Staffel 2 beginnt mit Folge 62)
+        // Provider with own seasons but continuous numbering (season 2 starts with episode 62)
         val offset = st[season]?.let { a ->
             val cnt = real(tmdb).first { it.num == season }.count
             if (a > 1 && eps.first().num == a && eps.last().num <= a + cnt + 1) a - 1 else 0
@@ -91,7 +91,7 @@ object EpisodeLogic {
         val n = to - from + 1
         if (n <= size) return listOf(Group(from, to, eps[from].num, eps[to].num, tmdbSeason, offset, name))
         val out = ArrayList<Group>()
-        // Gleichmäßig aufteilen statt 50 + Rest: kürzere Wege zur gesuchten Folge, kein winziger letzter Abschnitt
+        // Distribute evenly instead of 50 + remainder: shorter ways to the wanted episode, no tiny last section
         val count = (n + BLOCK - 1) / BLOCK
         val per = (n + count - 1) / count
         var a = from
@@ -103,10 +103,10 @@ object EpisodeLogic {
         return out
     }
 
-    /** Index des Abschnitts, der die Folge an Position [index] enthält (sonst 0). */
+    /** Index of the section that contains the episode at position [index] (otherwise 0). */
     fun groupOf(groups: List<Group>, index: Int): Int = groups.indexOfFirst { index in it }.coerceAtLeast(0)
 
-    /** Position der Folge mit Nummer [num]; gibt es sie nicht, die nächstgelegene. -1 bei leerer Liste. */
+    /** Position of the episode with number [num]; if it does not exist, the nearest. -1 for an empty list. */
     fun indexOfNum(eps: List<Episode>, num: Int): Int {
         if (eps.isEmpty()) return -1
         val exact = eps.indexOfFirst { it.num == num }
@@ -115,9 +115,9 @@ object EpisodeLogic {
     }
 
     /**
-     * Ziel von „Gehe zu Folge [n]“. Gibt es die Nummer in der aktuellen Staffel, gilt sie dort. Sonst in der ersten anderen
-     * Staffel mit dieser Nummer. Gibt es sie nirgends (z. B. 100 bei einer Serie mit je 25 Folgen pro Staffel), zählt sie als
-     * Gesamtnummer über alle Staffeln (Staffel 1 Folge 1 = 1). Ergebnis: Staffel und Folgennummer, null wenn es so viele Folgen nicht gibt.
+     * Target of "Go to episode [n]". If the number exists in the current season, it applies there. Otherwise in the first other
+     * season with this number. If it exists nowhere (e.g. 100 for a series with 25 episodes per season), it counts as a
+     * total number across all seasons (season 1 episode 1 = 1). Result: season and episode number, null if there are not that many episodes.
      */
     fun locate(all: List<Episode>, currentSeason: Int, n: Int): Pair<Int, Int>? {
         if (n < 1 || all.isEmpty()) return null
@@ -127,29 +127,29 @@ object EpisodeLogic {
         return sorted.getOrNull(n - 1)?.let { it.season to it.num }
     }
 
-    /** Beschriftung eines Abschnitts: „1–61“, bei TMDB-Staffel mit Namen „1–61 · East Blue“. */
+    /** Label of a section: "1–61", for a TMDB season with a name "1–61 · East Blue". */
     fun label(g: Group): String = (if (g.firstNum == g.lastNum) "${g.firstNum}" else "${g.firstNum}–${g.lastNum}") +
         (g.name?.let { " · $it" } ?: "")
 
-    /** Folgennummer, unter der TMDB die Folge in [Group.tmdbSeason] führt. */
+    /** Episode number under which TMDB lists the episode in [Group.tmdbSeason]. */
     fun tmdbNum(g: Group, num: Int): Int = num - g.offset
 }
 
 /**
- * Weiterschauen: wann eine Folge/ein Film als gesehen gilt, und der Fortschritt je Folge in kompakter Textform.
+ * Continue watching: when an episode/movie counts as watched, and the progress per episode in compact text form.
  */
 object ResumeLogic {
-    /** Gesehen: ab 92 % oder in den letzten 90 Sekunden (Abspann), sofern mindestens die Hälfte gelaufen ist. */
+    /** Watched: from 92 % or in the last 90 seconds (credits), provided at least half has played. */
     fun finished(posMs: Long, durMs: Long): Boolean =
         durMs > 0 && (posMs >= durMs * 0.92 || (durMs - posMs <= 90_000 && posMs >= durMs / 2))
 
-    /** Erst ab 30 Sekunden lohnt sich ein Fortsetzen-Punkt. */
+    /** Only from 30 seconds on is a resume point worthwhile. */
     const val MIN_POS = 30_000L
 
     /**
-     * Soll der Stand gemerkt werden? Ab 30 Sekunden oder zu Ende geschaut immer. Kürzer nur, wenn bereits ein Eintrag für
-     * dieselbe Serie existiert und dieser eine ANDERE Folge betrifft: Wer von Folge 40 zu 41 und 42 weitergeht, soll beim
-     * Wiederkommen bei 42 landen, nicht bei 40. Ein kurzes Reinschauen in dieselbe Folge ändert nichts.
+     * Should the state be remembered? From 30 seconds or when watched to the end always. Shorter only if there is already an entry for
+     * the same series and it concerns ANOTHER episode: whoever moves on from episode 40 to 41 and 42 should land at
+     * 42 when coming back, not at 40. A short peek into the same episode changes nothing.
      */
     fun shouldSave(hasOld: Boolean, oldSeason: Int, oldEp: Int, season: Int, ep: Int, posMs: Long, finished: Boolean): Boolean = when {
         finished -> true
@@ -159,7 +159,7 @@ object ResumeLogic {
         else -> false
     }
 
-    /** Fortschritt einer Folge in Sekunden. */
+    /** Progress of an episode in seconds. */
     data class EpPos(val pos: Int, val dur: Int) {
         val done: Boolean get() = finished(pos * 1000L, dur * 1000L)
         val fraction: Float get() = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
@@ -167,7 +167,7 @@ object ResumeLogic {
 
     fun key(season: Int, ep: Int): Long = (season.toLong() shl 32) or (ep.toLong() and 0xFFFFFFFFL)
 
-    /** „s:e:pos:dur;…“ (Sekunden). */
+    /** "s:e:pos:dur;…" (seconds). */
     fun encode(m: Map<Long, EpPos>): String = m.entries.joinToString(";") { (k, v) ->
         "${(k shr 32).toInt()}:${k.toInt()}:${v.pos}:${v.dur}"
     }
@@ -185,7 +185,7 @@ object ResumeLogic {
         return out
     }
 
-    /** Staffel und Folge aus „Titel S1E3“ (alte Einträge ohne eigene Felder). */
+    /** Season and episode from "Title S1E3" (old entries without their own fields). */
     private val SE = Regex("""[Ss](\d{1,3})\s*[Ee](\d{1,4})\s*$""")
 
     fun seasonEp(title: String): Pair<Int, Int>? =

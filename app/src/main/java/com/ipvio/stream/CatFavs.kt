@@ -14,6 +14,13 @@ object CatFavs {
         list.addAll((prefs(c).getString("c", "") ?: "").split("\n").filter { it.isNotBlank() })
     }
 
+    /** Reads the list again after the live sync (W-010b). Main thread. */
+    fun reload(c: Context) {
+        if (!inited) return
+        val l = (prefs(c).getString("c", "") ?: "").split("\n").filter { it.isNotBlank() }
+        if (l != list.toList()) { list.clear(); list.addAll(l) }
+    }
+
     fun toggle(c: Context, name: String) {
         init(c)
         if (!list.remove(name)) list.add(0, name)

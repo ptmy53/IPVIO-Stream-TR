@@ -15,8 +15,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Kleine Linien-Symbole für die Filterleisten (gezeichnet, keine Schriftzeichen – sehen auf jedem Gerät gleich aus). */
-enum class FIcon { Sort, Rating, Year, Genre, Country, View, Grid, Reset }
+/** Small line icons for the filter bars (drawn, not font characters – look the same on every device). */
+enum class FIcon { Sort, Rating, Year, Genre, Country, Language, View, Grid, Reset }
 
 @Composable
 fun FilterIcon(icon: FIcon, color: Color, size: Dp = 20.dp) {
@@ -49,7 +49,7 @@ fun FilterIcon(icon: FIcon, color: Color, size: Dp = 20.dp) {
                 drawLine(color, o(16f, 3f), o(16f, 7f), 2f * u, StrokeCap.Round)
             }
             FIcon.Genre -> {
-                // Klappe: Rahmen + schräger Streifen oben
+                // Clapperboard: frame + slanted stripe at the top
                 drawRoundRect(color, o(3.5f, 9.5f), Size(17f * u, 11f * u), CornerRadius(2.5f * u), style = st)
                 drawLine(color, o(3.5f, 9.5f), o(5.5f, 4.5f), 2f * u, StrokeCap.Round)
                 drawLine(color, o(5.5f, 4.5f), o(20.5f, 4.5f), 2f * u, StrokeCap.Round)
@@ -60,6 +60,14 @@ fun FilterIcon(icon: FIcon, color: Color, size: Dp = 20.dp) {
                 drawCircle(color, 9f * u, o(12f, 12f), style = st)
                 drawLine(color, o(3f, 12f), o(21f, 12f), 2f * u, StrokeCap.Round)
                 drawOval(color, o(8f, 3f), Size(8f * u, 18f * u), style = st)
+            }
+            FIcon.Language -> {
+                // Speech bubble with two text lines (the country filter uses the globe, so the two stay apart)
+                drawRoundRect(color, o(3.5f, 4.5f), Size(17f * u, 12f * u), CornerRadius(3f * u), style = st)
+                drawLine(color, o(8f, 16.5f), o(6f, 20.5f), 2f * u, StrokeCap.Round)
+                drawLine(color, o(6f, 20.5f), o(12f, 16.5f), 2f * u, StrokeCap.Round)
+                drawLine(color, o(7f, 9f), o(17f, 9f), 2f * u, StrokeCap.Round)
+                drawLine(color, o(7f, 12.5f), o(14f, 12.5f), 2f * u, StrokeCap.Round)
             }
             FIcon.View -> {
                 drawRoundRect(color, o(3.5f, 4f), Size(17f * u, 9.5f * u), CornerRadius(2.5f * u), style = st)

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -41,6 +42,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +65,8 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -93,25 +97,27 @@ import kotlinx.coroutines.flow.collectLatest
 data class PlayReq(
     val title: String, val url: String, val itemId: String, val live: Boolean, val startMs: Long,
     val tmdbId: Int = 0, val season: Int = 0, val episode: Int = 0,
-    /** Weitere Quellen desselben Films (andere Qualität) – zum Ausweichen bei Fehlern/Ruckeln und im Qualitäts-Menü. */
+    /** Further sources of the same movie (other quality) – to fall back on errors/stutter and in the quality menu. */
     val alts: List<Variant> = emptyList(),
-    /** Kurzer Hinweis beim Start (z. B. „4K passt nicht zu diesem Gerät – spiele FHD“). */
+    /** Short notice at start (e.g. "4K does not suit this device – playing FHD"). */
     val note: String? = null,
-    /** Sendung aus dem Archiv (Catchup) eines Live-Senders; [itemId] ist dann der Sender. */
+    /** Show from the archive (catchup) of a live channel; [itemId] is then the channel. */
     val archive: ArchiveRef? = null
 )
 
-/** Ziffer einer Fernbedienungstaste (0-9) oder -1. */
+/** Digit of a remote control key (0-9) or -1. */
 private fun digitOf(k: Key): Int = when (k) {
     Key.Zero, Key.NumPad0 -> 0; Key.One, Key.NumPad1 -> 1; Key.Two, Key.NumPad2 -> 2
     Key.Three, Key.NumPad3 -> 3; Key.Four, Key.NumPad4 -> 4; Key.Five, Key.NumPad5 -> 5
     Key.Six, Key.NumPad6 -> 6; Key.Seven, Key.NumPad7 -> 7; Key.Eight, Key.NumPad8 -> 8
     Key.Nine, Key.NumPad9 -> 9; else -> -1
 }
+/** Error when a Stalker portal gives no play address (details: [StalkerApi.lastDetail]). */
+private const val STALKER_NO_ADDRESS = "Das Portal hat keine Abspiel-Adresse geliefert. Später erneut versuchen."
 
 private val SLEEP_MIN = listOf(0, 15, 30, 45, 60, 90, 120)
 
-private enum class Panel { NONE, TRACKS, SUBSTYLE, QUALITY, SPEED, ASPECT, MENU, STEP, EPISODES, SLEEP, ARCHIVE, CLOCK }
+private enum class Panel { NONE, TRACKS, SUBSEARCH, SUBSTYLE, QUALITY, SPEED, ASPECT, MENU, STEP, EPISODES, SLEEP, ARCHIVE, CLOCK, SUBDELAY, AVDELAY }
 
 private class Flash(val icon: PIcon?, val text: String?)
 
@@ -144,51 +150,63 @@ private fun findActivity(c: Context): ComponentActivity? =
 fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesItem: Item? = null, onBack: () -> Unit) {
     val ctx = LocalContext.current
     CatFavs.init(ctx)
-    // Eigene HTTP-Einstellungen: folgt Weiterleitungen auch von http nach https (viele IPTV-Server tun das)
-    // und gibt nach 10 s Verbindungsaufbau bzw. 15 s Lesezeit auf, statt endlos zu warten.
+    // Own HTTP settings: follows redirects even from http to https (many IPTV servers do that)
+    // and gives up after 10 s connect time or 15 s read time instead of waiting forever.
     val player = remember {
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(10_000)
             .setReadTimeoutMs(15_000)
-        ExoPlayer.Builder(ctx, SoftAudio.factory(ctx))
+        // W-005/W-007: renderers wrapped for the subtitle and audio delay (no change while both are 0)
+        ExoPlayer.Builder(ctx, PlayerSync.wrap(SoftAudio.factory(ctx)))
             .setLoadControl(Mem.loadControl(ctx))
             .setWakeMode(C.WAKE_MODE_NETWORK)
-            // „tap://“ = Live-Puffer auf dem Gerät (Zurückspulen, Aufnahme), alles andere wie bisher
-            .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(TapAwareDataSource.Factory(DefaultDataSource.Factory(ctx, http))))
+            // "tap://" = live buffer on the device (rewind, recording), everything else as before
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(ctx)
+                    .setDataSourceFactory(TapAwareDataSource.Factory(HostFailover.DataSourceWrapper.Factory(DefaultDataSource.Factory(ctx, http))))
+                    // Short network hiccups are retried inside the player (several times) instead of ending in an error
+                    .setLoadErrorHandlingPolicy(IptvLoadErrorPolicy())
+            )
             .build()
             .also {
-                // Bildrate: nur wechseln, wenn der Fernseher das nahtlos kann (kein Aufblitzen); abschaltbar unter Einstellungen > Player
+                // Frame rate: only switch if the TV can do it seamlessly (no flashing); can be turned off under Settings > Player
                 it.videoChangeFrameRateStrategy = if (AppSettings.autoFps) C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS else C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
             }
     }
     val h = remember { Handler(Looper.getMainLooper()) }
-    // Zustand für die Bildschirm-Wachhaltung: Sie gilt nur, solange wirklich abgespielt oder nachgeladen wird
-    // (nicht bei Pause, Ende, Fehler oder im Hintergrund). Sonst startet nach ca. 5 Minuten der Bildschirmschoner.
+    // State for keeping the screen awake: applies while playing, buffering or paused by the user
+    // (not after the sleep timer, at the end, on error or in the background).
     var pWhenReady by remember { mutableStateOf(true) }
+    var sleepExpired by remember { mutableStateOf(false) }
     var pState by remember { mutableIntStateOf(Player.STATE_IDLE) }
     var pError by remember { mutableStateOf(false) }
     var foreground by remember { mutableStateOf(true) }
-    KeepScreenOn("player", AwakeLogic.playerNeedsScreen(pWhenReady, pState, pError, foreground))
+    KeepScreenOn("player", AwakeLogic.playerNeedsScreen(pWhenReady, pState, pError, foreground, sleepExpired))
     var cur by remember { mutableStateOf(req) }
+    // W-005: the subtitle delay applies to one title only
+    LaunchedEffect(cur.itemId, cur.season, cur.episode) { PlayerSync.resetSub() }
     var zapSrc by remember { mutableStateOf(zapList) }
     var msg by remember { mutableStateOf<String?>(null) }
     var buffering by remember { mutableStateOf(true) }
     var playing by remember { mutableStateOf(true) }
-    // Live (Runde 14): beim Öffnen gleich die Steuerleiste mit Sender und Sendung statt der kurzen Info-Box
+    // Live (round 14): open straight with the control bar showing channel and show instead of the short info box
+    // TR fork: live TV starts on the channel itself (TiviMate style); OK opens the channel list.
     var controls by remember { mutableStateOf(!req.live) }
     var focusSeek by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(Panel.NONE) }
-    // Technik-Info und Untertitel-Suche (OpenSubtitles)
+    // Technical info and subtitle search (OpenSubtitles)
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var techOn by remember { mutableStateOf(false) }
     var panelParent by remember { mutableStateOf(Panel.NONE) }
     var lastPanel by remember { mutableStateOf(Panel.NONE) }
     var menuSel by remember { mutableIntStateOf(0) }
     var showChannels by remember { mutableStateOf(false) }
-    // Zweiter Stream (Runde 22): Live-Player mit zweitem Bild; splitMode 0 = Bild-in-Bild, 1 = geteilt
+    // Second stream (round 22): live player with a second picture; splitMode 0 = picture-in-picture, 1 = split
     var second by remember { mutableStateOf<Item?>(null) }
     var pickSecond by remember { mutableStateOf(false) }
+    // Quick access to the score overlay (switch off, corner, arrangement) without leaving the stream
+    var scoreDlg by remember { mutableStateOf(false) }
     DualPrefs.init(ctx)
     val splitMode = DualPrefs.split
     val audioOnSecond = DualPrefs.audioSecond
@@ -197,7 +215,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     LaunchedEffect(showChannels) { if (!showChannels) pickSecond = false }
     var showCats by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
-    // Aus Live TV über „TV-Guide“ gestartet: Guide sofort zeigen
+    // Started from Live TV via "TV guide": show the guide immediately
     LaunchedEffect(Unit) { if (AppNav.openGuide) { AppNav.openGuide = false; if (req.live) { controls = false; showGuide = true } } }
     var inHeader by remember { mutableStateOf(false) }
     val headerFocus = remember { FocusRequester() }
@@ -213,6 +231,8 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     var sleepIdx by remember { mutableIntStateOf(0) }
     var sleepAt by remember { mutableLongStateOf(0L) }
     var aspect by remember { mutableIntStateOf(General.defaultAspect) }
+    // Display aspect ratio of the current video (width × pixel ratio / height), 0 = not known yet (issue 10)
+    var videoAr by remember { mutableStateOf(0f) }
     var interact by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var flash by remember { mutableStateOf<Flash?>(null) }
     var info by remember { mutableStateOf<String?>(null) }
@@ -231,25 +251,27 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     var epg by remember { mutableStateOf<List<EpgEntry>>(emptyList()) }
     var banner by remember { mutableStateOf(false) }
     var bannerTick by remember { mutableIntStateOf(0) }
+    // Boomer mode: channel permanently unplayable → big friendly message, then back to the tiles
+    var boomerFail by remember { mutableStateOf(false) }
     var miniBar by remember { mutableStateOf(false) }
     var miniTick by remember { mutableIntStateOf(0) }
     var nextDismissed by remember { mutableStateOf(false) }
-    // Schutz: pro Folge nur einmal „Ende“ behandeln (Ende-Meldung des Players und Zeit-Auslöser nicht doppelt)
+    // Guard: handle "end" only once per episode (the player's end event and the time trigger must not both fire)
     var endGuard by remember { mutableStateOf("") }
-    // Live: wie oft der Server den Stream beendet hat (Neuverbinden, aber nicht endlos im Kreis)
+    // Live: how often the server ended the stream (reconnect, but not endlessly in circles)
     var liveEnds by remember { mutableIntStateOf(0) }
-    // Tatsächlich gespielte Adresse (bei Stalker-Portalen vom Portal erzeugt)
+    // Address actually played (generated by the portal for Stalker portals)
     var resolvedUrl by remember { mutableStateOf("") }
-    // Ton/Untertitel: von Hand gewählt (dann keine Automatik mehr für diesen Titel)
+    // Audio/subtitles: chosen by hand (then no automatic selection for this title any more)
     var manualTracks by remember { mutableStateOf(false) }
-    // Quellen, die für diesen Titel schon gescheitert sind; Nachladepausen (Ruckeln); letzter Spulvorgang
+    // Sources that already failed for this title; rebuffering pauses (stutter); last seek
     val triedUrls = remember { HashSet<String>() }
     var stalls by remember { mutableStateOf(emptyList<Long>()) }
     var readyOnce by remember { mutableStateOf(false) }
     var lastSeekT by remember { mutableLongStateOf(0L) }
-    // Hinweis oben (Quelle gewechselt, Gerät/Qualität) für einige Sekunden
+    // Notice at the top (source switched, device/quality) for a few seconds
     var notice by remember { mutableStateOf(req.note) }
-    // Aus einer eigenen Senderliste/Favoriten gestartet: diese Auswahl im Senderwechsel zeigen, sonst die Kategorie des Senders
+    // Started from an own channel list/favorites: show this selection in channel switching, otherwise the channel's category
     var chanCat by remember {
         mutableStateOf(ZapContext.key?.takeIf { k -> (k == FAV_CAT || ChannelLists.byKey(k) != null) && zapList.any { it.id == req.itemId } }
             ?: liveAll.firstOrNull { it.id == req.itemId }?.group ?: "ALL")
@@ -271,7 +293,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     val step = AppSettings.seekStep * 1000L
     val firstFocus = if (cur.live) liveFirst else playBtn
 
-    // Serien: Folgenliste für Vorherige/Nächste Folge und das Folgen-Menü
+    // Series: episode list for previous/next episode and the episode menu
     val epList = remember(seriesItem) {
         if (seriesItem != null && seriesItem.kind == Kind.SERIES) seriesItem.episodes.sortedWith(compareBy({ it.season }, { it.num }))
         else emptyList()
@@ -280,15 +302,15 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     val hasPrev = epIdx > 0
     val hasNext = epIdx >= 0 && epIdx < epList.lastIndex
 
-    // Diese Werte ändern sich nur selten, obwohl pos alle 500 ms tickt – deshalb "abgeleitet":
-    // der Player wird nur neu zusammengesetzt, wenn sich das Ergebnis wirklich ändert.
+    // These values change only rarely although pos ticks every 500 ms – hence "derived":
+    // the player is only recomposed when the result really changes.
     val hasDur by remember { derivedStateOf { dur > 0 } }
     val activeSeg by remember { derivedStateOf { val p = pos; segs.firstOrNull { p >= it.start && p < it.end - 1000 } } }
     val showNextCard by remember(hasNext) {
         derivedStateOf { hasNext && !cur.live && dur > 0 && dur - pos < 30_000 && !nextDismissed }
     }
 
-    // Lambdas für Zeitleisten & Co.: gelesen wird erst beim Zeichnen, nicht beim Zusammensetzen.
+    // Lambdas for timelines etc.: read only when drawing, not when composing.
     val posNow: () -> Long = { if (scrubTarget >= 0) scrubTarget else pos }
     val durNow: () -> Long = { dur }
     val bufNow: () -> Long = { buffered }
@@ -300,9 +322,9 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
 
     fun togglePlay() { if (player.isPlaying) player.pause() else player.play() }
 
-    // Springen: Einzeldruck = eingestellte Sprungweite. Halten beschleunigt in Stufen (Schnellspulen).
-    // Mehrere Sprünge werden gesammelt und erst nach kurzer Pause ausgeführt.
-    // fromBar = true: Steuerleiste verschwindet sofort, nur Spul-Anzeige und dünne Zeitleiste bleiben.
+    // Seeking: single press = configured jump size. Holding speeds up in levels (fast seeking).
+    // Several jumps are collected and executed only after a short pause.
+    // fromBar = true: control bar disappears immediately, only the seek display and a thin timeline remain.
     fun stepSeek(d: Int, amount: Long = step, fromBar: Boolean = true) {
         val dd = player.duration
         val base = if (scrubTarget >= 0) scrubTarget else player.currentPosition
@@ -318,7 +340,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
 
     fun repeatSeek(d: Int) {
         val now = System.currentTimeMillis()
-        if (now - lastRepeatT > 700) { holdStartT = now; turbo = 0 }   // neue Haltephase
+        if (now - lastRepeatT > 700) { holdStartT = now; turbo = 0 }   // new hold phase
         lastRepeatT = now
         val lvl = turboLevel(now - holdStartT)
         turbo = lvl
@@ -356,7 +378,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         else if (n > 0) flash = Flash(null, "Kein Kanal mit dieser Nummer")
     }
 
-    // Menüs: parent = Menü, zu dem "Links" zurückkehrt (NONE = ganz schließen)
+    // Menus: parent = menu that "Left" returns to (NONE = close completely)
     fun openPanel(p: Panel, parent: Panel = Panel.NONE) {
         if (parent == Panel.NONE) { lastPanel = p; focusSeek = false }
         panelParent = parent
@@ -369,15 +391,34 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         panel = if (pp != Panel.NONE) pp else Panel.NONE
     }
 
-    /** Weitere Quellen des laufenden Titels: beim Film aus der Playlist, bei Serien die Quellen der Folge. */
+    // Live: the same channel in several qualities (4K / Full HD / HD / SD as separate playlist entries), best first.
+    // Computed a moment after zapping so fast channel changes cost nothing.
+    val liveAlts by produceState(emptyList<Variant>(), cur.itemId, cur.live, liveAll) {
+        value = emptyList()
+        if (!cur.live || liveAll.isEmpty()) return@produceState
+        kotlinx.coroutines.delay(800)
+        val me = liveAll.firstOrNull { it.id == cur.itemId } ?: return@produceState
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val base = LiveBundleLogic.baseName(me.title)
+            if (base.isEmpty()) emptyList()
+            else liveAll.filter { it.lang == me.lang && LiveBundleLogic.baseName(it.title) == base }
+                .sortedByDescending { LiveBundleLogic.rank(it.title, it.quality) }
+                .map { v ->
+                    val q = when (LiveBundleLogic.rank(v.title, v.quality)) { 8 -> "8K"; 7 -> "4K"; 5 -> "Full HD"; 4 -> "HD"; 2 -> "SD"; else -> "Standard" }
+                    Variant(v.url, q + "  ·  " + v.title, v.quality ?: q, v.lang)
+                }
+        }
+    }
+
+    /** Further sources of the running title: for a movie from the playlist, for series the sources of the episode. */
     fun currentAlts(): List<Variant> = when {
-        cur.live -> emptyList()
+        cur.live -> liveAlts
         cur.alts.isNotEmpty() -> cur.alts
         cur.season > 0 || cur.episode > 0 -> epList.firstOrNull { it.season == cur.season && it.num == cur.episode }?.variants.orEmpty()
         else -> emptyList()
     }
 
-    /** Auf eine andere (möglichst kleinere) Quelle wechseln – nach einem Fehler oder bei Ruckeln. true = gewechselt. */
+    /** Switch to another (preferably smaller) source – after an error or on stutter. true = switched. */
     fun switchSource(reason: String, sameFirst: Boolean = false): Boolean {
         if (cur.live || !PlaybackPrefs.autoFallback) return false
         val alts = currentAlts()
@@ -386,7 +427,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         val curI = alts.indexOfFirst { it.url == cur.url }.coerceAtLeast(0)
         val tried = alts.indices.filter { alts[it].url in triedUrls }.toSet()
         val ni = QualityLogic.fallback(alts.map { it.quality }, curI, tried, sameFirst) ?: return false
-        // 4K musste wegen Ruckeln/Decoder weichen: zählt für die gelernte Gerätegrenze (ein toter Link nicht)
+        // 4K had to give way because of stutter/decoder: counts for the learned device limit (a dead link does not)
         if (!sameFirst && QualityLogic.rank(alts[curI].quality) >= 4 && QualityLogic.rank(alts[ni].quality) < 4) PlaybackPrefs.note4kTrouble(ctx)
         val at = player.currentPosition.coerceAtLeast(0L)
         val t = alts[ni]
@@ -396,12 +437,12 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         return true
     }
 
-    /** Ton und Untertitel nach Einstellungen und gemerkter Wahl für diesen Titel. */
+    /** Audio and subtitles according to settings and the remembered choice for this title. */
     fun applyTrackPrefs() {
         val mem = TrackMemory.get(ctx, cur.itemId)
-        // Wichtig: Mit Kopfhörern (nur Stereo-Ausgang) schloss der Player sonst eine 5.1-Tonspur (oft die deutsche)
-        // automatisch aus und nahm eine Stereo-Spur in anderer Sprache. Die Sprache zählt, der Decoder mischt herunter.
-        // Die Option gibt es nur beim DefaultTrackSelector (Standard von ExoPlayer), nicht beim allgemeinen Parameter-Builder.
+        // Important: with headphones (stereo output only) the player used to exclude a 5.1 audio track (often the German one)
+        // automatically and took a stereo track in another language. The language counts, the decoder downmixes.
+        // The option exists only on DefaultTrackSelector (ExoPlayer's default), not on the generic parameters builder.
         (player.trackSelectionParameters as? androidx.media3.exoplayer.trackselection.DefaultTrackSelector.Parameters)?.let {
             player.trackSelectionParameters = it.buildUpon().setConstrainAudioChannelCountToDeviceCapabilities(false).build()
         }
@@ -418,8 +459,8 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     }
 
     /**
-     * Sicherheitsnetz für die Tonsprache: ändert sich die Auswahl von allein (Kopfhörer an/aus, Ausgabegerät gewechselt),
-     * wird wieder die bevorzugte Sprache gewählt, sofern der Player sie abspielen kann. Nicht während das Tonmenü offen ist.
+     * Safety net for the audio language: if the selection changes on its own (headphones on/off, output device changed),
+     * the preferred language is chosen again if the player can play it. Not while the audio menu is open.
      */
     var audioFixTries by remember { mutableIntStateOf(0) }
     fun ensureAudio() {
@@ -439,15 +480,15 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     .setOverrideForType(androidx.media3.common.TrackSelectionOverride(g.mediaTrackGroup, idx)).build()
                 return
             }
-            // Gewünschte Sprache vorhanden, aber vom Gerät mit diesem Ausgang nicht abspielbar
+            // Wanted language exists, but cannot be played by the device with this output
             if (audioFixTries < 3) { audioFixTries++; notice = "Tonspur „" + lang.uppercase() + "“ ist mit diesem Ausgang nicht abspielbar – andere Spur im Menü wählen" }
             return
         }
     }
 
     /**
-     * Fehler kommt vom Ton-Decoder: andere abspielbare Tonspur wählen (bevorzugt die zweite Sprache, sonst irgendeine) und neu
-     * starten. Liefert true, wenn so weitergespielt wird.
+     * Error comes from the audio decoder: choose another playable audio track (preferably the second language, otherwise any) and
+     * restart. Returns true if playback continues this way.
      */
     var audioFallbacks by remember { mutableIntStateOf(0) }
     fun audioFallback(): Boolean {
@@ -478,7 +519,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         return true
     }
 
-    /** „Nur bei fremder Tonspur“: Untertitel an, wenn der Ton in einer Sprache ist, die man nicht eingestellt hat. */
+    /** "Only for a foreign audio track": subtitles on when the audio is in a language that is not set. */
     fun autoSubs() {
         if (manualTracks || cur.live || AppSettings.subMode != TrackLogic.SUB_FOREIGN) return
         val audio = player.currentTracks.groups.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
@@ -488,7 +529,10 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         if (want == off) player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !want).build()
     }
 
-    /** Von Hand im Menü gewählt: für diesen Titel merken und als Vorgabe für die nächste Folge setzen. */
+    /** Key under which an online subtitle is remembered: the title, or the episode of a series. */
+    fun subKey() = if (cur.season > 0 && cur.episode > 0) cur.itemId + "#S" + cur.season + "E" + cur.episode else cur.itemId
+
+    /** Chosen by hand in the menu: remember for this title and set as default for the next episode. */
     fun rememberTracks() {
         manualTracks = true
         fun langOf(type: Int): String? = player.currentTracks.groups.firstOrNull { it.type == type && it.isSelected }
@@ -506,7 +550,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
 
     fun saveProgress() {
         if (cur.live || cur.archive != null) return
-        // Dauer unbekannt (manche Anbieter-Streams melden keine): trotzdem die Stelle merken, sonst bliebe „Weiterschauen“ auf der alten Folge
+        // Duration unknown (some provider streams report none): remember the position anyway, otherwise "Continue watching" would stay on the old episode
         val d = player.duration.coerceAtLeast(0L)
         val p = player.currentPosition
         if (p <= 0) return
@@ -514,9 +558,9 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         val si = seriesItem
         var next: Entry? = null
         if (si != null && (cur.season > 0 || cur.episode > 0)) {
-            // Fortschritt dieser Folge (Balken/Haken in der Folgenliste)
+            // Progress of this episode (bar/check mark in the episode list)
             EpProgress.put(ctx, cur.itemId, cur.season, cur.episode, p, d)
-            // Hier frisch berechnen: diese Funktion läuft auch im 5-Sekunden-Takt mit dem Stand vom Start des Players
+            // Compute freshly here: this function also runs on the 5-second tick with the state from player start
             val i = epList.indexOfFirst { it.season == cur.season && it.num == cur.episode }
             if (i >= 0 && i < epList.lastIndex) {
                 val nx = epList[i + 1]
@@ -525,7 +569,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     0L, 0L, now, nx.season, nx.num, true)
             }
         }
-        // Film: Fortschritt merken, damit die Detailseite nach dem Ansehen „Erneut abspielen“ zeigt
+        // Movie: remember progress so the detail page shows "Play again" after watching
         if (si == null && cur.season == 0 && cur.episode == 0) EpProgress.put(ctx, cur.itemId, 0, 0, p, d)
         WatchStore.save(ctx, Entry(cur.itemId, cur.title, cur.url, p, d, now, cur.season, cur.episode), next)
     }
@@ -538,12 +582,12 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         History.add(ctx, si.id)
         scrubTarget = -1L
         cur = PlayReq(si.title + " S" + ep.season + "E" + ep.num, v.url, si.id, false, 0L, cur.tmdbId, ep.season, ep.num)
-        if (!openStream(player, v.url, 0L)) { msg = PlayerLogic.MSG_FORMAT; buffering = false; return }
+        if (!openStream(player, v.url, 0L, SubSearch.item(ctx, v.url, subKey()))) { msg = PlayerLogic.MSG_FORMAT; buffering = false; return }
         ping()
     }
 
-    // ---------------------------------------------------------------- Archiv (Catchup)
-    // Programm des Senders, dessen Archiv-Sendung gerade läuft (für „Vorherige/Nächste Sendung“ und das Weiterspielen)
+    // ---------------------------------------------------------------- Archive (catchup)
+    // Schedule of the channel whose archive show is currently playing (for "Previous/Next show" and continued playback)
     var archProg by remember { mutableStateOf<List<EpgEntry>>(emptyList()) }
     LaunchedEffect(cur.archive?.chId) {
         archProg = emptyList()
@@ -554,7 +598,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     val archPrev = cur.archive?.let { a -> CatchupLogic.neighbour(archProg, a.prog.start, -1)?.takeIf { Catchup.canPlay(curItem, it, archNow) } }
     val archNext = cur.archive?.let { a -> CatchupLogic.neighbour(archProg, a.prog.start, 1)?.takeIf { Catchup.canPlay(curItem, it, archNow) } }
 
-    /** Sendung aus dem Archiv des Senders [ch] abspielen (auch die laufende von Anfang an). */
+    /** Play a show from the channel's archive [ch] (including the running one from the beginning). */
     fun playArchive(ch: Item, e: EpgEntry) {
         val url = Catchup.urlFor(ch, e)
         if (url == null) { flash = Flash(null, "Nicht im Archiv verfügbar"); return }
@@ -569,20 +613,20 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         flash = Flash(null, dayLabel(e.start) + "  " + hhmm(e.start))
     }
 
-    /** Vom Archiv zurück zum Live-Bild desselben Senders. */
+    /** From the archive back to the live picture of the same channel. */
     fun backToLive() {
         val ch = curItem ?: return
         switchTo(ch, zapSrc)
         flash = Flash(PIcon.Play, "LIVE")
     }
 
-    // Wird vom Player aufgerufen, wenn ein Film/eine Folge zu Ende ist (immer mit dem neuesten Stand)
+    // Called by the player when a movie/episode has ended (always with the latest state)
     val onEnded by rememberUpdatedState({
         val ch = curItem
         if (endGuard != cur.url) {
             endGuard = cur.url
             if (cur.archive != null && ch != null) {
-                // Archiv: nahtlos mit der nächsten Sendung weiter, sonst zurück zum Live-Bild
+                // Archive: continue seamlessly with the next show, otherwise back to the live picture
                 val nx = archNext
                 if (nx != null) playArchive(ch, nx) else backToLive()
             } else if (!cur.live && hasNext && AppSettings.autoNext && !nextDismissed) playEpisode(epList[epIdx + 1])
@@ -591,14 +635,14 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
 
     var lastBackAt by remember { mutableLongStateOf(0L) }
     fun handleBack() {
-        // Doppelte Zurück-Meldungen (Taste + System) dürfen nicht erst das Menü und gleich danach den Stream schließen
+        // Duplicate back events (key + system) must not first close the menu and right after that the stream
         val now = System.currentTimeMillis()
         if (now - lastBackAt < 350) return
         lastBackAt = now
         when {
             scrubTarget >= 0 -> scrubTarget = -1L
             panel != Panel.NONE -> closePanel()
-            // Guide: eigener Zurück-Schritt (Sendung → Sender → Kategorie → schließen)
+            // Guide: own back step (show → channel → category → close)
             showGuide -> GuideBack.handler?.invoke() ?: run { showGuide = false }
             showCats -> showCats = false
             showChannels -> showChannels = false
@@ -611,8 +655,10 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
 
     BackHandler { handleBack() }
 
+    // Phone search shows what is playing now (also after switching / next episode)
+    LaunchedEffect(cur) { RemoteHub.nowTitle = cur.title; RemoteHub.nowLive = cur.live }
     DisposableEffect(Unit) {
-        // Hängt der Player lange im Nachladen (Verbindung tot, ohne dass ein Fehler kommt): bis zu zweimal neu verbinden
+        // If the player hangs in buffering for a long time (dead connection without an error): reconnect up to twice
         var bufSince = 0L
         var wdTries = 0
         val tick = object : Runnable {
@@ -622,7 +668,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 if (player.playbackState == Player.STATE_BUFFERING && player.playWhenReady && !pError) {
                     if (bufSince == 0L) bufSince = nowT
                     else if (nowT - bufSince > (if (cur.live) 15_000L else 30_000L) && (cur.live || wdTries < 2)) {
-                        // Live: ohne Grenze neu verbinden (wie bei einem Receiver), Film/Serie: zweimal
+                        // Live: reconnect without limit (like a receiver), movie/series: twice
                         wdTries++; bufSince = nowT
                         msg = if (cur.live) "Verbindung hängt – neuer Versuch ($wdTries)" else "Verbindung hängt – neuer Versuch ($wdTries/2)"
                         if (cur.live && cur.archive == null) LiveTimeshift.reconnect(player) else player.prepare()
@@ -635,7 +681,13 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             }
         }
         fun showInfo(w: Int, hh: Int) {
-            if (w <= 0 || hh <= 0 || cur.live) return
+            if (w <= 0 || hh <= 0) return
+            if (cur.live) {
+                // Live: remember picture size and frame rate per channel (shown in the channel list)
+                val lf = player.videoFormat
+                LiveQuality.put(ctx, cur.itemId, qualityName(maxOf(hh, w * 9 / 16)), if (lf != null && lf.frameRate > 0) Math.round(lf.frameRate) else 0)
+                return
+            }
             val q = qualityName(maxOf(hh, w * 9 / 16))
             val prev = QualityStore.get(cur.itemId)
             if (prev == null || rankQ(q) > rankQ(prev)) QualityStore.put(ctx, cur.itemId, q)
@@ -659,26 +711,26 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             override fun onPlayerError(e: PlaybackException) {
                 pError = true
                 val status = httpStatusOf(e)
-                Diag.report("Wiedergabe: " + e.errorCodeName + (if (status > 0) " (HTTP $status)" else ""))
+                Diag.report("Playback: " + e.errorCodeName + (if (status > 0) " (HTTP $status)" else ""))
                 val decoder = e.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
                     e.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
                     e.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ||
                     e.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES
-                // Gewählte Tonspur lässt sich auf diesem Gerät/Ausgang nicht decodieren: nicht aufgeben, sondern die Spur wechseln
-                // und weiterspielen (Bild und Position bleiben). Nie die ganze Quelle verwerfen, nur weil der Ton nicht geht.
+                // Chosen audio track cannot be decoded on this device/output: do not give up, switch the track
+                // and keep playing (picture and position stay). Never discard the whole source just because the audio fails.
                 if (decoder && audioFallback()) return
                 val liveNow = cur.live && cur.archive == null
                 if (retries < (if (liveNow) 50 else 3) && !isPermanentHttp(status) && !decoder) {
                     retries++
                     msg = if (liveNow) "Verbindung unterbrochen – neuer Versuch ($retries)" else "Verbindung unterbrochen – neuer Versuch ($retries/3)"
-                    // Live: immer wieder versuchen, mit wachsender Pause (höchstens 15 s), und zurück zum Live-Bild
+                    // Live: keep trying with a growing pause (at most 15 s), and back to the live picture
                     h.postDelayed({ if (liveNow) LiveTimeshift.reconnect(player) else player.prepare() }, minOf(1500L * retries, 15_000L))
                 } else {
-                    // Endgültig gescheitert: Link merken (nur wenn es am Link liegt) und eine andere Quelle versuchen
+                    // Finally failed: remember the link (only if the link is the cause) and try another source
                     if (cur.archive == null && DeadLinkLogic.counts(status, decoder, DeviceCaps.online(ctx))) DeadLinks.fail(ctx, cur.url, DeadLinkLogic.permanent(status))
                     if (switchSource(if (decoder) "Format nicht abspielbar" else "Quelle gestört", sameFirst = !decoder)) { pError = false; msg = null }
                     else if (cur.archive != null) msg = "Diese Sendung ist im Archiv des Anbieters nicht abrufbar.  Zurück = Live-Sender."
-                    else msg = Lang.tr(playbackErrorText(e.errorCode, status, cur.live)) + "  " + Lang.tr("Zurück mit der Zurück-Taste.")
+                    else { msg = Lang.tr(playbackErrorText(e.errorCode, status, cur.live, TlsFallback.isHostMismatch(e))) + "  " + Lang.tr("Zurück mit der Zurück-Taste."); if (Boomer.enabled) boomerFail = true }
                 }
             }
             override fun onPlaybackStateChanged(state: Int) {
@@ -686,18 +738,18 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 if (state == Player.STATE_BUFFERING || state == Player.STATE_READY) pError = false
                 buffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) {
-                    msg = null; retries = 0
+                    msg = null; retries = 0; boomerFail = false
                     if (player.duration > 0 && player.currentPosition < player.duration - 3000) endGuard = ""
                     if (!readyOnce) { readyOnce = true; DeadLinks.ok(ctx, cur.url) }
                 }
-                // Ruckeln: Nachladen mitten in der Wiedergabe, nicht direkt nach dem Spulen
+                // Stutter: rebuffering in the middle of playback, not right after seeking
                 if (state == Player.STATE_BUFFERING && readyOnce && player.playWhenReady &&
                     System.currentTimeMillis() - lastSeekT > 4000
                 ) {
                     val now = System.currentTimeMillis()
                     stalls = StallLogic.add(stalls, now)
                     if (StallLogic.tooMany(stalls, now)) {
-                        // Automatik: Puffer für die nächste Wiedergabe vergrößern (langsames Internet)
+                        // Automatic: enlarge the buffer for the next playback (slow internet)
                         val before = AppSettings.bufferLearned
                         AppSettings.learnBuffer(ctx)
                         if (AppSettings.bufferLearned != before) notice = "Ruckelt – Puffer wird beim nächsten Start größer"
@@ -705,7 +757,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     }
                 }
                 if (state == Player.STATE_ENDED) {
-                    // Live-Stream vom Server beendet (häufig bei IPTV): sofort neu verbinden statt stehen zu bleiben
+                    // Live stream ended by the server (common with IPTV): reconnect immediately instead of stalling
                     if (cur.live && cur.archive == null && liveEnds < 30) {
                         liveEnds++
                         msg = "Stream beendet – verbinde neu …"
@@ -717,7 +769,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) lastSeekT = System.currentTimeMillis()
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { pWhenReady = playWhenReady }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { pWhenReady = playWhenReady; if (playWhenReady) sleepExpired = false }
             override fun onTracksChanged(tracks: Tracks) {
                 tracksVer++
                 ensureAudio()
@@ -725,26 +777,31 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 val vf = player.videoFormat
                 if (vf != null) showInfo(vf.width, vf.height)
             }
-            override fun onVideoSizeChanged(videoSize: VideoSize) { showInfo(videoSize.width, videoSize.height) }
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) videoAr = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+                showInfo(videoSize.width, videoSize.height)
+            }
         }
         player.addListener(l)
         applyTrackPrefs()
         h.postDelayed(tick, 5000)
         AppNav.playing = true
+        RemoteHub.player = player
         onDispose {
             AppNav.playing = false
-            // Detailseite merkt sich die zuletzt gespielte Folge (auch nach „Nächste Folge“)
+            if (RemoteHub.player === player) RemoteHub.player = null
+            // Detail page remembers the last played episode (also after "Next episode")
             if (!cur.live && cur.archive == null) DetailReturn.set(cur.itemId, cur.season, cur.episode)
             saveProgress()
             h.removeCallbacksAndMessages(null)
             player.removeListener(l)
             player.release()
-            // Puffer loslassen (eine laufende Aufnahme hält ihn weiter)
+            // Release the buffer (a running recording keeps holding it)
             LiveTimeshift.stop()
         }
     }
 
-    // Pausiert, wenn die App in den Hintergrund geht (Home-Taste, anderer Dialog), und macht danach weiter.
+    // Pauses when the app goes to the background (Home key, other dialog) and continues afterwards.
     val lifecycle = remember(ctx) { findActivity(ctx)?.lifecycle }
     DisposableEffect(lifecycle) {
         var resumeAfter = false
@@ -758,7 +815,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     saveProgress()
                 }
                 Lifecycle.Event.ON_RESUME -> {
-                    // Rückkehr aus Standby/anderer App: hängt der Player nach einem Fehler, neu verbinden
+                    // Return from standby/other app: if the player hangs after an error, reconnect
                     if (player.playerError != null && resumeAfter) { retries = 0; player.prepare() }
                     if (resumeAfter) {
                         resumeAfter = false
@@ -774,7 +831,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         onDispose { lifecycle?.removeObserver(obs) }
     }
 
-    // Netz wieder da (WLAN-Abbruch, Router-Neustart): hängt der Player im Fehler, sofort neu verbinden
+    // Network is back (Wi-Fi drop, router restart): if the player hangs in an error, reconnect immediately
     DisposableEffect(Unit) {
         val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
         val cb = object : ConnectivityManager.NetworkCallback() {
@@ -792,7 +849,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         val ok = cm != null && runCatching { cm.registerDefaultNetworkCallback(cb) }.isSuccess
         onDispose { if (ok) runCatching { cm?.unregisterNetworkCallback(cb) } }
     }
-    // Wachhaltung nicht möglich: Hinweis statt stillem Versagen
+    // Keeping awake not possible: notice instead of silent failure
     var awakeWarn by remember { mutableStateOf(false) }
     LaunchedEffect(ScreenAwake.unavailable) {
         if (ScreenAwake.unavailable) { awakeWarn = true; delay(8000); awakeWarn = false }
@@ -800,23 +857,23 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
 
     LaunchedEffect(cur.url) {
         readyOnce = false; stalls = emptyList()
-        retries = 0; msg = null; buffering = true; segs = emptyList(); pos = 0; dur = 0; buffered = 0
+        retries = 0; msg = null; boomerFail = false; buffering = true; segs = emptyList(); pos = 0; dur = 0; buffered = 0
         infoFor = ""; info = null; badges = emptyList(); nextDismissed = false
         if (cur.live) bannerTick++
         scrubTarget = -1L
         liveEnds = 0
-        // Aufnahme eines anderen Senders läuft weiter: das braucht eine zweite Verbindung zum Anbieter
+        // Recording of another channel keeps running: this needs a second connection to the provider
         if (cur.live && Recorder.active.any { it.running && it.channelId != cur.itemId }) notice = "Aufnahme läuft weiter – dafür braucht dein Anbieter 2 gleichzeitige Verbindungen"
         val loaded = player.currentMediaItem?.localConfiguration?.uri?.toString()
-        // Stalker-Portal: echte Adresse erst jetzt vom Portal holen (sie ist nur kurz gültig)
+        // Stalker portal: fetch the real address from the portal only now (it is valid only briefly)
         val playUrl = if (StalkerLogic.isItem(cur.url)) StalkerApi.resolve(ctx, cur.url) else cur.url
         if (playUrl == null) {
-            msg = "Das Portal hat keine Abspiel-Adresse geliefert. Später erneut versuchen."; buffering = false
+            msg = STALKER_NO_ADDRESS; buffering = false
             return@LaunchedEffect
         }
         resolvedUrl = playUrl
         if (cur.live && cur.archive == null && (LiveTimeshift.wanted(playUrl) || Recorder.isRecording(cur.itemId))) {
-            // Live über den Puffer auf dem Gerät (Zurückspulen; bei laufender Aufnahme dieselbe Verbindung)
+            // Live via the buffer on the device (rewind; with a running recording the same connection)
             if (!LiveTimeshift.start(ctx, player, playUrl)) {
                 LiveTimeshift.stop()
                 notice = "Zu wenig freier Speicher für den Live-Puffer"
@@ -824,8 +881,9 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             }
         } else if (loaded != playUrl) {
             LiveTimeshift.stop()
-            // Unbekanntes Format (z. B. ohne passendes Modul): Hinweis statt Absturz
-            if (!openStream(player, playUrl, if (cur.startMs > 0) cur.startMs else 0L)) { msg = PlayerLogic.MSG_FORMAT; buffering = false }
+            // Unknown format (e.g. without a matching module): notice instead of a crash
+            val item = if (cur.live) null else SubSearch.item(ctx, playUrl, subKey())
+            if (!openStream(player, playUrl, if (cur.startMs > 0) cur.startMs else 0L, item)) { msg = PlayerLogic.MSG_FORMAT; buffering = false }
         }
     }
     LaunchedEffect(Unit) {
@@ -834,7 +892,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 pos = player.currentPosition
                 dur = player.duration.coerceAtLeast(0)
                 buffered = player.bufferedPosition
-                // Manche Server melden das Ende nie: kurz vor Schluss selbst zur nächsten Folge
+                // Some servers never report the end: move to the next episode myself shortly before the end
                 if (!cur.live && cur.archive == null && hasNext && AppSettings.autoNext && !nextDismissed && dur > 0 && dur - pos in 0..700L && player.isPlaying) onEnded()
             }
             delay(500)
@@ -852,29 +910,29 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     LaunchedEffect(cur.url, hasDur) {
         if (!cur.live && cur.tmdbId > 0 && hasDur && AppSettings.skipIntro) segs = IntroDb.get(cur.tmdbId, cur.season, cur.episode, dur)
     }
-    // Optional: Intro automatisch überspringen
+    // Optional: skip the intro automatically
     LaunchedEffect(activeSeg) {
         val s = activeSeg
         if (s != null && AppSettings.autoSkipIntro && s.label.startsWith("Intro")) player.seekTo(s.end)
-        // Abspann beginnt: gleich die nächste Folge (nur wenn die Abspann-Zeit bekannt ist)
+        // Credits start: go straight to the next episode (only if the credits time is known)
         if (s != null && AppSettings.autoSkipOutro && s.label.startsWith("Abspann") && hasNext && !nextDismissed && player.isPlaying) playEpisode(epList[epIdx + 1])
     }
-    // Überspringen-Knopf: 10 s sichtbar, dann ausgeblendet. Öffnet man in dieser Zeit (oder danach, solange der Abschnitt läuft)
-    // die Steuerleiste, erscheint er wieder.
+    // Skip button: visible for 10 s, then hidden. If the control bar is opened in that time (or afterwards while the section runs)
+    // it appears again.
     var segVisible by remember { mutableStateOf(false) }
     LaunchedEffect(activeSeg) {
         segVisible = activeSeg != null
         if (activeSeg != null) { delay(10_000); segVisible = false }
     }
-    // Überspringen: Abspann = gleich die nächste Folge (kaum jemand will danach noch Sekunden Abspann sehen).
-    // Danach Menü zu und Fokus zurück, sonst blieb man im Menü hängen.
+    // Skip: credits = straight to the next episode (hardly anyone wants to watch seconds of credits afterwards).
+    // Then close the menu and restore focus, otherwise you got stuck in the menu.
     fun skipSeg(sg: Seg) {
         segVisible = false
         controls = false
         if (sg.label.startsWith("Abspann") && hasNext) playEpisode(epList[epIdx + 1]) else player.seekTo(sg.end)
         runCatching { rootFocus.requestFocus() }
     }
-    // Titel der Folge (TMDB, sonst Name aus der Playlist) für Einblendung und Steuerleiste
+    // Episode title (TMDB, otherwise name from the playlist) for the overlay and control bar
     var epName by remember(cur.itemId, cur.season, cur.episode) { mutableStateOf<String?>(null) }
     var epBanner by remember { mutableStateOf(false) }
     LaunchedEffect(cur.itemId, cur.season, cur.episode) {
@@ -898,7 +956,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             while (true) { epg = Epg.now(it); delay(60_000) }
         }
     }
-    // Steuerleiste nach einstellbarer Zeit ohne Tastendruck ausblenden. Jeder Tastendruck startet die Zeit neu.
+    // Hide the control bar after a configurable time without a key press. Every key press restarts the timer.
     LaunchedEffect(controls, panel, showChannels, showGuide, playing) {
         if (controls && panel == Panel.NONE && !showChannels && !showGuide && (playing || cur.live)) {
             snapshotFlow { interact }.collectLatest {
@@ -910,8 +968,8 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     LaunchedEffect(controls) { if (!controls) { lastPanel = Panel.NONE; focusSeek = false; ctrlLabel = "" } }
     LaunchedEffect(controls, panel, showChannels, showCats, showGuide) {
         delay(40)
-        // Der Fokus wird bis zu 6-mal versucht: Listen brauchen manchmal einen Moment, bis das Ziel gezeichnet ist.
-        // Ohne Fokus würden die Tasten ins Leere laufen und die Liste wirkt "festgefahren".
+        // Focus is tried up to 6 times: lists sometimes need a moment until the target is drawn.
+        // Without focus the keys would go nowhere and the list seems "stuck".
         repeat(12) {
             val ok = runCatching {
                 when {
@@ -927,7 +985,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             delay(70)
         }
     }
-    // Senderliste und TV-Guide schließen sich selbst, wenn eine Weile keine Taste gedrückt wird.
+    // Channel list and TV guide close themselves when no key is pressed for a while.
     LaunchedEffect(showChannels) {
         if (showChannels) snapshotFlow { interact }.collectLatest { delay(15_000); showChannels = false }
     }
@@ -939,13 +997,14 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         if (sleepAt > 0L) {
             delay((sleepAt - System.currentTimeMillis()).coerceAtLeast(0L))
             if (sleepAt > 0L) {
+                sleepExpired = true   // the screen is released again (a plain pause keeps it on)
                 player.pause()
                 sleepAt = 0L; sleepIdx = 0
                 flash = Flash(PIcon.Pause, "Sleep-Timer")
             }
         }
     }
-    // Abstand zum Live-Bild: bei HLS vom Player, sonst als Summe der Pausenzeit
+    // Distance to the live picture: for HLS from the player, otherwise as the sum of the pause time
     LaunchedEffect(cur.url, cur.live) {
         behindSec = 0L
         while (cur.live) {
@@ -975,7 +1034,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             .focusRequester(rootFocus)
             .onPreviewKeyEvent { e ->
                 interact = System.currentTimeMillis()
-                // Zurück selbst behandeln: sonst nimmt Compose zuerst nur den Fokus weg und das Menü bleibt offen
+                // Handle back ourselves: otherwise Compose first only removes the focus and the menu stays open
                 if (e.key == Key.Back) {
                     if (e.type == KeyEventType.KeyUp) handleBack()
                     true
@@ -990,13 +1049,22 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     }
                     return@onKeyEvent (k == Key.DirectionLeft || k == Key.DirectionRight)
                 }
+                // Boomer mode: only left/right (switch channel); everything else does nothing, no menu opens
+                if (Boomer.enabled && cur.live && cur.archive == null) {
+                    when (k) {
+                        Key.DirectionLeft, Key.MediaPrevious -> zap(-1)
+                        Key.DirectionRight, Key.MediaNext -> zap(1)
+                        else -> {}
+                    }
+                    return@onKeyEvent true
+                }
                 when {
                     k == Key.MediaPlayPause || k == Key.Spacebar -> { togglePlay(); true }
                     k == Key.MediaPlay -> { player.play(); true }
                     k == Key.MediaPause -> { player.pause(); true }
                     k == Key.MediaFastForward && !cur.live -> { stepSeek(1); true }
                     k == Key.MediaRewind && !cur.live -> { stepSeek(-1); true }
-                    // Live mit Puffer: Spultasten springen im Puffer (nicht über das Live-Bild hinaus)
+                    // Live with buffer: seek keys jump within the buffer (not beyond the live picture)
                     k == Key.MediaRewind && cur.live && LiveTimeshift.active -> { LiveTimeshift.seekBy(player, -step); flash = Flash(PIcon.Replay, "−" + step / 1000 + " s"); true }
                     k == Key.MediaFastForward && cur.live && LiveTimeshift.active -> { LiveTimeshift.seekBy(player, step); flash = Flash(PIcon.Forward, "+" + step / 1000 + " s"); true }
                     k == Key.MediaNext && cur.live -> { zap(1); true }
@@ -1012,7 +1080,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                         true
                     }
                     !cur.live && !controls && panel == Panel.NONE && !showChannels && !showGuide && digitOf(k) >= 0 && player.duration > 0 -> {
-                        // Zifferntaste springt zu 0–90 % des Films
+                        // Digit key jumps to 0–90 % of the movie
                         val n = digitOf(k)
                         player.seekTo(player.duration * n / 10)
                         flash = Flash(null, (n * 10).toString() + " %")
@@ -1029,8 +1097,8 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                             if (showNextCard) { playEpisode(epList[epIdx + 1]); true }
                             else if (seg != null && segVisible) { skipSeg(seg); true }
                             else if (cur.live) { openChannels(); true }
-                            // Wie bei YouTube, Netflix & Co.: Während/kurz nach dem Spulen bestätigt OK die Zielposition und spielt weiter,
-                            // statt zu pausieren (das passierte, weil man das Spulen „bestätigen“ will).
+                            // Like YouTube, Netflix & co.: during/shortly after seeking, OK confirms the target position and keeps playing
+                            // instead of pausing (that happened because one wants to "confirm" the seek).
                             else if (scrubTarget >= 0) {
                                 val t = scrubTarget
                                 player.seekTo(t); pos = t
@@ -1060,8 +1128,8 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             .focusable()
     ) {
         // ---------------------------------------------------------------- Video
-        // Bildformat (im verkleinerten Guide-Bild immer „Einpassen“). Zoom: Bildfläche größer als der Bildschirm, mittig;
-        // 4:3: Fläche im Seitenverhältnis 4:3, mittig.
+        // Aspect ratio (in the shrunken guide picture always "Fit"). Zoom: picture area larger than the screen, centered;
+        // 4:3: area in 4:3 aspect ratio, centered.
         val am = if (showGuide) 0 else aspect
         val videoMod = if (showGuide) Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 24.dp).size(width = 400.dp, height = 225.dp).clip(RoundedCornerShape(DS.RadiusM))
         else when (am) {
@@ -1074,8 +1142,17 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 }
             }
             5 -> Modifier.align(Alignment.Center).fillMaxHeight().aspectRatio(4f / 3f)
+            // Issue 10: fit / crop / stretch are laid out here from the real video aspect ratio instead of relying on the resize
+            // mode of the player view (which showed no difference); the view then only fills the area it gets
+            in 0..2 -> if (videoAr > 0f) Modifier.fillMaxSize().layout { m, c ->
+                val (w, hh) = AspectLogic.box(am, videoAr, c.maxWidth, c.maxHeight)
+                val pl = m.measure(androidx.compose.ui.unit.Constraints.fixed(w, hh))
+                layout(c.maxWidth, c.maxHeight) { pl.place((c.maxWidth - w) / 2, (c.maxHeight - hh) / 2) }
+            } else Modifier.fillMaxSize()
             else -> Modifier.fillMaxSize()
         }
+        // Area sized by the layout above: the view fills it exactly
+        val sized = !showGuide && am in 0..2 && videoAr > 0f
         AndroidView(
             factory = { c ->
                 PlayerView(c).apply {
@@ -1085,11 +1162,11 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 }
             },
             update = { v ->
-                // nur anwenden, wenn sich wirklich etwas geändert hat (spart Arbeit bei jedem Neuzeichnen)
-                val styleKey = "$am|${AppSettings.subSize}|${AppSettings.subColor}|${AppSettings.subBg}|${AppSettings.subEdge}"
+                // apply only if something really changed (saves work on every redraw)
+                val styleKey = "$am|$sized|${AppSettings.subSize}|${AppSettings.subColor}|${AppSettings.subBg}|${AppSettings.subEdge}"
                 if (v.tag != styleKey) {
                     v.tag = styleKey
-                    v.resizeMode = when (am) {
+                    v.resizeMode = if (sized) AspectRatioFrameLayout.RESIZE_MODE_FILL else when (am) {
                         1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         2, 5 -> AspectRatioFrameLayout.RESIZE_MODE_FILL
                         else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
@@ -1099,6 +1176,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             },
             modifier = if (dualSplit) Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(0.5f) else videoMod
         )
+        if (scoreDlg) ScoreOverlayDialog { scoreDlg = false }
         second?.let { s2 ->
             SecondStream(
                 s2, dualSplit, audioOnSecond,
@@ -1106,20 +1184,21 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 else pipModifier()
             )
         }
-        // Handy/Tablet (Runde 20): Tippen zeigt oder versteckt die Steuerleiste, Doppeltippen links/rechts spult,
-        // Doppeltippen in der Mitte pausiert. Auf dem Fernseher ohne Wirkung (keine Berührung).
+        // Phone/tablet (round 20): tap shows or hides the control bar, double-tap left/right seeks,
+        // double-tap in the middle pauses. No effect on the TV (no touch).
         Box(
             Modifier.fillMaxSize().pointerInput(cur.live) {
                 detectTapGestures(
                     onTap = {
                         interact = System.currentTimeMillis()
-                        if (panel == Panel.NONE && !showChannels && !showGuide) controls = !controls
+                        if (!Boomer.enabled && panel == Panel.NONE && !showChannels && !showGuide) controls = !controls
                     },
                     onDoubleTap = { o ->
                         interact = System.currentTimeMillis()
                         val third = size.width / 3f
                         val dir = if (o.x < third) -1 else if (o.x > third * 2) 1 else 0
                         when {
+                            Boomer.enabled -> { if (dir != 0 && cur.live) zap(dir) }
                             dir == 0 -> togglePlay()
                             !cur.live -> stepSeek(dir)
                             LiveTimeshift.active -> { LiveTimeshift.seekBy(player, dir * step); flash = Flash(if (dir < 0) PIcon.Replay else PIcon.Forward, (if (dir < 0) "−" else "+") + step / 1000 + " s") }
@@ -1130,15 +1209,26 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             }
         )
 
-        // ---------------------------------------------------------------- Meldungen
+        // ---------------------------------------------------------------- Messages
         if (buffering && msg == null && !showGuide) {
             Spinner(Accent2, Modifier.align(Alignment.Center).size(48.dp))
         }
-        msg?.let { m ->
+        // Hidden while the TV guide is open: the error box would sit on top of the guide (it comes back when the guide closes)
+        msg?.takeIf { !Boomer.enabled && !showGuide }?.let { m ->
             Box(
                 Modifier.align(Alignment.Center).clip(RoundedCornerShape(DS.RadiusM)).background(PT.PanelBg)
                     .padding(horizontal = 28.dp, vertical = 18.dp)
-            ) { Text(m, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+            ) {
+                Column {
+                    Text(m, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    // Stalker portal: what the portal answered (masked), so the cause can be found
+                    val detail = if (m == STALKER_NO_ADDRESS) StalkerApi.lastDetail else ""
+                    if (detail.isNotEmpty()) {
+                        Text(detail, color = Color(0xCCFFFFFF), fontSize = 12.sp, raw = true, maxLines = 6,
+                            modifier = Modifier.padding(top = 8.dp).widthIn(max = 720.dp))
+                    }
+                }
+            }
         }
         flash?.let { fl ->
             if (fl.icon != null) {
@@ -1168,7 +1258,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             }
         }
 
-        // Folgentitel beim Start einer Folge
+        // Episode title when an episode starts
         if (epBanner && !controls && panel == Panel.NONE && !showGuide && !cur.live) {
             Column(
                 Modifier.align(Alignment.TopStart).padding(start = PT.MarginX, top = PT.MarginY)
@@ -1179,12 +1269,12 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             }
         }
 
-        // Mini-Zeitleiste beim Spulen (wenn die Steuerleiste nicht sichtbar ist)
+        // Mini timeline while seeking (when the control bar is not visible)
         if (!controls && !cur.live) {
             MiniSeekDock({ (miniBar || scrubTarget >= 0) && dur > 0 }, posNow, durNow, bufNow, segsNow)
         }
 
-        notice?.let { n ->
+        notice?.takeIf { !Boomer.enabled }?.let { n ->
             Text(
                 n, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = PT.MarginY + 48.dp)
@@ -1208,14 +1298,11 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             )
         }
 
-        // Kurzer Sender-Banner beim Umschalten
-        if (banner && cur.live && !controls && !showChannels && !showGuide) {
-            LiveInfoBlock(
-                curItem, cur.title, if (curIdx >= 0) curIdx + 1 else 0, epg,
-                Modifier.align(Alignment.BottomStart).padding(start = PT.MarginX, bottom = PT.MarginY)
-                    .clip(RoundedCornerShape(DS.RadiusL)).background(Color(0xCC000000)).padding(20.dp)
-            )
+        // Short channel banner when switching
+        if (banner && cur.live && !Boomer.enabled && !controls && !showChannels && !showGuide) {
+            LiveBanner(curItem, cur.title, if (curIdx >= 0) curIdx + 1 else 0, epg, Modifier.align(Alignment.BottomStart))
         }
+        if (Boomer.enabled) BoomerPlayerOverlay(cur.title, bannerTick, boomerFail) { onBack() }
 
         if (panel == Panel.SUBSTYLE) {
             val fg = Color(SubStyle.COLORS[AppSettings.subColor].second.toInt())
@@ -1230,7 +1317,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         if (AppSettings.clockOn && !controls && panel == Panel.NONE) PClock()
         if (techOn) PTechOverlay(player)
 
-        // ---------------------------------------------------------------- Überspringen & Nächste Folge
+        // ---------------------------------------------------------------- Skip & next episode
         val seg0 = activeSeg?.takeIf { segVisible || controls }
         if ((seg0 != null || showNextCard) && panel == Panel.NONE && !showChannels && !showGuide) {
             Column(
@@ -1238,7 +1325,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Nur EIN Knopf: Abspann-Marke und „Nächste Folge“ zeigen dasselbe und werden zusammengelegt
+                // Only ONE button: credits marker and "Next episode" show the same thing and are merged
                 val outro = seg0 != null && seg0.label.startsWith("Abspann") && hasNext
                 if (seg0 != null && !outro) PSkipPill(seg0.label + (if (!controls) "  (OK)" else "")) { skipSeg(seg0) }
                 if (outro || (showNextCard && hasNext && !controls)) {
@@ -1247,16 +1334,16 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             }
         }
 
-        // ---------------------------------------------------------------- Steuerleiste
+        // ---------------------------------------------------------------- Control bar
         AnimatedVisibility(
-            // Unter dem TV-Guide keine Steuerleiste: sonst konnte der Fokus aus dem Guide in dieses Menü rutschen
+            // No control bar under the TV guide: otherwise focus could slip from the guide into this menu
             visible = controls && !showGuide,
             modifier = Modifier.fillMaxSize(),
             enter = fadeIn(tween(160)),
             exit = fadeOut(tween(120))
         ) {
             Box(Modifier.fillMaxSize()) {
-                // Abdunklung oben und unten
+                // Dimming at the top and bottom
                 Box(
                     Modifier.fillMaxWidth().height(200.dp).align(Alignment.TopCenter)
                         .background(Brush.verticalGradient(listOf(PT.ScrimTop, Color.Transparent)))
@@ -1266,7 +1353,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                         .background(Brush.verticalGradient(0f to Color.Transparent, 0.45f to Color(0x85000000), 1f to PT.ScrimBottom))
                 )
 
-                // Titel (oben links) – bei Live übernimmt der Infoblock unten
+                // Title (top left) – for live the info block at the bottom takes over
                 if (!cur.live) {
                     val baseTitle = if (cur.season > 0 && cur.episode > 0) cur.title.substringBeforeLast(" S" + cur.season + "E" + cur.episode) else cur.title
                     Column(
@@ -1291,7 +1378,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     }
                 }
 
-                // Marken oben rechts
+                // Badges top right
                 Row(
                     Modifier.align(Alignment.TopEnd).padding(end = PT.MarginX, top = PT.MarginY),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically
@@ -1310,9 +1397,11 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     if (cur.live) {
                         LiveInfoBlock(curItem, cur.title, if (curIdx >= 0) curIdx + 1 else 0, epg)
                         Spacer(Modifier.height(20.dp))
+                        // Recently watched channels (Up from the buttons): switch back with one press
+                        RecentChannelsRow(liveAll, cur.itemId, setLabel) { switchTo(it, zapSrc) }
                         val fav = Library.isFav(cur.itemId)
                         Row(
-                            Modifier.onPreviewKeyEvent { e ->
+                            Modifier.horizontalScroll(rememberScrollState()).onPreviewKeyEvent { e ->
                                 if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionDown) { controls = false; true } else false
                             },
                             horizontalArrangement = Arrangement.spacedBy(PT.BtnGap), verticalAlignment = Alignment.CenterVertically
@@ -1334,13 +1423,13 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                             }) {
                                 PlayerIcon(PIcon.Play, it)
                             }
-                            // Live-Puffer: 30 s zurück (Spultasten der Fernbedienung springen um die Sprungweite)
+                            // Live buffer: 30 s back (the remote's seek keys jump by the step size)
                             if (LiveTimeshift.active) {
                                 PRoundButton(label = "30 s zurück", onLabel = setLabel, onClick = {
                                     LiveTimeshift.seekBy(player, -30_000L); flash = Flash(PIcon.Replay, "−30 s")
                                 }) { PlayerIcon(PIcon.Replay, it) }
                             }
-                            // Aufnahme der laufenden Sendung (aus dem Puffer, ohne zweite Verbindung)
+                            // Recording of the running show (from the buffer, without a second connection)
                             if (cur.archive == null && TapLogic.tappable(resolvedUrl.ifEmpty { cur.url })) {
                                 val recOn = Recorder.isRecording(cur.itemId)
                                 PRoundButton(label = if (recOn) "Aufnahme beenden" else "Aufnehmen", onLabel = setLabel, onClick = {
@@ -1365,7 +1454,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                                     AppIcon(AIcon.History, it, size = 26.dp)
                                 }
                             }
-                            // Mit eigenen Senderlisten: Auswahl, wohin (Favoriten oder eine eigene Liste); sonst direkt Favorit an/aus
+                            // With own channel lists: choose where to (favorites or an own list); otherwise toggle favorite directly
                             Box {
                                 var favMenu by remember { mutableStateOf(false) }
                                 PRoundButton(
@@ -1381,11 +1470,18 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                             PRoundButton(Modifier.focusRequester(btn.getValue(Panel.ASPECT)), label = "Bildformat", onLabel = setLabel, onClick = { openPanel(Panel.ASPECT) }) {
                                 PlayerIcon(PIcon.Aspect, it)
                             }
-                            // Zweiter Stream (Runde 22): ohne zweites Bild Senderwahl, sonst das Menü mit Anordnung, Ton und Tauschen
-                            PRoundButton(label = "Zweiter Stream", onLabel = setLabel, onClick = {
+                            // Second stream (round 22): without a second picture channel selection, otherwise the menu with arrangement, audio and swap
+                            PRoundButton(label = "Zusatzbild", onLabel = setLabel, onClick = {
                                 if (second == null) { pickSecond = true; controls = false; openChannels() } else openPanel(Panel.MENU)
                             }) {
                                 AppIcon(AIcon.Layers, it, size = 26.dp)
+                            }
+                            // Live channel with several qualities: pick the stream (4K / Full HD / HD / SD)
+                            if (cur.live && liveAlts.size > 1) PRoundButton(label = "Qualität", onLabel = setLabel, onClick = { openPanel(Panel.QUALITY) }) {
+                                AppIcon(AIcon.Sliders, it, size = 26.dp)
+                            }
+                            if (SportAlerts.miniOn || SportAlerts.pinned.isNotEmpty()) PRoundButton(label = "Score-Overlay", onLabel = setLabel, onClick = { scoreDlg = true }) {
+                                AppIcon(AIcon.Live, it, size = 26.dp)
                             }
                             PRoundButton(Modifier.focusRequester(btn.getValue(Panel.MENU)), label = "Einstellungen", onLabel = setLabel, onClick = { openPanel(Panel.MENU) }) {
                                 PlayerIcon(PIcon.Settings, it)
@@ -1499,7 +1595,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             }
         }
 
-        // ---------------------------------------------------------------- Senderliste & TV-Guide
+        // ---------------------------------------------------------------- Channel list & TV guide
         if (showChannels) {
             ChannelOverlay(
                 liveAll, cur.itemId, curItem,
@@ -1523,16 +1619,27 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
             ) { switchTo(it, zapSrc) }
         }
 
-        // ---------------------------------------------------------------- Menüs
+        // ---------------------------------------------------------------- Menus
         if (panel != Panel.NONE) {
-            val back = if (panelParent != Panel.NONE) "Links = zurück" else "Links schließt das Menü"
+            val back = if (panelParent != Panel.NONE) "Links = zurück" else "Zurück schließt das Menü"
             when (panel) {
                 Panel.TRACKS -> TracksPanel(
                     player, tracksVer, { tracksVer++; h.postDelayed({ rememberTracks() }, 400) }, panelFocus, subsFocus,
-                    { closePanel() }, { openPanel(Panel.SUBSTYLE, Panel.TRACKS) }
+                    { closePanel() }, { openPanel(Panel.SUBSTYLE, Panel.TRACKS) },
+                    if (cur.live) null else ({ openPanel(Panel.SUBSEARCH, Panel.TRACKS) })
                 )
 
-                Panel.SUBSTYLE -> PSimplePanel(440.dp, "Untertitel-Stil", back, { closePanel() }) {
+                Panel.SUBSEARCH -> SubSearchPanel(
+                    SubSearchLogic.query(cur.title, cur.tmdbId, cur.season, cur.episode, AppSettings.subLangEffective(), Lang.code()),
+                    subKey(), player, panelFocus, back, { closePanel() }
+                ) { s ->
+                    notice = Lang.tr("Untertitel geladen") + ": " + s.label
+                    // Remember the choice like a subtitle picked by hand (on again next time)
+                    h.postDelayed({ tracksVer++; rememberTracks() }, 1500)
+                    panelParent = Panel.NONE; panel = Panel.NONE
+                }
+
+                Panel.SUBSTYLE -> PSimplePanel(440.dp, "Untertitel-Stil", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
                     Column(verticalArrangement = Arrangement.spacedBy(PT.RowGap)) {
                         PPanelRow("Größe", false, Modifier.focusRequester(panelFocus), trailing = SubStyle.SIZES[AppSettings.subSize].first, chevron = true) {
                             AppSettings.setSub(ctx, (AppSettings.subSize + 1) % SubStyle.SIZES.size, AppSettings.subColor, AppSettings.subBg, AppSettings.subEdge)
@@ -1550,11 +1657,11 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     }
                 }
 
-                Panel.QUALITY -> PSimplePanel(440.dp, "Videoqualität", back, { closePanel() }) {
+                Panel.QUALITY -> PSimplePanel(440.dp, "Videoqualität", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
                     val video = remember(tracksVer) { collectTracks(player, C.TRACK_TYPE_VIDEO) }
                     val videoAuto = player.trackSelectionParameters.overrides.keys.none { it.type == C.TRACK_TYPE_VIDEO }
-                    // Mehrere Quellen desselben Titels (4K/FHD/HD als eigene Einträge): hier von Hand wechseln
-                    val alts = remember(cur.url, cur.itemId, cur.season, cur.episode) { currentAlts() }
+                    // Several sources of the same title (4K/FHD/HD as separate entries): switch by hand here
+                    val alts = remember(cur.url, cur.itemId, cur.season, cur.episode, liveAlts) { currentAlts() }
                     val altsShown = alts.size > 1
                     if (altsShown) {
                         PColumnHeader("Quelle")
@@ -1568,7 +1675,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                                 if (a.url != cur.url) {
                                     val at = player.currentPosition.coerceAtLeast(0L)
                                     stalls = emptyList()
-                                    cur = cur.copy(url = a.url, startMs = at, note = null)
+                                    cur = cur.copy(url = a.url, startMs = if (cur.live) 0L else at, note = null)
                                 }
                                 closePanel()
                             }
@@ -1576,7 +1683,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                         if (video.size >= 2) PColumnHeader("Bildspur")
                     }
                     if (altsShown && video.size < 2) {
-                        // nur Quellen – keine Bildspuren zur Auswahl
+                        // sources only – no picture tracks to choose from
                     } else if (video.size < 2) {
                         Text(
                             "Keine Auswahl verfügbar (feste Qualität).", color = Muted, fontSize = 15.sp,
@@ -1600,32 +1707,37 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 }
 
                 Panel.ARCHIVE -> {
-                    // Wie die Senderliste: Sender mit Archiv | Tage | Sendungen (Zurück schließt über den Player)
+                    // Like the channel list: channels with archive | days | shows (Back closes via the player)
                     val archChannels = remember(zapSrc, liveAll, Catchup.version) {
                         zapSrc.filter { Catchup.has(it) }.ifEmpty { liveAll.filter { Catchup.has(it) } }
                     }
                     ArchivePanel(curItem, archChannels, cur.archive?.prog?.start, panelFocus, { closePanel() }) { ch, e -> playArchive(ch, e) }
                 }
 
-                Panel.SPEED -> PSimplePanel(400.dp, "Wiedergabe-Tempo", back, { closePanel() }) {
+                Panel.SPEED -> PSimplePanel(400.dp, "Wiedergabe-Tempo", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
                     PChoiceList(SPEEDS.map { speedLabel(it) }, speedIdx, panelFocus) { i ->
                         speedIdx = i
                         player.setPlaybackSpeed(SPEEDS[i])
                     }
                 }
 
-                Panel.SLEEP -> PSimplePanel(400.dp, "Sleep-Timer", back, { closePanel() }) {
+                Panel.SLEEP -> PSimplePanel(400.dp, "Sleep-Timer", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
                     PChoiceList(SLEEP_MIN.map { if (it == 0) "Aus" else "$it min" }, sleepIdx, panelFocus) { i ->
                         sleepIdx = i
                         sleepAt = if (i == 0) 0L else System.currentTimeMillis() + SLEEP_MIN[i] * 60_000L
                     }
                 }
 
-                Panel.ASPECT -> PSimplePanel(440.dp, "Bildformat", back, { closePanel() }) {
-                    PChoiceList(ASPECTS, aspect, panelFocus) { aspect = it; flash = Flash(null, ASPECTS[it]) }
+                Panel.ASPECT -> PSimplePanel(440.dp, "Bildformat", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
+                    PChoiceList(ASPECTS, aspect, panelFocus) {
+                        aspect = it
+                        // Crop and stretch change nothing when the picture already has the shape of the screen: say so
+                        val same = it in 1..2 && AspectLogic.sameShape(videoAr, 16f / 9f)
+                        flash = Flash(null, Lang.tr(ASPECTS[it]) + if (same) " – " + Lang.tr("Das Bild hat schon das Format des Fernsehers") else "")
+                    }
                 }
 
-                Panel.CLOCK -> PSimplePanel(440.dp, "Uhrzeit im Bild", back, { closePanel() }) {
+                Panel.CLOCK -> PSimplePanel(440.dp, "Uhrzeit im Bild", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
                     val poss = listOf("Oben rechts", "Oben links", "Unten rechts", "Unten links")
                     val sizes = listOf("Klein", "Mittel", "Groß")
                     val ops = listOf(20, 30, 40, 50, 60, 70, 80, 90, 100)
@@ -1655,19 +1767,29 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     }
                 }
 
-                Panel.STEP -> PSimplePanel(400.dp, "Sprungweite", back, { closePanel() }) {
+                Panel.SUBDELAY -> PSimplePanel(440.dp, "Untertitel-Verzögerung", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
+                    SyncRows(PlayerSync.subMs, 100, 1000, panelFocus, "Später", "Früher",
+                        "Gilt nur für diesen Titel. Später = der Text erscheint später.") { PlayerSync.setSub(it) }
+                }
+
+                Panel.AVDELAY -> PSimplePanel(440.dp, "Ton-Verzögerung", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
+                    SyncRows(PlayerSync.avMs, 50, 250, panelFocus, "Später", "Früher",
+                        "Später = der Ton kommt später als das Bild. Gilt für alle Titel auf diesem Gerät.") { PlayerSync.setAv(ctx, it) }
+                }
+
+                Panel.STEP -> PSimplePanel(400.dp, "Sprungweite", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
                     Text("Gilt für Links/Rechts, Halten und die Zeitleiste.", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp))
                     PChoiceList(STEP_OPTIONS.map { "$it s" }, STEP_OPTIONS.indexOf(AppSettings.seekStep).coerceAtLeast(0), panelFocus) { i ->
                         AppSettings.setPlayer(ctx, AppSettings.skipIntro, AppSettings.showInfo, STEP_OPTIONS[i])
                     }
                 }
 
-                Panel.MENU -> PSimplePanel(440.dp, "Einstellungen", back, { closePanel() }) {
+                Panel.MENU -> PSimplePanel(440.dp, "Einstellungen", back, { closePanel() }, leftBack = panelParent != Panel.NONE) {
                     val entries = buildList<MenuEntry> {
-                        if (cur.live) add(MenuEntry(20, "Zweiter Stream", second?.title ?: "Aus", false))
+                        if (cur.live) add(MenuEntry(20, "Zusatzbild", second?.title ?: "Aus", false))
                         if (cur.live && second != null) {
                             add(MenuEntry(21, "Anordnung", if (splitMode == 1) "Geteilt" else "Bild-in-Bild", false))
-                            add(MenuEntry(22, "Ton von", if (audioOnSecond) "Zweiter Stream" else "Hauptstream", false))
+                            add(MenuEntry(22, "Ton von", if (audioOnSecond) "Zusatzbild" else "Hauptstream", false))
                             if (splitMode == 0) {
                                 add(MenuEntry(24, "Fenstergröße", DualPrefs.SIZE_NAMES[DualPrefs.size], false))
                                 add(MenuEntry(25, "Position", DualPrefs.CORNER_NAMES[DualPrefs.corner], false))
@@ -1676,6 +1798,8 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                         }
                         add(MenuEntry(0, "Sprungweite", "${step / 1000} s", true))
                         add(MenuEntry(1, "Untertitel-Stil", null, true))
+                        add(MenuEntry(30, "Untertitel-Verzögerung", PlayerSync.label(PlayerSync.subMs), true))
+                        add(MenuEntry(31, "Ton-Verzögerung", PlayerSync.label(PlayerSync.avMs), true))
                         add(MenuEntry(2, "Videoqualität", currentAlts().size.takeIf { it > 1 }?.let { "$it Quellen" }, true))
                         add(MenuEntry(3, "Wiedergabe-Tempo", speedLabel(SPEEDS[speedIdx]), true))
                         add(MenuEntry(4, "Bildformat", ASPECTS[aspect].substringBefore(" ("), true))
@@ -1689,7 +1813,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                         add(MenuEntry(7, "Extern öffnen", null, false))
                     }
                     val focusAt = menuSel.coerceIn(0, entries.lastIndex)
-                    // Startet so, dass die zuletzt gewählte Zeile gezeichnet ist (sonst findet der Fokus sie nicht und die Tasten laufen ins Leere)
+                    // Starts so that the last chosen row is drawn (otherwise focus cannot find it and keys go nowhere)
                     LazyColumn(state = rememberLazyListState(maxOf(focusAt - 3, 0)), verticalArrangement = Arrangement.spacedBy(PT.RowGap)) {
                         itemsIndexed(entries) { i, e ->
                             PPanelRow(
@@ -1705,6 +1829,8 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                                     4 -> openPanel(Panel.ASPECT, Panel.MENU)
                                     8 -> openPanel(Panel.SLEEP, Panel.MENU)
                                     10 -> openPanel(Panel.CLOCK, Panel.MENU)
+                                    30 -> openPanel(Panel.SUBDELAY, Panel.MENU)
+                                    31 -> openPanel(Panel.AVDELAY, Panel.MENU)
                                     11 -> techOn = !techOn
                                     13 -> AppSettings.setAutoOutro(ctx, !AppSettings.autoSkipOutro)
                                     9 -> { panel = Panel.NONE; panelParent = Panel.NONE; lastChannel() }
@@ -1747,7 +1873,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     }
 }
 
-/** Mittige Spul-Anzeige: nur Richtung und tatsächlich vorgemerkte Zeit ("+0:30"), ohne Zähler. */
+/** Centered seek display: only direction and the time actually queued ("+0:30"), without a counter. */
 @Composable
 private fun ScrubCard(target: () -> Long, start: () -> Long, turbo: () -> Int, modifier: Modifier) {
     val t = target()
@@ -1769,7 +1895,7 @@ private fun ScrubCard(target: () -> Long, start: () -> Long, turbo: () -> Int, m
     }
 }
 
-/** Zeitleiste unten, solange gespult wird und die große Steuerleiste nicht offen ist. */
+/** Timeline at the bottom while seeking and the big control bar is not open. */
 @Composable
 private fun BoxScope.MiniSeekDock(
     visible: () -> Boolean, pos: () -> Long, dur: () -> Long, buffered: () -> Long, segs: () -> List<Seg>
@@ -1786,8 +1912,8 @@ private fun BoxScope.MiniSeekDock(
 }
 
 /**
- * „Nächste Folge“ als einzige Pille im Stil von „Intro überspringen“. Läuft das automatische Weiterspielen,
- * zählt sie in den letzten 10 Sekunden herunter. OK startet die Folge sofort.
+ * "Next episode" as the only pill in the style of "Skip intro". If automatic continuation is running,
+ * it counts down in the last 10 seconds. OK starts the episode immediately.
  */
 @Composable
 private fun NextPill(remain: () -> Long, auto: Boolean, showOk: Boolean, onClick: () -> Unit) {
@@ -1797,16 +1923,18 @@ private fun NextPill(remain: () -> Long, auto: Boolean, showOk: Boolean, onClick
 }
 
 /**
- * Stream öffnen. Media3 wirft beim Setzen eine IllegalStateException, wenn für das Format keine Quelle eingebaut ist
- * (früher bei .mpd ohne DASH-Modul: Absturz in dieser Zeile). false = nicht abspielbar.
+ * Open a stream. Media3 throws an IllegalStateException on setting if no source is built in for the format
+ * (formerly with .mpd without the DASH module: crash on this line). false = not playable.
  */
-internal fun openStream(player: androidx.media3.exoplayer.ExoPlayer, url: String, startMs: Long): Boolean = try {
-    player.setMediaItem(MediaItem.fromUri(url), startMs)
+internal fun openStream(player: androidx.media3.exoplayer.ExoPlayer, url: String, startMs: Long, item: MediaItem? = null): Boolean = try {
+    player.setMediaItem(item ?: MediaItem.fromUri(url), startMs)
     player.prepare()
     player.playWhenReady = true
     true
 } catch (e: IllegalStateException) {
     false
 } catch (e: IllegalArgumentException) {
+    false
+} catch (e: Exception) {
     false
 }

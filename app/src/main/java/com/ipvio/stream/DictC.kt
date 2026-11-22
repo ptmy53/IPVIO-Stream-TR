@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Übersetzungen Teil C: Einstellungen (Übersicht, Allgemein, Region, Jugendschutz, Speicher, Ansicht, Menü, Player)
+// Translations part C: settings (overview, general, region, parental controls, storage, view, menu, player)
 val DictC = """
 Allgemein¦General¦Genel¦Općenito¦Općenito¦Općenito¦General¦Général¦Generale
 Start, Beenden, Autostart¦Start, exit, autostart¦Başlangıç, çıkış, otomatik başlatma¦Početak, izlaz, automatsko pokretanje¦Početak, izlaz, automatsko pokretanje¦Početak, izlaz, automatsko pokretanje¦Inicio, salir, inicio automático¦Démarrage, sortie, lancement auto¦Avvio, uscita, avvio automatico

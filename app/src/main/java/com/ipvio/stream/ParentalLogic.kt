@@ -2,7 +2,7 @@ package com.ipvio.stream
 
 import java.security.MessageDigest
 
-/** Erkennung von Erwachsenen-Inhalten und PIN-Prüfung (ohne Android, testbar). */
+/** Detection of adult content and PIN check (without Android, testable). */
 object ParentalLogic {
     private val GROUP_RE = Regex(
         """(?i)(^|[^a-z0-9])(xxx|porn\w*|adult\w*|erotic\w*|erotik\w*|sex|nsfw|hentai|erwachsene\w*|fsk ?18|ab 18|for adults|18\s?\+|\+\s?18)($|[^a-z0-9])"""
@@ -22,15 +22,15 @@ object ParentalLogic {
     fun check(pin: String, salt: String, expected: String): Boolean = validPin(pin) && hash(pin, salt) == expected
 }
 
-/** Schutz gegen Durchprobieren der PIN: nach [maxFails] Fehlversuchen ist die Eingabe [lockMs] gesperrt. */
+/** Protection against guessing the PIN: after [maxFails] failed attempts, input is locked for [lockMs]. */
 class PinGuard(private val maxFails: Int = 5, private val lockMs: Long = 60_000L) {
     private var fails = 0
     private var lockedUntil = 0L
 
-    /** Restliche Sperrzeit in Sekunden (0 = Eingabe erlaubt). */
+    /** Remaining lock time in seconds (0 = input allowed). */
     fun waitSec(now: Long): Long = if (now >= lockedUntil) 0L else (lockedUntil - now + 999) / 1000
 
-    /** Ergebnis eines Versuchs melden. Liefert true, wenn ab jetzt gesperrt ist. */
+    /** Report the result of an attempt. Returns true if locked from now on. */
     fun record(ok: Boolean, now: Long): Boolean {
         if (ok) { fails = 0; lockedUntil = 0L; return false }
         fails++

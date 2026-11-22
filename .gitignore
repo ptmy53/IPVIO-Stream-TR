@@ -1,22 +1,15 @@
-# Build
-*.iml
-.gradle/
-.kotlin/
+# Private playlist extraction helper (never commit - contains no URL but is a local-only tool)
+extract_playlist_info.py
+playlist_categories_languages.csv
+ipvio_backup.json
+
+# Android
+*.apk
+*.aab
 build/
-/captures
-.externalNativeBuild
-.cxx
-
-# Android Studio
-.idea/
-.DS_Store
-
-# Local machine and private data – never commit
+.gradle/
 local.properties
-secrets.properties
-*.jks
-*.keystore
-keystore.properties
-
-# Full-size screenshot originals (the repository uses the smaller .jpg copies)
-docs/screenshots/*.png
+captures/
+.externalNativeBuild/
+.cxx/
+.DS_Store

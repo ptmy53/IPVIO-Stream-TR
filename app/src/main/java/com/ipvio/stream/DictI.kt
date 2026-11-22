@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Übersetzungen Teil I (Runde 17): neue Oberfläche – Schriften, Leer-Zustände, Hinweise
+// Translations part I (round 17): new interface – fonts, empty states, hints
 val DictI = """
 Outfit¦Outfit¦Outfit¦Outfit¦Outfit¦Outfit¦Outfit¦Outfit¦Outfit
 Inter¦Inter¦Inter¦Inter¦Inter¦Inter¦Inter¦Inter¦Inter
@@ -28,7 +28,7 @@ Für diesen Sender gibt es kein Programm.¦There is no programme guide for this 
 FILM¦MOVIE¦FİLM¦FILM¦FILM¦FILM¦PELÍCULA¦FILM¦FILM
 SERIE¦SERIES¦DİZİ¦SERIJA¦SERIJA¦SERIJA¦SERIE¦SÉRIE¦SERIE
 
-# Runde 18 (Nachtrag 25)
+# Round 18 (addendum 25)
 Runter für Details und Abspielen¦Down for details and playback¦Ayrıntılar ve oynatma için aşağı¦Dolje za detalje i reprodukciju¦Dolje za detalje i reprodukciju¦Dole za detalje i reprodukciju¦Abajo para detalles y reproducción¦Bas pour les détails et la lecture¦Giù per dettagli e riproduzione
 Links/Rechts = {#0} s springen¦Left/Right = skip {#0} s¦Sol/Sağ = {#0} sn atla¦Lijevo/Desno = preskoči {#0} s¦Lijevo/Desno = preskoči {#0} s¦Levo/Desno = preskoči {#0} s¦Izquierda/Derecha = saltar {#0} s¦Gauche/Droite = sauter {#0} s¦Sinistra/Destra = salta di {#0} s
 2020er¦2020s¦2020'ler¦2020-e¦2020-e¦2020-e¦Años 2020¦Années 2020¦Anni 2020
@@ -77,7 +77,7 @@ Hinzugefügt¦Added¦Eklendi¦Dodano¦Dodano¦Dodano¦Añadido¦Ajouté¦Aggiunt
 Diese Playlist ist sehr groß: {0} Titel in {#1} Sprachen.¦This playlist is very large: {0} titles in {#1} languages.¦Bu liste çok büyük: {#1} dilde {0} başlık.¦Ova playlista je vrlo velika: {0} naslova na {#1} jezika.¦Ova playlista je vrlo velika: {0} naslova na {#1} jezika.¦Ova playlista je vrlo velika: {0} naslova na {#1} jezika.¦Esta lista es muy grande: {0} títulos en {#1} idiomas.¦Cette liste est très grande : {0} titres en {#1} langues.¦Questa playlist è molto grande: {0} titoli in {#1} lingue.
 „Alles laden“ lädt alle {0} Titel. Das kann einige Minuten dauern.¦“Load everything” loads all {0} titles. This can take a few minutes.¦“Tümünü yükle” tüm {0} başlığı yükler. Bu birkaç dakika sürebilir.¦„Učitaj sve“ učitava svih {0} naslova. To može potrajati nekoliko minuta.¦„Učitaj sve“ učitava svih {0} naslova. To može potrajati nekoliko minuta.¦„Učitaj sve“ učitava svih {0} naslova. To može potrajati nekoliko minuta.¦“Cargar todo” carga los {0} títulos. Puede tardar unos minutos.¦« Tout charger » charge les {0} titres. Cela peut prendre quelques minutes.¦“Carica tutto” carica tutti i {0} titoli. Può richiedere qualche minuto.
 Gewählt: {0} Titel¦Selected: {0} titles¦Seçilen: {0} başlık¦Odabrano: {0} naslova¦Odabrano: {0} naslova¦Odabrano: {0} naslova¦Seleccionado: {0} títulos¦Sélection : {0} titres¦Selezionati: {0} titoli
-# Open-Source-Fassung: eigene API-Schlüssel
+# Open-source edition: own API keys
 Das dauert gerade sehr lange.¦This is taking a really long time.¦Bu gerçekten çok uzun sürüyor.¦Ovo traje jako dugo.¦¦¦Esto está tardando mucho.¦Cela prend vraiment beaucoup de temps.¦Ci sta mettendo davvero tanto.
 Sehr große Playlists brauchen lange. Mit der Sprachauswahl lädst du nur die Titel, die du wirklich brauchst.¦Huge playlists can take ages. Use the language selection to load only the titles you actually need.¦Çok büyük playlistler uzun sürer. Dil seçimiyle yalnızca gerçekten ihtiyacınız olan başlıkları yükleyin.¦Velike playliste traju dugo. Odabirom jezika učitaj samo naslove koji ti stvarno trebaju.¦¦¦Las listas enormes tardan mucho. Con la selección de idiomas cargas solo los títulos que realmente necesitas.¦Les très grandes playlists prennent du temps. Avec le choix des langues, ne chargez que les titres dont vous avez besoin.¦Le playlist enormi richiedono molto tempo. Con la scelta delle lingue carichi solo i titoli che ti servono davvero.
 Server nicht gefunden (DNS)¦Server not found (DNS)¦Sunucu bulunamadı (DNS)¦Server nije pronađen (DNS)¦¦¦Servidor no encontrado (DNS)¦Serveur introuvable (DNS)¦Server non trovato (DNS)

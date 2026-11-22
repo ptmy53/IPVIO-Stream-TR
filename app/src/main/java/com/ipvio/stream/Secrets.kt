@@ -10,11 +10,14 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Verschlüsselt kleine Texte (z. B. Playlist-Adressen mit Zugangsdaten) mit einem Schlüssel aus dem
- * Android-Keystore. Der Schlüssel verlässt das Gerät nie. Ohne Keystore (manche Boxen) liefert encrypt() null,
- * die App speichert dann wie bisher im Klartext – es geht also nie etwas verloren.
+ * Encrypts small texts (e.g. playlist addresses with login data) with a key from the
+ * Android Keystore. The key never leaves the device. Without a keystore (some boxes) encrypt() returns null,
+ * and the app then stores plain text as before – so nothing is ever lost.
  */
 object Secrets {
+    /** True once a value had to be stored as plain text because the keystore is unavailable. */
+    @Volatile var plainFallback = false
+
     private const val ALIAS = "ipvio_secrets_v1"
     private const val PREFIX = "v1:"
 
@@ -35,7 +38,7 @@ object Secrets {
     }
 
     fun encrypt(plain: String): String? = try {
-        val k = key() ?: return null
+        val k = key() ?: run { plainFallback = true; return null }
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.ENCRYPT_MODE, k)
         val ct = c.doFinal(plain.toByteArray(Charsets.UTF_8))

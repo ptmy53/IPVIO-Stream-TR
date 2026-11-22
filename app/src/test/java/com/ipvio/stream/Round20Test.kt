@@ -51,7 +51,7 @@ class MultiLogicTest {
         val a = listOf(movie("1", "Dune", 2021), live("10", "Das Erste"))
         val b = listOf(movie("2", "Dune", 2021), movie("3", "Heat", 1995), live("11", "Das Erste"), movie("1", "Dune", 2021))
         val m = MultiLogic.merge(listOf(a, b), listOf("A", "B"))
-        assertEquals(5, m.items.size)   // doppelte ID "1" nur einmal
+        assertEquals(5, m.items.size)   // duplicate ID "1" only once
         assertEquals(setOf("2"), m.shadow)
         assertEquals(4, m.visible().size)
         val heat = m.items.first { it.id == "3" }
@@ -107,7 +107,7 @@ class TapLogicTest {
         assertEquals(2000L, t.byteAt(1500))
         assertEquals(3000L, t.byteAt(9000))
         assertEquals(1500L, t.msAt(2000))
-        t.add(1500, 5000)   // rückwärts in der Zeit: ignoriert
+        t.add(1500, 5000)   // backwards in time: ignored
         assertEquals(3, t.size())
         t.trimBefore(2000)
         assertEquals(1000L, t.firstMs())

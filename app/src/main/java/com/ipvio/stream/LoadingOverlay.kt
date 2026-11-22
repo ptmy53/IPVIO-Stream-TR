@@ -48,10 +48,10 @@ import java.text.NumberFormat
 import java.util.Locale
 
 /**
- * Ladebildschirm beim Hinzufügen einer Playlist – bewusst ruhig gehalten:
- * dunkler Hintergrund, Logo blendet sanft ein und "atmet" kaum merklich, darunter eine feine Fortschrittslinie.
- * Kennt der Server die Größe, zeigt die Linie den genauen Stand, sonst gleitet ein weicher Lichtstreifen langsam hindurch.
- * Bei "Bewegung: aus" bleibt alles still. Dauert es sehr lange: Zitate (ab 5 min), Sprüche (ab 10 min), Hinweis (ab 15 min).
+ * Loading screen when adding a playlist – deliberately kept calm:
+ * dark background, the logo fades in gently and barely noticeably "breathes", below it a fine progress line.
+ * If the server knows the size, the line shows the exact state, otherwise a soft light streak glides slowly through.
+ * With "Motion: off" everything stays still. If it takes very long: quotes (from 5 min), sayings (from 10 min), hint (from 15 min).
  */
 @Composable
 fun PlaylistLoadingOverlay() {
@@ -76,7 +76,7 @@ fun PlaylistLoadingOverlay() {
     val line = Accent1.copy(alpha = 0.85f)
     val barW = 360.dp
 
-    // Versehentliches Zurück bricht nicht ab: erst der zweite Druck innerhalb von 3 s
+    // An accidental Back does not cancel: only the second press within 3 s
     var lastBack by remember { mutableLongStateOf(0L) }
     var hint by remember { mutableStateOf(false) }
     BackHandler {
@@ -84,11 +84,11 @@ fun PlaylistLoadingOverlay() {
         if (now - lastBack < 3000) PlaylistStore.cancel() else { lastBack = now; hint = true }
     }
     LaunchedEffect(lastBack) { if (lastBack > 0) { delay(3000); hint = false } }
-    // Fokus hierher holen, damit das D-Pad nicht unsichtbar im Hintergrund weiterblättert
+    // Bring the focus here so the D-pad does not keep paging invisibly in the background
     val holder = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { holder.requestFocus() } }
 
-    // Ladezeit für Zitate, Sprüche und Hinweis
+    // Load time for quotes, sayings and hint
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
     val started = PlaylistStore.loadStarted
@@ -99,7 +99,7 @@ fun PlaylistLoadingOverlay() {
 
     Box(
         Modifier.fillMaxSize().background(
-            // dezente Vignette: Mitte minimal heller, Ränder dunkler – kein farbiges Leuchten
+            // subtle vignette: center slightly lighter, edges darker – no colored glow
             Brush.radialGradient(listOf(lerp(Bg, Color.White, 0.035f), lerp(Bg, Color.Black, 0.45f)), radius = 1500f)
         ).focusRequester(holder).focusable(),
         contentAlignment = Alignment.Center
@@ -116,7 +116,7 @@ fun PlaylistLoadingOverlay() {
                 Text(p, color = Muted, fontSize = 14.sp)
             }
             Spacer(Modifier.height(28.dp))
-            // feine Fortschrittslinie
+            // thin progress line
             Box(Modifier.width(barW).height(3.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f))) {
                 if (known) {
                     Box(Modifier.fillMaxHeight().fillMaxWidth(frac).clip(RoundedCornerShape(50)).background(line))
@@ -134,7 +134,7 @@ fun PlaylistLoadingOverlay() {
                 Text(if (read > 0) mb(read) else "", color = Muted.copy(alpha = 0.8f), fontSize = 13.sp)
                 Text(if (known) ((frac * 100).toInt()).toString() + " %" else "", color = Muted.copy(alpha = 0.8f), fontSize = 13.sp)
             }
-            // Ab 5 Minuten: Zitate, ab 10 Minuten: Sprüche (bewusst auf Englisch)
+            // From 5 minutes: quotes, from 10 minutes: sayings (deliberately in English)
             if (fun1 != null) {
                 Spacer(Modifier.height(30.dp))
                 Crossfade(fun1, animationSpec = tween(if (moving) 900 else 0), label = "fun") { (text, author) ->
@@ -164,7 +164,7 @@ fun PlaylistLoadingOverlay() {
     }
 }
 
-/** Hinweis nach 15 Minuten: zuerst Englisch, darunter in der Sprache der App (wenn nicht Englisch). */
+/** Hint after 15 minutes: first English, below it in the app's language (if not English). */
 @Composable
 private fun SlowHint(onChoose: () -> Unit, onClose: () -> Unit) {
     val first = remember { FocusRequester() }
@@ -191,8 +191,8 @@ private fun SlowHint(onChoose: () -> Unit, onClose: () -> Unit) {
 }
 
 /**
- * Sehr große Playlist: erst erklären und fragen (alle Sprachen oder auswählen), dann die Auswahl.
- * „Alles laden“ lädt in beiden Schritten die ganze Playlist. Vorausgewählt ist die Sprache des Geräts, sonst Englisch.
+ * Very large playlist: first explain and ask (all languages or select), then the selection.
+ * "Load everything" loads the whole playlist in both steps. The device's language is preselected, otherwise English.
  */
 @Composable
 private fun LangPicker(ask: PlaylistStore.LangAsk) {
@@ -206,13 +206,13 @@ private fun LangPicker(ask: PlaylistStore.LangAsk) {
     }
 }
 
-/** Schritt 1: Erklärung – warum die App fragt, und die Wahl zwischen „Sprachen auswählen“ und „Alles laden“. */
+/** Step 1: explanation – why the app asks, and the choice between "Select languages" and "Load everything". */
 @Composable
 private fun LangIntro(ask: PlaylistStore.LangAsk, onSelect: () -> Unit) {
     val nf = remember { NumberFormat.getIntegerInstance(Lang.locale()) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(150); runCatching { first.requestFocus() } }
-    // Zurück: erst Hinweis, beim zweiten Mal abbrechen (Angaben bleiben gespeichert)
+    // Back: first a hint, the second time cancel (details stay saved)
     var lastBack by remember { mutableLongStateOf(0L) }
     BackHandler {
         val now = System.currentTimeMillis()
@@ -249,7 +249,7 @@ private fun LangIntro(ask: PlaylistStore.LangAsk, onSelect: () -> Unit) {
     }
 }
 
-/** Schritt 2: Sprachen als übersichtliches Raster (größte zuerst, „Ohne Kennung“ zuletzt), Knöpfe oben. */
+/** Step 2: languages as a clear grid (largest first, "No tag" last), buttons at the top. */
 @Composable
 private fun LangSelect(ask: PlaylistStore.LangAsk, onBack: () -> Unit) {
     val nf = remember { NumberFormat.getIntegerInstance(Lang.locale()) }
@@ -296,7 +296,7 @@ private fun LangSelect(ask: PlaylistStore.LangAsk, onBack: () -> Unit) {
     }
 }
 
-/** Eine Sprache: Name in der Sprache selbst (so erkennt jeder seine), Kürzel und Anzahl der Titel. */
+/** One language: name in the language itself (so everyone recognizes theirs), abbreviation and number of titles. */
 @Composable
 private fun LangTile(code: String, count: String, checked: Boolean, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }

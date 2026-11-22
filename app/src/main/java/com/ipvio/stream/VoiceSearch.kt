@@ -6,13 +6,13 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 
 /**
- * Sprachsuche.
- * - Geräte mit Spracherkennung (Google TV, Android TV, Handys): Mikrofon-Knopf → System-Spracherkennung.
- * - Fire TV: Amazon lässt Apps keine eigene Spracherkennung nutzen (die Mikrofontaste gehört Alexa);
- *   dort gibt es keinen Mikrofon-Knopf.
+ * Voice search.
+ * - Devices with speech recognition (Google TV, Android TV, phones): microphone button → system speech recognition.
+ * - Fire TV: Amazon does not let apps use their own speech recognition (the microphone key belongs to Alexa);
+ *   there is no microphone button there.
  */
 object VoiceSearch {
-    /** Gibt es eine Spracherkennung, die Apps nutzen dürfen? */
+    /** Is there a speech recognizer that apps may use? */
     fun available(c: Context): Boolean = runCatching {
         SpeechRecognizer.isRecognitionAvailable(c) &&
             Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).resolveActivity(c.packageManager) != null

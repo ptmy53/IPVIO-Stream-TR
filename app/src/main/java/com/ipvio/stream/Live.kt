@@ -17,7 +17,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
 
-/** Eigene Senderlisten (je Profil). Logik in [ChannelListLogic]. */
+/** Own channel lists (per profile). Logic in [ChannelListLogic]. */
 object ChannelLists {
     val lists = mutableStateListOf<ChList>()
     private var inited = false
@@ -36,7 +36,7 @@ object ChannelLists {
 
     fun byKey(k: String): ChList? = ChannelListLogic.idOfKey(k)?.let { id -> lists.firstOrNull { it.id == id } }
 
-    /** Neue Liste (optional gleich mit einem Sender); gibt die neue ID zurück. */
+    /** New list (optionally right away with a channel); returns the new ID. */
     fun create(c: Context, name: String, first: String? = null): Int {
         init(c)
         val n = ChannelListLogic.create(lists.toList(), name, first)
@@ -52,20 +52,20 @@ object ChannelLists {
 }
 
 /**
- * Erinnerungen an Sendungen aus dem TV-Guide. Ist die App offen, erscheint eine Karte mit „Umschalten“;
- * ist sie zu, eine Benachrichtigung, die den Sender öffnet. Gilt für das ganze Gerät (nicht je Profil).
+ * Reminders for shows from the TV guide. If the app is open, a card with "Switch" appears;
+ * if it is closed, a notification that opens the channel. Applies to the whole device (not per profile).
  */
 object Reminders {
     const val EXTRA_CH = "ipvio_remind_ch"
     private const val CHANNEL = "reminders"
     val list = mutableStateListOf<Reminder>()
-    /** Vorlauf in Minuten. */
+    /** Lead time in minutes. */
     var leadMin by mutableIntStateOf(5)
         private set
-    /** Bereits gemeldet (Karte oder Benachrichtigung) – nicht doppelt. */
+    /** Already reported (card or notification) – not twice. */
     private val done = HashSet<String>()
     @Volatile private var inited = false
-    /** App im Vordergrund? Dann Karte in der App statt Benachrichtigung. */
+    /** App in the foreground? Then a card in the app instead of a notification. */
     @Volatile var foreground = false
 
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences("ipvio_reminders", Context.MODE_PRIVATE)
@@ -88,7 +88,7 @@ object Reminders {
 
     fun isSet(chId: String, start: Long): Boolean = list.any { it.chId == chId && it.start == start }
 
-    /** An/aus für eine Sendung. true = jetzt gesetzt. */
+    /** On/off for a show. true = set now. */
     @Synchronized
     fun toggle(c: Context, r: Reminder): Boolean {
         init(c)
@@ -106,7 +106,7 @@ object Reminders {
         save(c); schedule(c)
     }
 
-    /** Fällige, noch nicht gemeldete Erinnerungen. */
+    /** Due, not yet reported reminders. */
     @Synchronized
     fun pending(nowSec: Long): List<Reminder> = ReminderLogic.due(list.toList(), nowSec, leadMin * 60L).filter { it.key !in done }
 
@@ -115,7 +115,7 @@ object Reminders {
         done.add(r.key); save(c)
     }
 
-    /** Alte Einträge entfernen und den nächsten Wecker stellen. */
+    /** Remove old entries and set the next alarm. */
     @Synchronized
     fun schedule(c: Context) {
         init(c)
@@ -131,7 +131,7 @@ object Reminders {
         if (next == null) { am.cancel(pi); return }
         val at = next * 1000L
         try {
-            // Genau, wenn erlaubt; sonst ungefähr (das System kann um einige Minuten verschieben)
+            // Exact if allowed; otherwise approximate (the system may shift by a few minutes)
             if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
             else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
         } catch (e: SecurityException) {
@@ -139,7 +139,7 @@ object Reminders {
         }
     }
 
-    /** Vom Wecker aufgerufen: fällige Erinnerungen als Benachrichtigung (App offen: übernimmt die Karte in der App). */
+    /** Called by the alarm: due reminders as a notification (app open: the card in the app takes over). */
     fun fire(c: Context) {
         init(c)
         if (!foreground) {
@@ -149,7 +149,7 @@ object Reminders {
         schedule(c)
     }
 
-    /** Text der Erinnerung: „In 5 Min“ bzw. „Läuft jetzt“. */
+    /** Text of the reminder: "In 5 min" or "Running now". */
     fun whenText(r: Reminder, nowSec: Long): String {
         val m = (r.start - nowSec + 30) / 60
         return if (m <= 0) Lang.tr("Läuft jetzt") else Lang.tr("In $m Min")
@@ -179,7 +179,7 @@ object Reminders {
         }
     }
 
-    /** Android 13+: einmal um Erlaubnis für Benachrichtigungen bitten (beim ersten Setzen einer Erinnerung). */
+    /** Android 13+: ask once for permission for notifications (when a reminder is first set). */
     fun askPermission(a: Activity?) {
         if (a == null || Build.VERSION.SDK_INT < 33) return
         if (a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -188,10 +188,10 @@ object Reminders {
     }
 }
 
-/** Wecker für Erinnerungen (und nach dem Neustart des Geräts: Wecker neu stellen). */
+/** Alarm for reminders (and after a device restart: set the alarm again). */
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
-        // Sprache der App für den Benachrichtigungstext (App kann geschlossen sein)
+        // Language of the app for the notification text (the app may be closed)
         runCatching { General.init(c) }
         runCatching { Reminders.fire(c) }
     }

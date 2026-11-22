@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -40,44 +41,68 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 
 /**
- * Zweiter Stream im Live-Player (Runde 22): ein eigener, schlanker Player neben dem Hauptbild.
- * Bild-in-Bild (kleines Fenster) oder geteilter Bildschirm (halbe Breite). Der Ton kommt immer nur von einem der beiden Streams.
- * Der zweite Stream lädt weniger voraus und decodiert höchstens 720p (PiP: SD), damit schwache Geräte nicht überfordert werden.
- * Hinweis: Viele Anbieter erlauben nur eine Verbindung je Zugang – dann bricht der zweite Stream ab und die App meldet es.
+ * Second stream in the live player (round 22): a separate, slim player next to the main picture.
+ * Picture-in-picture (small window) or split screen (half width). Sound always comes from only one of the two streams.
+ * The second stream preloads less and decodes at most 720p (PiP: SD) so weak devices are not overloaded.
+ * Note: many providers allow only one connection per login – then the second stream drops and the app reports it.
  */
 @Composable
-internal fun SecondStream(item: Item, split: Boolean, audioOn: Boolean, modifier: Modifier) {
+internal fun SecondStream(item: Item, split: Boolean, audioOn: Boolean, modifier: Modifier, small: Boolean = false) {
     val ctx = LocalContext.current
     var failed by remember { mutableStateOf(false) }
+    // Hint for the user: why it failed and what to try (shown below the message)
+    var tip by remember { mutableStateOf("") }
+    // One automatic second try: a provider often needs a moment before it accepts the extra connection
+    var retries by remember { mutableIntStateOf(0) }
+    var retryTick by remember { mutableIntStateOf(0) }
+    // small = tile of the multi view: lowest load (small picture, small buffer), because up to four players run at once
     val p = remember {
-        val http = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(10_000)
-            .setReadTimeoutMs(15_000)
-        val lc = DefaultLoadControl.Builder().setBufferDurationsMs(4_000, 15_000, 1_000, 2_000).build()
-        ExoPlayer.Builder(ctx, SoftAudio.factory(ctx))
-            .setLoadControl(lc)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(DefaultDataSource.Factory(ctx, http)))
-            .build()
-            .also {
-                it.addListener(object : Player.Listener {
-                    override fun onPlayerError(error: PlaybackException) { failed = true }
-                    override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) failed = false }
-                })
-            }
+        runCatching {
+            val http = DefaultHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(10_000)
+                .setReadTimeoutMs(15_000)
+            val lc = DefaultLoadControl.Builder()
+                .setBufferDurationsMs(if (small) 3_000 else 4_000, if (small) 12_000 else 15_000, 1_000, 2_000)
+                .apply { if (small) setTargetBufferBytes(4 * 1024 * 1024) }
+                .build()
+            ExoPlayer.Builder(ctx, SoftAudio.factory(ctx))
+                .setLoadControl(lc)
+                .setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setDataSourceFactory(HostFailover.DataSourceWrapper.Factory(DefaultDataSource.Factory(ctx, http))))
+                .build()
+                .also {
+                    it.addListener(object : Player.Listener {
+                        override fun onPlayerError(error: PlaybackException) {
+                            tip = secondStreamTip(error)
+                            if (retries < 1) { retries++; retryTick++ } else failed = true
+                        }
+                        override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) failed = false }
+                    })
+                }
+        }.getOrNull()
     }
-    DisposableEffect(Unit) { onDispose { runCatching { p.release() } } }
-    // Auflösung begrenzen: im kleinen Fenster reicht SD, geteilt höchstens 720p
-    LaunchedEffect(split) {
-        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
-            .setMaxVideoSize(if (split) 1280 else 854, if (split) 720 else 480)
-            .build()
+    DisposableEffect(Unit) { onDispose { runCatching { p?.release() } } }
+    // Limit resolution: SD is enough in the small window, split at most 720p
+    // Multi view (small): the tile with sound gets a bit more, the muted one stays light (less load, less lag)
+    LaunchedEffect(split, small, audioOn) {
+        runCatching {
+            if (p != null) p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                .setMaxVideoSize(
+                    if (small) (if (audioOn) 960 else 640) else if (split) 1280 else 854,
+                    if (small) (if (audioOn) 540 else 360) else if (split) 720 else 480
+                )
+                .setMaxVideoBitrate(if (small) (if (audioOn) 3_500_000 else 1_200_000) else Int.MAX_VALUE)
+                .build()
+        }
     }
-    LaunchedEffect(item.url) {
+    LaunchedEffect(item.url, retryTick) {
+        if (retryTick > 0) kotlinx.coroutines.delay(1_500) else { retries = 0; tip = "" }
         failed = false
-        if (!openStream(p, item.url, C.TIME_UNSET)) failed = true
+        // Stalker portal: fetch the real address from the portal only now
+        val playUrl = runCatching { if (StalkerLogic.isItem(item.url)) StalkerApi.resolve(ctx, item.url) else item.url }.getOrNull()
+        if (p == null || playUrl == null || !openStream(p, playUrl, C.TIME_UNSET)) failed = true
     }
-    LaunchedEffect(audioOn) { p.volume = if (audioOn) 1f else 0f }
+    LaunchedEffect(audioOn) { runCatching { p?.volume = if (audioOn) 1f else 0f } }
     val shape = RoundedCornerShape(if (split) 0.dp else 10.dp)
     Box(modifier.clip(shape).background(Color.Black).border(if (split) 0.dp else 2.dp, if (audioOn) Accent2 else Color(0x66FFFFFF), shape)) {
         AndroidView(
@@ -97,12 +122,29 @@ internal fun SecondStream(item: Item, split: Boolean, audioOn: Boolean, modifier
             Text(raw = true, text = (if (audioOn) "♪ " else "") + item.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (failed) Box(Modifier.fillMaxSize().background(Color(0xAA000000)), contentAlignment = Alignment.Center) {
-            Text("Zweiter Stream nicht abspielbar", color = Color.White, fontSize = 14.sp)
+            Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Zusatzbild nicht abspielbar", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                if (tip.isNotEmpty()) Text(tip, color = Color(0xFFD0D0D6), fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 4)
+            }
         }
     }
 }
 
-/** Gespeicherte Einstellungen für den zweiten Stream: Anordnung, Fenstergröße und Ecke (Bild-in-Bild), Ton. */
+/** Short hint for a failed extra picture: what most likely happened and what to try. German key text (translated by Text). */
+internal fun secondStreamTip(e: PlaybackException): String {
+    val http = (e.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode ?: 0
+    return when {
+        http == 404 || http == 410 -> "Dieser Sender ist beim Anbieter gerade nicht erreichbar. Probiere einen anderen."
+        http in 400..599 -> "Dein Anbieter erlaubt vermutlich nur eine Verbindung gleichzeitig. Frage nach einem Zugang mit mehr Verbindungen."
+        e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED || e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+            "Die Verbindung ist zu langsam oder wurde abgelehnt. Ein Sender in niedrigerer Qualität hilft oft."
+        e.errorCode in PlaybackException.ERROR_CODE_DECODER_INIT_FAILED..PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ->
+            "Dein Gerät schafft zwei Videos gleichzeitig nicht. Wähle für beide Bilder SD-Sender."
+        else -> "Probiere einen anderen Sender oder eine niedrigere Qualität."
+    }
+}
+
+/** Saved settings for the second stream: arrangement, window size and corner (picture-in-picture), sound. */
 object DualPrefs {
     val SIZES = listOf(220, 300, 400, 520)
     val SIZE_NAMES = listOf("Klein", "Mittel", "Groß", "Sehr groß")
@@ -138,7 +180,7 @@ object DualPrefs {
     }
 }
 
-/** Position und Größe des kleinen Fensters (Bild-in-Bild). Unten bleibt Platz für die Steuerleiste. */
+/** Position and size of the small window (picture-in-picture). Space remains at the bottom for the control bar. */
 internal fun BoxScope.pipModifier(): Modifier {
     val align = when (DualPrefs.corner) {
         1 -> Alignment.BottomStart

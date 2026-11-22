@@ -1,6 +1,6 @@
 package com.ipvio.stream
 
-// Übersetzungen Teil H (Nachtrag 17): Verlauf, Erneut abspielen, Verzögerung, Bildrate, Technik-Info, OpenSubtitles, Update, Empfehlungen
+// Translations part H (addendum 17): history, replay, delay, frame rate, technical info, OpenSubtitles, update, recommendations
 val DictH = """
 Verlauf¦History¦Geçmiş¦Povijest¦Povijest¦Istorija¦Historial¦Historique¦Cronologia
 Verlauf · Filme¦History · Movies¦Geçmiş · Filmler¦Povijest · Filmovi¦Povijest · Filmovi¦Istorija · Filmovi¦Historial · Películas¦Historique · Films¦Cronologia · Film

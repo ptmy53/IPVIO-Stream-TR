@@ -33,7 +33,7 @@ class LangTagLogicTest {
     @Test fun kategorieVorSendername() {
         assertEquals("de", LangTagLogic.of("DE | Sport", "TR: beIN", live = true))
         assertEquals("tr", LangTagLogic.of("Sport", "TR: beIN 1", live = true))
-        // Filme/Serien: nur ausdrückliche Kennungen im Originalnamen zählen
+        // Movies/series: only explicit tags in the original name count
         assertEquals("de", LangTagLogic.of("Netflix", "DE: Titel", live = false))
         assertEquals("tr", LangTagLogic.of("Netflix", "Film Adı [TR]", live = false))
         assertEquals("en", LangTagLogic.of("Netflix", "EN - The Movie", live = false))

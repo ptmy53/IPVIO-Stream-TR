@@ -1,28 +1,28 @@
 package com.ipvio.stream
 
 /**
- * Reine Regeln für das Navigationsmenü (ohne Android), damit sie getestet werden können.
- * Garantien: Jeder Bereich kommt genau einmal vor, "Start" (0) und "Einstellungen" (5) können nie ausgeblendet werden.
+ * Pure rules for the navigation menu (without Android) so they can be tested.
+ * Guarantees: every area occurs exactly once, "Start" (0) and "Settings" (5) can never be hidden.
  */
 object MenuLogic {
     const val COUNT = 11
     const val HOME = 0
     const val SEARCH = 4
     const val SETTINGS = 5
-    /** Seit Runde 13 (Entwurf): TV-Guide, Favoriten (Sender), Meine Liste (Filme/Serien). */
+    /** Since round 13 (draft): TV guide, favorites (channels), "Meine Liste" (movies/series). */
     const val EPG = 6
     const val FAVS = 7
     const val MYLIST = 8
-    /** Runde 15 (Nachtrag 17): Verlauf – zuletzt Angesehenes, Filme und Serien getrennt. */
+    /** Round 15 (addendum 17): History – recently watched, movies and series separate. */
     const val VERLAUF = 9
-    /** Runde 20: Sport – laufende und kommende Sport-Sendungen, Sportsender. */
+    /** Round 20: Sports – running and upcoming sports shows, sports channels. */
     const val SPORT = 10
-    /** Wie im Entwurf: Home, Live TV, Filme, Serien, EPG, Favoriten, Meine Liste, (Suche), Einstellungen. */
+    /** As in the draft: Home, Live TV, movies, series, EPG, favorites, "Meine Liste", (search), settings. */
     val DEFAULT_ORDER = listOf(0, 3, 1, 2, SPORT, EPG, FAVS, MYLIST, VERLAUF, SEARCH, 5)
     /**
-     * Suche steht oben im Kopf, nicht in der Seitenleiste: standardmäßig ausgeblendet.
-     * EPG (Runde 14, Wunsch des Nutzers): ebenfalls ausgeblendet – der TV-Guide ist über Live TV erreichbar.
-     * Beides lässt sich unter Einstellungen > Menü wieder einblenden.
+     * Search sits at the top in the header, not in the sidebar: hidden by default.
+     * EPG (round 14, user's wish): also hidden – the TV guide is reachable via Live TV.
+     * Both can be shown again under Settings > Menu.
      */
     const val DEFAULT_HIDDEN = "4,6"
 
@@ -30,7 +30,7 @@ object MenuLogic {
         val order = (raw ?: DEFAULT_ORDER.joinToString(",")).split(",").mapNotNull { it.trim().toIntOrNull() }
             .filter { it in 0 until COUNT }.distinct().toMutableList()
         for (id in 0 until COUNT) if (id !in order) {
-            // Neuer Bereich (gespeicherte Reihenfolge von vorher): vor „Einstellungen“ einreihen, nicht dahinter
+            // New area (saved order from before): insert before "Settings", not after
             val s = order.indexOf(SETTINGS)
             if (id >= EPG && s >= 0) order.add(s, id) else order.add(id)
         }

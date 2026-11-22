@@ -35,15 +35,15 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.BoxWithConstraints
 
 /*
- * Gemeinsame Bausteine der Oberfläche:
- *  - ArtPlaceholder: Platzhalter für fehlende Bilder (Verlauf, große Initialen, Symbol, Titel)
- *  - screenEnter: Einblenden von Bildschirmen (nur Transparenz und Verschiebung)
- *  - Pulse: kurzes Nachgeben beim Bestätigen
- *  - EmptyState: Leer-/Fehlerzustand mit Erklärung und Aktion
- * Alles beachtet „Animationen“ (Aus/Dezent/Normal) und läuft nie im Player.
+ * Shared building blocks of the UI:
+ *  - ArtPlaceholder: placeholder for missing images (gradient, big initials, icon, title)
+ *  - screenEnter: fading in of screens (only transparency and shift)
+ *  - Pulse: brief give on confirming
+ *  - EmptyState: empty/error state with explanation and action
+ * Everything respects "Animations" (Off/Subtle/Normal) and never runs in the player.
  */
 
-// ---------------------------------------------------------------------------------------------------------- Platzhalter
+// ---------------------------------------------------------------------------------------------------------- Placeholders
 
 private fun initialsOf(title: String): String {
     val words = title.replace(Regex("""[^\p{L}\p{N} ]"""), " ").split(' ').filter { it.isNotBlank() }
@@ -57,12 +57,12 @@ private fun initialsOf(title: String): String {
 private fun iconOf(k: Kind) = when (k) { Kind.LIVE -> AIcon.Live; Kind.SERIES -> AIcon.Layers; Kind.MOVIE -> AIcon.Play }
 
 /**
- * Platzhalter für fehlende Bilder: Verlauf aus der Titel-Farbe, große Initialen als Motiv, Symbol der Art (Film/Serie/Sender)
- * und der Titel unten. Liegt unter dem Bild – lädt das Bild nicht, bleibt er sichtbar.
+ * Placeholder for missing images: gradient from the title color, big initials as motif, icon of the kind (movie/series/channel)
+ * and the title at the bottom. Lies under the image – if the image does not load, it stays visible.
  */
 @Composable
 fun ArtPlaceholder(item: Item, modifier: Modifier = Modifier, showTitle: Boolean = true) {
-    // Runde 17c: schlank (ohne BoxWithConstraints, das in langen Reihen teuer war); feste, kleine Größen
+    // Round 17c: slim (without BoxWithConstraints, which was expensive in long rows); fixed, small sizes
     val base = colorFor(item)
     Box(modifier.background(Brush.linearGradient(listOf(lerp(base, Color.Black, 0.15f), lerp(Look.bg, base, 0.22f), Look.bg)))) {
         Text(
@@ -78,11 +78,11 @@ fun ArtPlaceholder(item: Item, modifier: Modifier = Modifier, showTitle: Boolean
     }
 }
 
-// ---------------------------------------------------------------------------------------------------------- Bewegung
+// ---------------------------------------------------------------------------------------------------------- Motion
 
 /**
- * Einblenden eines Bildschirms: weich aus leichter Verschiebung, nur Transparenz/Verschiebung (ohne Zwischenpuffer).
- * Neuer [key] = neu einblenden (z. B. anderer Reiter).
+ * Fading in a screen: softly from a slight shift, only transparency/shift (without an intermediate buffer).
+ * New [key] = fade in again (e.g. a different tab).
  */
 @Composable
 fun Modifier.screenEnter(key: Any? = Unit): Modifier {
@@ -96,7 +96,7 @@ fun Modifier.screenEnter(key: Any? = Unit): Modifier {
     }
 }
 
-/** Kurzes Nachgeben beim Bestätigen: [pulse] aufrufen, [scale] in graphicsLayer verwenden. */
+/** Brief give on confirming: call [pulse], use [scale] in graphicsLayer. */
 class Pulse(private val anim: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>, private val scope: kotlinx.coroutines.CoroutineScope) {
     val scale: Float get() = anim.value
     fun pulse() {
@@ -115,9 +115,9 @@ fun rememberPulse(): Pulse {
     return remember { Pulse(anim, scope) }
 }
 
-// ---------------------------------------------------------------------------------------------------------- Leer-/Fehlerzustand
+// ---------------------------------------------------------------------------------------------------------- Empty/error state
 
-/** Leerer oder fehlerhafter Bereich: Symbol, Titel, Erklärung und (optional) eine Aktion, die weiterhilft. */
+/** Empty or faulty area: icon, title, explanation and (optionally) an action that helps further. */
 @Composable
 fun EmptyState(
     icon: AIcon, title: String, text: String, modifier: Modifier = Modifier,

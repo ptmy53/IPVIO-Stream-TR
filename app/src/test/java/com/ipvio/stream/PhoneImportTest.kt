@@ -53,6 +53,69 @@ class PhoneImportTest {
         } finally { pi.stop() }
     }
 
+    /** Sends one request and returns the raw response; [declaredLength] overrides Content-Length (to test limits without sending the data). */
+    private fun rawRequest(port: Int, requestLine: String, body: ByteArray, declaredLength: Long = body.size.toLong()): String {
+        Socket("127.0.0.1", port).use { s ->
+            s.getOutputStream().write(("$requestLine HTTP/1.1\r\nHost: x\r\nContent-Length: $declaredLength\r\n\r\n").toByteArray() + body)
+            s.getOutputStream().flush()
+            return s.getInputStream().readBytes().toString(Charsets.UTF_8)
+        }
+    }
+
+    /** Server like the phone search: [PhoneImport.api] is set, which must not bypass the code any more. */
+    private fun listServer(received: MutableList<Pair<String, ByteArray>>): PhoneImport {
+        val pi = PhoneImport { }
+        pi.onList = { name, bytes -> received.add(name to bytes) }
+        pi.api = { _, _ -> null }
+        return pi
+    }
+
+    @Test fun listImportWithoutCodeIsRejectedEvenWhenPhoneSearchIsActive() {
+        val received = mutableListOf<Pair<String, ByteArray>>()
+        val pi = listServer(received)
+        assertTrue(pi.start())
+        try {
+            assertTrue(rawRequest(pi.port, "POST /listimport?name=a.csv", "Name,Year\nX,2000".toByteArray()).startsWith("HTTP/1.1 403"))
+            assertTrue(rawRequest(pi.port, "POST /listimport?name=a.csv&code=0000x", "Name,Year\nX,2000".toByteArray()).startsWith("HTTP/1.1 403"))
+            assertTrue(received.isEmpty())
+        } finally { pi.stop() }
+    }
+
+    @Test fun listImportWithCodeDeliversExactlyTheSentBytes() {
+        val received = mutableListOf<Pair<String, ByteArray>>()
+        val pi = listServer(received)
+        assertTrue(pi.start())
+        try {
+            // larger than one read chunk (64 KiB) so that the chunked reading is covered
+            val data = ByteArray(200_000) { (it % 251).toByte() }
+            assertTrue(rawRequest(pi.port, "POST /listimport?name=w.csv&code=${pi.code}", data).startsWith("HTTP/1.1 200"))
+            assertEquals(1, received.size)
+            assertEquals("w.csv", received[0].first)
+            assertArrayEquals(data, received[0].second)
+        } finally { pi.stop() }
+    }
+
+    @Test fun listImportRejectsTooLargeUploadWithoutReadingIt() {
+        val received = mutableListOf<Pair<String, ByteArray>>()
+        val pi = listServer(received)
+        assertTrue(pi.start())
+        try {
+            val r = rawRequest(pi.port, "POST /listimport?name=big.json&code=${pi.code}", ByteArray(0), PhoneImport.MAX_LIST_UPLOAD + 1)
+            assertTrue(r.startsWith("HTTP/1.1 413"))
+            assertTrue(received.isEmpty())
+        } finally { pi.stop() }
+    }
+
+    @Test fun listImportRejectsEmptyBody() {
+        val received = mutableListOf<Pair<String, ByteArray>>()
+        val pi = listServer(received)
+        assertTrue(pi.start())
+        try {
+            assertTrue(rawRequest(pi.port, "POST /listimport?name=e.csv&code=${pi.code}", ByteArray(0)).startsWith("HTTP/1.1 400"))
+            assertTrue(received.isEmpty())
+        } finally { pi.stop() }
+    }
+
     @Test fun handySeiteInDerSpracheDesHandys() {
         assertEquals(0, PhoneImportLogic.langIndex("de-AT,de;q=0.9,en;q=0.8"))
         assertEquals(2, PhoneImportLogic.langIndex("tr-TR,tr;q=0.9"))

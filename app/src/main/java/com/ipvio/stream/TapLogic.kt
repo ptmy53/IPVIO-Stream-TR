@@ -1,44 +1,44 @@
 package com.ipvio.stream
 
 /**
- * Live-Puffer auf dem Gerät (Zurückspulen und Aufnehmen im Live TV, Runde 20). Ohne Android, testbar.
+ * Live buffer on the device (rewinding and recording in Live TV, round 20). Without Android, testable.
  *
- * Der Live-Stream (MPEG-TS) wird über EINE Verbindung in Stücke von [CHUNK] Bytes auf den Speicher geschrieben.
- * Der Player liest aus diesen Stücken (wenige Sekunden hinter dem Live-Bild), eine Aufnahme kopiert daraus.
- * Alte Stücke werden gelöscht, sobald die eingestellte Puffergröße überschritten ist (Ringpuffer).
- * Zeit und Byte-Stelle werden laufend gemerkt ([TimeIndex]), damit „30 s zurück“ die richtige Stelle findet.
+ * The live stream (MPEG-TS) is written over ONE connection in pieces of [CHUNK] bytes to the storage.
+ * The player reads from these pieces (a few seconds behind the live picture), a recording copies from them.
+ * Old pieces are deleted as soon as the configured buffer size is exceeded (ring buffer).
+ * Time and byte position are noted continuously ([TimeIndex]) so "30 s back" finds the right position.
  */
 object TapLogic {
     const val CHUNK = 16L * 1024 * 1024
-    /** Größe eines TS-Pakets: Lesestellen werden darauf ausgerichtet. */
+    /** Size of a TS packet: read positions are aligned to it. */
     const val TS = 188L
 
     fun chunkOf(pos: Long): Long = pos / CHUNK
     fun offsetIn(pos: Long): Long = pos % CHUNK
     fun align(pos: Long): Long = if (pos <= 0) 0 else pos - pos % TS
 
-    /** Ab welcher Stelle der Puffer noch Daten hat, wenn höchstens [maxBytes] behalten werden (ganze Stücke). */
+    /** From which position the buffer still has data if at most [maxBytes] are kept (whole pieces). */
     fun keepFrom(written: Long, maxBytes: Long): Long {
         if (written <= maxBytes) return 0L
-        // Das Stück, in dem die Grenze liegt, bleibt ganz erhalten
+        // The piece containing the limit is kept entirely
         return chunkOf(written - maxBytes) * CHUNK
     }
 
-    /** Puffergröße aus der Einstellung (MB) und dem freien Platz: es bleiben immer mindestens [reserve] Bytes frei. */
+    /** Buffer size from the setting (MB) and the free space: at least [reserve] bytes always stay free. */
     fun budget(settingMb: Int, usable: Long, reserve: Long = 400L * 1024 * 1024): Long {
         val want = settingMb.toLong() * 1024 * 1024
         val can = usable - reserve
         return if (can < 3 * CHUNK) 0L else minOf(want, can).coerceAtLeast(3 * CHUNK)
     }
 
-    /** Text für die Anzeige „LIVE −1:05“. */
+    /** Text for the display "LIVE −1:05". */
     fun behindText(ms: Long): String {
         val s = (ms / 1000).coerceAtLeast(0)
         return if (s >= 3600) "${s / 3600}:" + ((s / 60) % 60).toString().padStart(2, '0') + ":" + (s % 60).toString().padStart(2, '0')
         else "${s / 60}:" + (s % 60).toString().padStart(2, '0')
     }
 
-    /** Kann diese Adresse über den Puffer laufen? Nur fortlaufende Streams (TS), keine Playlists (HLS/DASH) oder Dateien. */
+    /** Can this address run through the buffer? Only continuous streams (TS), no playlists (HLS/DASH) or files. */
     fun tappable(url: String): Boolean {
         val u = url.lowercase().substringBefore('?')
         if (!u.startsWith("http://") && !u.startsWith("https://")) return false
@@ -46,7 +46,7 @@ object TapLogic {
         return true
     }
 
-    /** Dateiname einer Aufnahme (ohne Zeichen, die Dateisysteme nicht mögen). */
+    /** File name of a recording (without characters file systems do not like). */
     fun fileName(channel: String, title: String, startMs: Long, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): String {
         val f = java.text.SimpleDateFormat("yyyy-MM-dd HHmm", java.util.Locale.ROOT).apply { timeZone = zone }
         val base = listOf(channel, title).map { it.trim() }.filter { it.isNotEmpty() }.distinct().joinToString(" - ")
@@ -55,8 +55,8 @@ object TapLogic {
     }
 
     /**
-     * Zeit (ms seit Beginn des Puffers) ↔ Byte-Stelle. Wird beim Schreiben etwa jede halbe Sekunde ergänzt.
-     * Zwischen zwei Punkten wird linear gerechnet; vor dem ersten bzw. nach dem letzten Punkt gilt der Randwert.
+     * Time (ms since the start of the buffer) ↔ byte position. Extended about every half second while writing.
+     * Between two points it is calculated linearly; before the first or after the last point the edge value applies.
      */
     class TimeIndex {
         private var t = LongArray(256)
@@ -69,7 +69,7 @@ object TapLogic {
             t[n] = ms; b[n] = bytes; n++
         }
 
-        /** Punkte vor der Byte-Stelle [bytes] verwerfen (gelöschte Stücke); einer bleibt als Anker. */
+        /** Discard points before byte position [bytes] (deleted pieces); one stays as an anchor. */
         @Synchronized fun trimBefore(bytes: Long) {
             var i = 0
             while (i + 1 < n && b[i + 1] <= bytes) i++

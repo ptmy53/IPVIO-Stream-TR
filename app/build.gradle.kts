@@ -36,8 +36,10 @@ android {
         minSdk = 24
         targetSdk = 37
         // Raise both for every release; the GitHub release tag must match versionName (e.g. tag "v1.1").
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 14
+        versionName = "1.4.8"
+        // Name under the icon; the debug build overrides it (see buildTypes)
+        manifestPlaceholders["appLabel"] = "IPVIO Stream"
 
         buildConfigField("String", "TMDB_KEY", "\"${secret("TMDB_KEY")}\"")
         buildConfigField("String", "OMDB_KEY", "\"${secret("OMDB_KEY")}\"")
@@ -55,11 +57,24 @@ android {
     }
 
     buildTypes {
+        // Test build (Run in Android Studio / debug APK): own app ID, so the private IPVIO app on the TV
+        // is not overwritten. Both apps can be installed side by side (own data, own name).
+        debug {
+            applicationIdSuffix = ".test"
+            manifestPlaceholders["appLabel"] = "IPVIO Stream"
+        }
         release {
             if (hasKeystore) signingConfig = signingConfigs.getByName("release")
             optimization {
+                // R8 runs over the whole app in the classic way, without packageScope (T-024, ADR 0005). The libraries (Compose,
+                // Media3, OkHttp, Kotlin) are shrunk and optimized; without that Compose runs unoptimized and the UI is noticeably
+                // slower. The app's own code (com.ipvio.**) is kept unchanged by a keep rule, and renaming and repackaging of
+                // classes are switched off. Rules: src/main/keepRules/reflection.keep. This also turns on resource shrinking.
+                // History: the library-only packageScope crashed the release at start with AGP 9.x (IllegalAccessError: renamed
+                // kotlin.text class, in androidx.startup.InitializationProvider); during 1.2 a build with com.ipvio.** in the
+                // scope (12.7 MB) did not start either (cause unknown, see ADR 0001).
+                // Rollback: set enable = false (this one line).
                 enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
         }
     }
@@ -88,8 +103,13 @@ dependencies {
     // MPEG-DASH (.mpd) streams; without it Media3 throws IllegalStateException when such a stream is opened
     implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
+    // MetadataRetriever: reads the tracks of a stream from its header for the detail page (MediaProbe.kt, T-033)
+    implementation("androidx.media3:media3-inspector:1.11.1")
     // Software audio decoder (AC3/E-AC3/DTS ...) for headphones/Bluetooth, see SoftAudio.kt. GPL-3.0 – the reason the app is GPL-3.0.
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
+
+    // T-049e: VPN with WireGuard (official tunnel library, Apache-2.0; runs the Go backend and the VpnService). See AppVpn.kt
+    implementation("com.wireguard.android:tunnel:1.0.20230706")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
@@ -97,4 +117,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Real JSON implementation for JVM unit tests (the Android android.jar only has stubs that throw).
+    // Needed by ListImportLogic.parseTrakt, which swallows the stub exception and returns an empty list.
+    testImplementation("org.json:json:20250517")
 }

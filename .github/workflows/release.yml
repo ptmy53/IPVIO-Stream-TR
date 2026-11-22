@@ -1,0 +1,128 @@
+name: Release
+
+# Runs when dev is merged into main. The release is published only if all tests pass.
+# See CLAUDE.md section 16 and docs/RELEASE.md.
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+      # Not blocking yet: no lint baseline file exists (docs/quality/baseline-2026-11-11.md has 9 errors).
+      # Turn this into a gate after lint-baseline.xml is committed.
+      - name: Lint report (not blocking)
+        continue-on-error: true
+        run: ./gradlew --no-daemon lintDebug
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Read version from app/build.gradle.kts
+        id: version
+        run: |
+          VN=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -1)
+          VC=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts | head -1)
+          if [ -z "$VN" ] || [ -z "$VC" ]; then echo "::error::Could not read versionName/versionCode"; exit 1; fi
+          echo "name=$VN" >> "$GITHUB_OUTPUT"
+          echo "code=$VC" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to overwrite an existing release
+        run: |
+          if gh release view "v${{ steps.version.outputs.name }}" >/dev/null 2>&1; then
+            echo "::error::Release v${{ steps.version.outputs.name }} already exists. Raise versionName in app/build.gradle.kts."
+            exit 1
+          fi
+
+      # Signing secrets are required. Without them the APK would be unsigned and users could not update.
+      - name: Write signing configuration
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Signing secrets are missing. Refusing to publish an unsigned release."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > ipvio-release.jks
+          printf 'storeFile=ipvio-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+
+      - name: Build signed release APK
+        # Google sign-in for Drive and live sync: without these the release hides the Drive section (see app/build.gradle.kts)
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Verify signature
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -f "$APK" || { echo "::error::$APK not found"; exit 1; }
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs "$APK"
+
+      - name: Create IPVIO-Stream.apk and update.json
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk IPVIO-Stream.apk
+          SHA=$(sha256sum IPVIO-Stream.apk | cut -d' ' -f1)
+          printf '{\n  "versionCode": %s,\n  "versionName": "%s",\n  "apk": "IPVIO-Stream.apk",\n  "sha256": "%s",\n  "minSupportedCode": 0,\n  "mandatory": false\n}\n' \
+            "${{ steps.version.outputs.code }}" "${{ steps.version.outputs.name }}" "$SHA" > update.json
+          # Update dialog text: the first four highlight lines of the release notes, max 300 characters (Round17Logic.kt)
+          NOTES_FILE="docs/release-notes/v${{ steps.version.outputs.name }}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            NOTE=$(awk 'NF && !/^[[:space:]]*#/ { sub(/^[[:space:]]*[-*][[:space:]]+/, ""); print; if (++n == 4) exit }' "$NOTES_FILE" | paste -sd'\t' | sed 's/\t/ · /g')
+            jq --arg n "$NOTE" '. + {notes: ($n | .[0:300])}' update.json > update.tmp && mv update.tmp update.json
+          fi
+          cat update.json
+
+      # Release text: docs/release-notes/v<versionName>.md if it exists (CLAUDE.md section 18), otherwise GitHub's PR list
+      - name: Publish GitHub release
+        run: |
+          NOTES_FILE="docs/release-notes/v${{ steps.version.outputs.name }}.md"
+          if [ -f "$NOTES_FILE" ]; then NOTES_ARGS=(--notes-file "$NOTES_FILE"); else NOTES_ARGS=(--generate-notes); fi
+          gh release create "v${{ steps.version.outputs.name }}" IPVIO-Stream.apk update.json \
+            --target "$GITHUB_SHA" \
+            --title "IPVIO Stream ${{ steps.version.outputs.name }}" \
+            "${NOTES_ARGS[@]}"

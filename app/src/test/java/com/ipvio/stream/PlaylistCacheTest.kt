@@ -9,7 +9,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 
-/** Einlesen (Sprache, Speicher sparen) und Zwischenspeicher der Playlist. */
+/** Parsing (language, saving memory) and the playlist cache. */
 class PlaylistCacheTest {
     private val m3u = """#EXTM3U
 #EXTINF:-1 tvg-id="ard" group-title="DE | News",DE: Das Erste HD
@@ -48,7 +48,7 @@ http://h/series/u/p/8.mkv
         assertTrue(e1.variants.isEmpty())
         assertEquals("http://h/series/u/p/6.mkv", pickVariant(e1, null, null, null).url)
         assertEquals(2, e2.variants.size)
-        assertEquals("FHD", e2.quality)          // beste Quelle zuerst
+        assertEquals("FHD", e2.quality)          // best source first
         assertEquals("http://h/series/u/p/8.mkv", e2.url)
     }
 
@@ -80,7 +80,7 @@ http://h/series/u/p/8.mkv
         assertEquals(1, c.counts["tr"])
         assertEquals(1, c.counts["en"])
         assertEquals(items.size, c.counts.values.sum())
-        // nach dem Überspringen stimmen die folgenden Einträge noch (Serie mit Varianten kommt zuletzt)
+        // after skipping, the following entries are still correct (a series with variants comes last)
         assertEquals(2, c.items.first { it.kind == Kind.SERIES }.episodes.size)
     }
 
@@ -92,15 +92,15 @@ http://h/series/u/p/8.mkv
         assertNull(PlaylistCacheIO.read(ByteArrayInputStream(bad.toByteArray()), "http://a", emptySet()))
     }
 
-    /** Version 3 (ältere App, ohne Sprache) wird weiter gelesen; die Sprache wird aus Kategorie/Name berechnet. */
+    /** Version 3 (older app, without language) is still read; the language is derived from category/name. */
     @Test fun cache_version3WirdGelesen() {
         val out = ByteArrayOutputStream()
         val o = DataOutputStream(out)
         fun str(s: String?) { if (s == null) o.writeInt(-1) else { val b = s.toByteArray(); o.writeInt(b.size); o.write(b) } }
         o.writeInt(3); str("http://a"); o.writeInt(0); o.writeInt(0); o.writeInt(2)
-        // Live-Sender in türkischer Kategorie
+        // Live channel in a Turkish category
         str("1"); o.writeInt(Kind.LIVE.ordinal); str("TRT 1"); o.writeInt(-1); str("http://h/1"); str(null); str("TR | Ulusal"); str(null); str(null); o.writeInt(0)
-        // Film in deutscher Kategorie mit einer Einzel-Quelle als Liste (alte Form)
+        // Movie in a German category with a single source as a list (old form)
         str("2"); o.writeInt(Kind.SERIES.ordinal); str("Show"); o.writeInt(-1); str(""); str(null); str("DE | Serien"); str(null); str(null); o.writeInt(1)
         o.writeInt(1); o.writeInt(1); str("Episode 1"); str("http://h/e1"); str(null); o.writeInt(1); str("http://h/e1"); str("DE"); str(null); str("DE")
         val c = PlaylistCacheIO.read(ByteArrayInputStream(out.toByteArray()), "http://a", setOf("tr"))!!

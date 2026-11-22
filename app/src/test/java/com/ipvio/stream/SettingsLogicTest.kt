@@ -36,25 +36,25 @@ class SettingsLogicTest {
 
     @Test fun daily() {
         val p = UpdatePlan(2, hour = 4, minute = 30)
-        // 20.10. 09:00 -> letzter Termin war 20.10. 04:30
+        // 20.10. 09:00 -> last slot was 20.10. 04:30
         val now = at(2026, 10, 20, 9, 0)
         assertEquals(at(2026, 10, 20, 4, 30), SettingsLogic.lastScheduled(p, now, utc))
         assertTrue(SettingsLogic.refreshDue(p, at(2026, 10, 19, 20, 0), now, utc))
         assertFalse(SettingsLogic.refreshDue(p, at(2026, 10, 20, 5, 0), now, utc))
-        // vor dem heutigen Termin gilt der gestrige
+        // before today's slot, yesterday's applies
         val early = at(2026, 10, 20, 3, 0)
         assertEquals(at(2026, 10, 19, 4, 30), SettingsLogic.lastScheduled(p, early, utc))
         assertFalse(SettingsLogic.refreshDue(p, at(2026, 10, 19, 5, 0), early, utc))
     }
 
     @Test fun weekly() {
-        // 20.10.2026 ist ein Dienstag. Plan: montags 04:00 -> letzter Termin 19.10. 04:00
+        // 20.10.2026 is a Tuesday. Plan: Mondays 04:00 -> last slot 19.10. 04:00
         val p = UpdatePlan(3, hour = 4, minute = 0, dow = Calendar.MONDAY)
         val now = at(2026, 10, 20, 9, 0)
         assertEquals(at(2026, 10, 19, 4, 0), SettingsLogic.lastScheduled(p, now, utc))
         assertTrue(SettingsLogic.refreshDue(p, at(2026, 10, 18, 12, 0), now, utc))
         assertFalse(SettingsLogic.refreshDue(p, at(2026, 10, 19, 5, 0), now, utc))
-        // Dienstag-Plan, aber es ist Dienstag 03:00 -> letzte Woche
+        // Tuesday plan, but it is Tuesday 03:00 -> last week
         val q = UpdatePlan(3, hour = 4, minute = 0, dow = Calendar.TUESDAY)
         assertEquals(at(2026, 10, 13, 4, 0), SettingsLogic.lastScheduled(q, at(2026, 10, 20, 3, 0), utc))
         assertEquals(at(2026, 10, 20, 4, 0), SettingsLogic.lastScheduled(q, at(2026, 10, 20, 4, 0), utc))

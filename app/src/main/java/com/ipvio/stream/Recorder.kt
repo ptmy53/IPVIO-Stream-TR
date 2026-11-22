@@ -16,10 +16,10 @@ import java.io.FileOutputStream
 import java.io.RandomAccessFile
 
 /**
- * Aufnahmen im Live TV (Runde 20). Eine Aufnahme liest aus dem Live-Puffer ([LiveTap]) desselben Senders –
- * schaut man den Sender gerade, braucht sie keine zweite Verbindung zum Anbieter. Ist die laufende Sendung schon
- * im Puffer, beginnt die Aufnahme an ihrem Anfang, sonst ab jetzt. Ende: Ende der Sendung laut TV-Guide plus
- * Nachlauf, oder von Hand. Gespeichert wird als .ts mit einer kleinen .json daneben (Sender, Titel, Zeiten).
+ * Recordings in Live TV (round 20). A recording reads from the live buffer ([LiveTap]) of the same channel –
+ * if you are watching the channel, it needs no second connection to the provider. If the running show is already
+ * in the buffer, the recording starts at its beginning, otherwise from now. End: end of the show according to the TV guide plus
+ * overrun, or by hand. Stored as .ts with a small .json next to it (channel, title, times).
  */
 object Recorder {
     class Rec(
@@ -32,15 +32,15 @@ object Recorder {
         internal var thread: Thread? = null
     }
 
-    /** Fertige oder laufende Aufnahme auf dem Speicher. */
+    /** Finished or running recording on the storage. */
     class RecFile(val file: File, val channel: String, val title: String, val startMs: Long, val endMs: Long, val bytes: Long, val running: Boolean)
 
     val active = mutableStateListOf<Rec>()
 
-    /** Höchstens so lange ohne Programm-Ende (Sicherheit, falls niemand stoppt). */
+    /** At most this long without a program end (safety in case nobody stops). */
     private const val MAX_MS = 4L * 3600_000
 
-    /** Mögliche Speicherorte: interner Speicher und eingesteckte USB-Sticks/SD-Karten (App-Ordner, keine Berechtigung nötig). */
+    /** Possible storage locations: internal storage and inserted USB sticks/SD cards (app folder, no permission needed). */
     fun dirs(c: Context): List<File> {
         val ext = runCatching { c.getExternalFilesDirs("recordings").filterNotNull() }.getOrDefault(emptyList())
         return ext.ifEmpty { listOf(File(c.filesDir, "recordings")) }
@@ -60,15 +60,15 @@ object Recorder {
     fun isRecording(channelId: String): Boolean = active.any { it.channelId == channelId && it.running }
 
     /**
-     * Aufnahme des Senders [ch] aus dem Puffer [tap] starten (der Puffer wird dafür festgehalten).
-     * [prog] = laufende Sendung (Beginn/Ende), null = ab jetzt bis zum Stoppen.
+     * Start a recording of channel [ch] from the buffer [tap] (the buffer is held for it).
+     * [prog] = running show (start/end), null = from now until stopped.
      */
     fun start(c: Context, ch: Item, prog: EpgEntry?, tap: LiveTap): Rec? {
         active.firstOrNull { it.channelId == ch.id && it.running }?.let { return it }
         val now = System.currentTimeMillis()
         val dir = dir(c)
         if (dir.usableSpace < 300L * 1024 * 1024) return null
-        // Beginn: Anfang der Sendung, wenn er noch im Puffer liegt, sonst ab jetzt
+        // Start: beginning of the show if it is still in the buffer, otherwise from now
         val progStartMs = prog?.start?.let { it * 1000 }
         val fromTapMs = if (progStartMs != null) (progStartMs - tap.startedWall).coerceIn(tap.oldestMs(), tap.nowMs()) else tap.nowMs()
         val fromByte = if (tap.index.size() == 0) tap.start else tap.index.byteAt(fromTapMs)
@@ -142,7 +142,7 @@ object Recorder {
         }
     }
 
-    /** Aufnahmen auf dem gewählten Speicher (und den anderen), neueste zuerst. */
+    /** Recordings on the chosen storage (and the others), newest first. */
     fun list(c: Context): List<RecFile> {
         val out = ArrayList<RecFile>()
         for (d in dirs(c)) {
@@ -163,13 +163,13 @@ object Recorder {
         runCatching { metaFile(f.file).delete() }
     }
 
-    /** Eine Aufnahme als Eintrag zum Abspielen (wie ein Film: spulbar, Fortschritt wird gemerkt). */
+    /** A recording as an entry to play (like a movie: seekable, progress is remembered). */
     fun itemOf(f: RecFile): Item = Item("rec:" + f.file.name.hashCode(), Kind.MOVIE, f.title, null, fileUrl(f.file), null, "Aufnahmen")
 }
 
 /**
- * Hält die App am Leben, solange eine Aufnahme läuft (Benachrichtigung „Aufnahme läuft“). Ohne diesen Dienst
- * könnte Android die App im Hintergrund beenden und die Aufnahme bräche ab.
+ * Keeps the app alive while a recording runs ("Recording in progress" notification). Without this service
+ * Android could end the app in the background and the recording would break off.
  */
 class RecordService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
@@ -185,11 +185,11 @@ class RecordService : Service() {
             .setContentText(text)
             .setOngoing(true)
             .build()
-        // Nach startForegroundService() muss startForeground() immer kommen – auch wenn gleich wieder beendet wird
+        // After startForegroundService() startForeground() must always follow – even if it ends right away again
         try {
             if (Build.VERSION.SDK_INT >= 29) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(ID, n)
         } catch (e: Exception) {
-            // Vordergrund nicht erlaubt: Aufnahme läuft trotzdem, solange die App lebt
+            // Foreground not allowed: recording runs anyway as long as the app lives
         }
         if (running.isEmpty()) stopNow()
         return START_NOT_STICKY
@@ -200,7 +200,7 @@ class RecordService : Service() {
         stopSelf()
     }
 
-    /** Android 15+: Zeitgrenze für Hintergrund-Datenübertragung erreicht – sofort beenden (sonst stürzt die App ab). */
+    /** Android 15+: time limit for background data transfer reached – end immediately (otherwise the app crashes). */
     override fun onTimeout(startId: Int, fgsType: Int) {
         Recorder.active.toList().forEach { Recorder.stop(this, it) }
         stopNow()
@@ -210,7 +210,7 @@ class RecordService : Service() {
         private const val CHANNEL = "rec"
         private const val ID = 4711
 
-        /** Dienst passend zu den laufenden Aufnahmen starten oder beenden. */
+        /** Start or end the service to match the running recordings. */
         fun update(c: Context) {
             val any = Recorder.active.any { it.running }
             val i = Intent(c, RecordService::class.java)

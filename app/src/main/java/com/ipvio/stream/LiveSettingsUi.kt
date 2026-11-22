@@ -22,7 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Einstellungen > Live TV: Zurückspulen (Puffer auf dem Gerät) und Aufnahmen. */
+/** Settings > Live TV: rewind (buffer on the device) and recordings. */
 @Composable
 internal fun LiveBufferSection(ctx: Context) {
     LiveSettings.init(ctx)

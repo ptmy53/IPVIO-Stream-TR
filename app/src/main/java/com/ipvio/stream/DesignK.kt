@@ -9,24 +9,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Maßstab des Entwurfs (Bilder des Nutzers, 1658 px breit). Alle Maße der Startseite, Filme/Serien, Seitenleiste und Kopfzeile
- * werden in „Entwurfs-Pixeln“ angegeben und auf die echte Bildschirmbreite umgerechnet – so sieht die App auf jedem Gerät
- * genau wie der Entwurf aus (gleiche Anteile), unabhängig von der Einstellung „Anzeigegröße“.
+ * Scale of the design (user's images, 1658 px wide). All measurements of the home screen, movies/series, sidebar and header
+ * are given in "design pixels" and converted to the real screen width – so the app looks on every device
+ * exactly like the design (same proportions), independent of the "Display size" setting.
  */
 object Design {
     const val WIDTH = 1658f
-    /** dp je Entwurfs-Pixel; wird in MainActivity aus der Bildschirmbreite gesetzt (1130 dp → 0,68). */
+    /** dp per design pixel; set in MainActivity from the screen width (1130 dp → 0.68). */
     var k by mutableFloatStateOf(0.68f)
 }
 
-/** Entwurfs-Pixel → dp. */
+/** Design pixels → dp. */
 fun dpx(v: Number): Dp = (v.toFloat() * Design.k).dp
 
-/** Entwurfs-Pixel → sp (Schriftgröße). */
+/** Design pixels → sp (font size). */
 fun spx(v: Number): TextUnit = typeSize(v.toFloat()).sp
 
 /**
- * Lesbarkeit aus 3 m (Runde 17): kleine Entwurfsgrößen werden nicht beliebig klein. Unter etwa 19 Entwurfs-Pixeln bleibt
- * die Schrift bei mindestens 13 sp (bzw. 85 % des Entwurfswerts, falls kleiner); große Titel folgen genau dem Entwurf.
+ * Legibility from 3 m (round 17): small design sizes do not become arbitrarily small. Below about 19 design pixels the
+ * text stays at least 13 sp (or 85% of the design value if smaller); large titles follow the design exactly.
  */
 fun typeSize(v: Float): Float = maxOf(v * Design.k, minOf(v * 0.85f, 13f))

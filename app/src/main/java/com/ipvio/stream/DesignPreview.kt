@@ -32,25 +32,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Live-Vorschau der Design-Seite. Sie steht fest oben rechts (wird von HomeScreen über die Einstellungen gelegt),
- * damit man beim Ändern nicht hoch und runter scrollen muss.
- * Markierte, aber noch nicht gewählte Farben (Fokus) zeigt nur die Vorschau – die App selbst ändert sich erst mit OK.
+ * Live preview of the design page. It sits fixed at the top right (placed by HomeScreen over the settings)
+ * so you do not have to scroll up and down when changing.
+ * Highlighted but not yet chosen colors (focus) are shown only in the preview – the app itself changes only with OK.
  */
 object DesignPreview {
     val WIDTH = 330.dp
-    /** Design-Seite ist offen. */
+    /** Design page is open. */
     var visible by mutableStateOf(false)
-    /** Probehalber markiert (null = aktuelle Einstellung). */
+    /** Marked on trial (null = current setting). */
     var accent by mutableStateOf<Int?>(null)
     var bg by mutableStateOf<Int?>(null)
     var custom by mutableStateOf<Int?>(null)
     var custom2 by mutableStateOf<Int?>(null)
-    /** Runde 14: auch Animationen, Anzeigegröße, Schriftart und Schriftgröße als Vorschau (Fokus, ohne OK). */
+    /** Round 14: also animations, display size, font and font size as a preview (focus, without OK). */
     var motion by mutableStateOf<Int?>(null)
     var scale by mutableStateOf<Int?>(null)
     var font by mutableStateOf<Int?>(null)
     var textScale by mutableStateOf<Int?>(null)
-    /** Name der markierten Auswahl („Ozean“), für die Überschrift. */
+    /** Name of the highlighted choice ("Ocean"), for the heading. */
     var label by mutableStateOf<String?>(null)
 
     fun clear() { accent = null; bg = null; custom = null; custom2 = null; motion = null; scale = null; font = null; textScale = null; label = null }
@@ -61,12 +61,12 @@ fun DesignPreviewPanel(modifier: Modifier) {
     val probe = DesignPreview.accent != null || DesignPreview.bg != null || DesignPreview.custom != null || DesignPreview.custom2 != null ||
         DesignPreview.motion != null || DesignPreview.scale != null || DesignPreview.font != null || DesignPreview.textScale != null
     val cfg = androidx.compose.ui.platform.LocalConfiguration.current
-    // Größen relativ zur aktuellen Einstellung (die App ist schon damit skaliert)
+    // Sizes relative to the current setting (the app is already scaled with it)
     val uiRel = ThemeMath.uiFactor(DesignPreview.scale ?: Look.uiScale, cfg.screenWidthDp) / ThemeMath.uiFactor(Look.uiScale, cfg.screenWidthDp)
     val txtRel = General.textFactor(DesignPreview.textScale ?: General.textScaleIdx) / General.textFactor()
     val fam = General.fontFamily(DesignPreview.font ?: General.fontIdx)
     val motion = DesignPreview.motion ?: Look.motion
-    // Markierte Karte „atmet“ so stark, wie die gewählte Animationsstufe beim Fokus vergrößert
+    // Highlighted card "breathes" as much as the chosen animation level enlarges on focus
     val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "pv")
     val pv by pulse.animateFloat(1f, ThemeMath.focusScale(1.08f, motion),
         androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(700), androidx.compose.animation.core.RepeatMode.Reverse), label = "pvs")
@@ -87,10 +87,10 @@ fun DesignPreviewPanel(modifier: Modifier) {
             Text(if (probe) "Vorschau" else "Aktuelles Design", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             DesignPreview.label?.takeIf { probe }?.let { Text(it, color = p.high, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
         }
-        // Kleiner Bildschirm im gewählten Design
+        // Small screen in the chosen design
         val screen = RoundedCornerShape(DS.RadiusM)
         Row(Modifier.fillMaxWidth().height(196.dp).clip(screen).background(p.bg)) {
-            // Seitenleiste
+            // Sidebar
             Column(
                 Modifier.width(34.dp).fillMaxHeight().background(lerp(p.bg, Color.Black, 0.25f)).padding(vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -108,7 +108,7 @@ fun DesignPreviewPanel(modifier: Modifier) {
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // markierte Karte (Rahmen in Farbe 2) und zwei normale
+                    // highlighted card (frame in color 2) and two normal ones
                     val card = RoundedCornerShape(8.dp)
                     Box(Modifier.width(66.dp * uiRel).height(92.dp * uiRel).graphicsLayer { scaleX = pv; scaleY = pv }.clip(card).background(Brush.verticalGradient(listOf(p.surf2, p.surf))).border(2.dp, p.high, card)) {
                         Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color(0x55FFFFFF))) {
@@ -138,7 +138,7 @@ fun DesignPreviewPanel(modifier: Modifier) {
             Box(Modifier.size(16.dp).clip(CircleShape).background(p.high))
             Box(Modifier.size(16.dp).clip(CircleShape).background(p.surf2).border(1.dp, Color(0x33FFFFFF), CircleShape))
         }
-        // Schrift: Art und Größe der Auswahl
+        // Font: type and size of the choice
         Text(raw = true, text = "Aa  " + Lang.tr("Beispieltext") + " 123", color = Color.White, fontSize = 18.sp * txtRel * uiRel,
             fontWeight = FontWeight.SemiBold, fontFamily = fam, maxLines = 1)
         Text(

@@ -11,11 +11,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /*
- * Einstellungs-Abschnitte aus Runde 10 (eigene Datei, damit SettingsHub.kt nicht weiter wächst).
- * Nutzt die Bausteine aus SettingsHub.kt (SelectRow, ToggleRow, Hint, SectionTitle, ConfirmPill).
+ * Settings sections from round 10 (own file so SettingsHub.kt does not keep growing).
+ * Uses the building blocks from SettingsHub.kt (SelectRow, ToggleRow, Hint, SectionTitle, ConfirmPill).
  */
 
-/** Ton & Untertitel: erste und zweite Tonsprache, wann Untertitel erscheinen, Sprache, CC. */
+/** Sound & subtitles: first and second audio language, when subtitles appear, language, CC. */
 @Composable
 fun TrackSettingsSection(ctx: Context) {
     val ai = Langs.AUDIO.indexOfFirst { it.first == AppSettings.audioLang }.coerceAtLeast(0)
@@ -49,10 +49,11 @@ fun TrackSettingsSection(ctx: Context) {
     )
 }
 
-/** Player: welche Quelle die App bei mehreren Qualitäten nimmt, und das Ausweichen bei Ruckeln/Fehlern. */
+/** Player: which source the app takes when there are several qualities, and falling back on stutter/errors. */
 @Composable
 fun SourceSettingsSection(ctx: Context) {
     PlaybackPrefs.init(ctx)
+    DeviceCaps.init(ctx)
     SectionTitle("Quelle & Qualität")
     val opts = listOf("Automatisch (passend zum Gerät)", "Immer die höchste", "Höchstens Full HD", "Höchstens HD (spart Daten)")
     SelectRow("Bei mehreren Quellen", opts[PlaybackPrefs.quality], opts, PlaybackPrefs.quality) { PlaybackPrefs.setQuality(ctx, it) }
@@ -61,6 +62,11 @@ fun SourceSettingsSection(ctx: Context) {
         "Ruckelt ein Titel mehrmals oder lässt er sich nicht abspielen, nimmt die App eine andere (kleinere) Quelle desselben Titels – an derselben Stelle.",
         PlaybackPrefs.autoFallback
     ) { PlaybackPrefs.setFallback(ctx, it) }
+    ToggleRow(
+        "Technische Infos auf der Detailseite",
+        "Liest beim Öffnen eines Titels den Anfang der Datei und zeigt Auflösung, HDR, Tonspuren und Untertitel. Das belegt kurz eine Verbindung zum Anbieter – bei Zugängen mit nur einer Verbindung ausschalten, wenn gleichzeitig etwas anderes läuft.",
+        PlaybackPrefs.probe
+    ) { PlaybackPrefs.setProbe(ctx, it) }
     Text("Dieses Gerät: " + DeviceCaps.summary(), color = Muted, fontSize = 15.sp)
     if (PlaybackPrefs.learnedCap in 1..3) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Gelernt: 4K ruckelte hier mehrmals – Automatik nimmt höchstens Full HD.", color = DS.Gold, fontSize = 15.sp)
@@ -72,7 +78,7 @@ fun SourceSettingsSection(ctx: Context) {
     )
 }
 
-/** Player: Links, die beim Abspielen nicht mehr gingen. */
+/** Player: links that no longer worked during playback. */
 @Composable
 fun DeadLinksSection(ctx: Context) {
     DeadLinks.init(ctx)
@@ -94,7 +100,7 @@ fun DeadLinksSection(ctx: Context) {
     )
 }
 
-/** Live-TV: eigene Senderlisten (Überblick, Bedienung). */
+/** Live TV: own channel lists (overview, operation). */
 @Composable
 fun ChannelListsSection(ctx: Context) {
     ChannelLists.init(ctx)
@@ -109,7 +115,7 @@ fun ChannelListsSection(ctx: Context) {
     )
 }
 
-/** Live-TV: Erinnerungen an Sendungen (Vorlauf, anstehende Erinnerungen). */
+/** Live TV: reminders for shows (lead time, upcoming reminders). */
 @Composable
 fun ReminderSettingsSection(ctx: Context) {
     Reminders.init(ctx)
@@ -135,7 +141,7 @@ fun ReminderSettingsSection(ctx: Context) {
     )
 }
 
-/** Live-TV: Archiv (Catchup) – wie viele Sender es anbieten und wie man es nutzt. */
+/** Live TV: archive (catchup) – how many channels offer it and how to use it. */
 @Composable
 fun CatchupSection() {
     SectionTitle("Archiv (Catchup)")

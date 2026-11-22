@@ -10,29 +10,29 @@ import java.io.RandomAccessFile
 import java.util.concurrent.TimeUnit
 
 /**
- * Live-Puffer für EINEN Sender (siehe [TapLogic]): eine Verbindung zum Anbieter, die Daten landen in Stücken auf dem
- * Speicher. Player und Aufnahme lesen daraus. Bricht die Verbindung ab, wird neu verbunden und weitergeschrieben.
+ * Live buffer for ONE channel (see [TapLogic]): one connection to the provider, the data lands in pieces on
+ * the storage. Player and recording read from it. If the connection drops, it reconnects and keeps writing.
  *
- * Lebensdauer über Zähler: [acquire]/[release]. Ist niemand mehr dran (Player zu, keine Aufnahme), wird geschlossen
- * und der Ordner gelöscht.
+ * Lifetime via counters: [acquire]/[release]. When nobody is attached any more (player closed, no recording), it is closed
+ * and the folder deleted.
  */
 class LiveTap(val id: Int, val url: String, private val dir: File, private val maxBytes: Long, private val ua: String) {
     private val lock = Object()
     @Volatile var written = 0L
         private set
-    /** Erste noch vorhandene Byte-Stelle (ältere Stücke sind gelöscht). */
+    /** First byte position still present (older pieces are deleted). */
     @Volatile var start = 0L
         private set
     @Volatile var closed = false
         private set
-    /** Endgültiger Fehler (z. B. Zugang abgelehnt); dann schreibt der Puffer nicht weiter. */
+    /** Final error (e.g. login rejected); then the buffer stops writing. */
     @Volatile var failure: String? = null
         private set
-    /** Anzahl Neuverbindungen (für den Hinweis im Player). */
+    /** Number of reconnects (for the hint in the player). */
     @Volatile var reconnects = 0
         private set
     val index = TapLogic.TimeIndex()
-    /** Beginn des Puffers: Uhrzeit (für Sendungszeiten aus dem TV-Guide) und monotone Zeit (für den Abstand). */
+    /** Start of the buffer: clock time (for show times from the TV guide) and monotonic time (for the distance). */
     val startedWall = System.currentTimeMillis()
     private val startedMono = System.nanoTime()
     private var refs = 0
@@ -42,17 +42,18 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
+        .addInterceptor(TlsFallback.interceptor())
         .build()
 
-    /** Millisekunden seit Beginn des Puffers. */
+    /** Milliseconds since the start of the buffer. */
     fun nowMs(): Long = (System.nanoTime() - startedMono) / 1_000_000
 
-    /** Zeitpunkt (ms seit Beginn) der ältesten noch vorhandenen Daten. */
+    /** Time (ms since start) of the oldest data still present. */
     fun oldestMs(): Long = index.msAt(start)
 
     fun acquire(): LiveTap { synchronized(lock) { refs++ }; return this }
 
-    /** true, wenn danach niemand mehr den Puffer nutzt (er wird dann geschlossen). */
+    /** true if nobody uses the buffer afterwards (it is then closed). */
     fun release(): Boolean {
         val last = synchronized(lock) { refs = (refs - 1).coerceAtLeast(0); refs == 0 }
         if (last) close()
@@ -71,7 +72,7 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
         t.start()
     }
 
-    /** Verbindung sofort neu aufbauen (Player meint, es hängt). */
+    /** Rebuild the connection immediately (player thinks it hangs). */
     fun kick() { runCatching { call?.cancel() } }
 
     @Volatile private var call: okhttp3.Call? = null
@@ -80,7 +81,7 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
     private var outIdx = -1L
     private var lastSample = -1000L
 
-    /** Empfangene Daten an den Puffer hängen (Stück für Stück), Zeitpunkt merken, alte Stücke löschen. */
+    /** Append received data to the buffer (piece by piece), note the time, delete old pieces. */
     internal fun append(buf: ByteArray, n: Int) {
         var done = 0
         while (done < n) {
@@ -119,7 +120,7 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
                         backoff = 1000L
                         while (!closed) {
                             val n = ins.read(buf)
-                            if (n < 0) break   // Server hat den Stream beendet: neu verbinden
+                            if (n < 0) break   // server ended the stream: reconnect
                             if (n > 0) append(buf, n)
                         }
                     }
@@ -140,7 +141,7 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
         }
     }
 
-    /** Ältere Stücke löschen, sobald mehr als [maxBytes] gespeichert sind. */
+    /** Delete older pieces as soon as more than [maxBytes] are stored. */
     private fun trim() {
         val keep = TapLogic.keepFrom(written, maxBytes)
         if (keep <= start) return
@@ -151,8 +152,8 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
     }
 
     /**
-     * Liest ab [at][0] (wird weitergezählt). Wartet, bis Daten da sind. Liegt die Stelle vor dem Puffer (gelöscht),
-     * geht es ab der ältesten vorhandenen Stelle weiter. -1 = Puffer beendet.
+     * Reads from [at][0] (counted on). Waits until data is there. If the position lies before the buffer (deleted),
+     * it continues from the oldest available position. -1 = buffer ended.
      */
     fun read(at: LongArray, buf: ByteArray, off: Int, len: Int, raf: Array<RandomAccessFile?>, rafIdx: LongArray): Int {
         if (at[0] < start) at[0] = start
@@ -168,7 +169,7 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
         if (rafIdx[0] != idx || raf[0] == null) {
             runCatching { raf[0]?.close() }
             raf[0] = try { RandomAccessFile(chunkFile(idx), "r") } catch (e: IOException) {
-                // Stück gerade gelöscht: zur ältesten Stelle springen
+                // Piece just deleted: jump to the oldest position
                 at[0] = start; rafIdx[0] = -1; return 0.also { if (closed) return -1 }
             }
             rafIdx[0] = idx
@@ -183,7 +184,7 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
         return n
     }
 
-    /** Geschätzte Datenrate (Bytes je Sekunde) der letzten Zeit, 0 = unbekannt. */
+    /** Estimated data rate (bytes per second) of the recent time, 0 = unknown. */
     fun rate(): Long {
         val t1 = index.lastMs(); val t0 = maxOf(index.firstMs(), t1 - 60_000)
         if (t1 - t0 < 2000) return 0
@@ -203,7 +204,7 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
     }
 }
 
-/** Alle laufenden Live-Puffer (einer je Sender; Player und Aufnahme teilen ihn sich). */
+/** All running live buffers (one per channel; player and recording share it). */
 object LiveTaps {
     private val taps = HashMap<Int, LiveTap>()
     private var next = 1
@@ -211,12 +212,12 @@ object LiveTaps {
 
     @Synchronized fun get(id: Int): LiveTap? = taps[id]?.takeIf { !it.closed }
 
-    /** Vorhandenen Puffer für diese Adresse nehmen oder einen neuen starten. null = zu wenig Speicher. */
+    /** Take the existing buffer for this address or start a new one. null = too little memory. */
     @Synchronized fun open(c: android.content.Context, url: String): LiveTap? {
         taps.values.firstOrNull { it.url == url && !it.closed && it.failure == null }?.let { return it.acquire() }
         taps.entries.removeAll { it.value.closed }
         val root = File(c.cacheDir, "livetap")
-        if (taps.isEmpty()) runCatching { root.deleteRecursively() }   // Reste nach einem Absturz
+        if (taps.isEmpty()) runCatching { root.deleteRecursively() }   // leftovers after a crash
         root.mkdirs()
         val budget = TapLogic.budget(LiveSettings.bufferMb, root.usableSpace)
         if (budget <= 0) return null

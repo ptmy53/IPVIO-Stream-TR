@@ -5,7 +5,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Before
 import org.junit.Test
 
-/** Runde 18: Übersetzungen der Laufzeit-Texte (Player-Hinweis, Kino-Hinweis, Jahrzehnte, Update-Meldungen). */
+/** Round 18: translations of the runtime texts (player hint, cinema hint, decades, update messages). */
 class Round18Test {
     @Before fun setUp() { I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI) }
     private val EN = 1; private val TR = 2; private val IT = 8

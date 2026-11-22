@@ -1,0 +1,29 @@
+name: PR checks
+
+# Warns (does not block) when app code changes without a test change. See CLAUDE.md section 17.
+
+on:
+  pull_request:
+    branches: [ dev, main ]
+
+permissions:
+  contents: read
+
+jobs:
+  test-change-warning:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Warn when app code changes without tests
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          if echo "$CHANGED" | grep -q '^app/src/main/' && ! echo "$CHANGED" | grep -q '^app/src/test/'; then
+            echo "::warning::app/src/main changed without any change in app/src/test. Add a test, or explain in the PR why it can only be tested on a device (CLAUDE.md section 17)."
+          else
+            echo "Test check: OK"
+          fi
