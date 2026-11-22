@@ -601,7 +601,7 @@ private fun GuideRow(
                     val inArchive = past && CatchupLogic.canPlay(cu, e.start, e.end, nowSec)
                     val dw = if (bf) maxOf(w, 200f) else w
                     val frac = if (isNow) ((nowSec - e.start).toFloat() / (e.end - e.start)).coerceIn(0f, 1f) else 0f
-                    val req = blockReqs.getOrPut(e.start) { FocusRequester() }
+                    val req = remember(e.start) { blockReqs.getOrPut(e.start) { FocusRequester() } }
                     val blockShape = RoundedCornerShape(DS.RadiusS)
                     Box(
                         Modifier.offset(x = x.dp).zIndex(if (bf) 2f else 0f).width(dw.dp).fillMaxHeight().clip(blockShape)

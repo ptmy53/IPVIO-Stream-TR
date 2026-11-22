@@ -211,7 +211,8 @@ fun SportTab(live: List<Item>, onPlay: (Item, List<Item>) -> Unit) {
                         // Other days of the week: only results and schedule of the leagues
                         items(5, key = { "dx$it" }) { k ->
                             val d = k + 2
-                            val f = java.text.SimpleDateFormat("EEE d.M.", java.util.Locale.getDefault()).apply { timeZone = zone }
+                            val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales.let { if (it.isEmpty) java.util.Locale.forLanguageTag("de") else it[0] }
+                            val f = java.text.SimpleDateFormat("EEE d.M.", locale).apply { timeZone = zone }
                             FilterPill(f.format(java.util.Date(System.currentTimeMillis() + d * 86_400_000L)), day == d, raw = true) { day = d }
                         }
                         item(key = "sep") { Box(Modifier.width(2.dp).height(dpx(28)).background(DS.Overlay3)) }

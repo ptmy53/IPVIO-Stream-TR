@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /** T-049a: OK on a sports alert (goal, kick-off) jumps to a channel that shows the game; every other key as usual. */
+    @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         val ok = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER
         if (ok && SportAlerts.current?.game != null && SportAlerts.jumpTarget(SportAlerts.current) != null) {

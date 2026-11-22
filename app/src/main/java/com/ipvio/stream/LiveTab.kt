@@ -118,7 +118,7 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
     val favs = remember(favsAll, srcK) { if (srcK < 0) favsAll else favsAll.filter { it.src == srcK } }
     CatFavs.init(ctx)
     ChannelLists.init(ctx)
-    remember { LiveQuality.init(ctx) }
+    remember { LiveQuality.init(ctx); 0 }
     // Last chosen category / list (round 14): the same one again after Back from the player and after a restart
     // The tab opens on "Start" (home), except when coming back from a stream: then the last category with its channel list.
     // LastFocus.pending is set exactly in that case (MainActivity, back from the player).
