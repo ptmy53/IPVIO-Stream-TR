@@ -44,6 +44,12 @@ class DictConsistencyTest {
             "EPG", "Outfit", "Inter", "Google Drive", "Golf",
             "HD", "FHD", "4K", "Logo", "tvg-id", "Sprint", "Form", "Formula 1", "Set",
             "Letterboxd, MyAnimeList, Trakt",
+            "Letterboxd: ZIP oder CSV ? MyAnimeList: XML ? Trakt: JSON",
+            "Letterboxd: ZIP or CSV ? MyAnimeList: XML ? Trakt: JSON",
+            "Letterboxd ? Gesehen", "Letterboxd ? Merkliste", "Trakt ? Gesehen", "Trakt ? Merkliste",
+            "MyAnimeList ? Gesehen", "MyAnimeList ? Merkliste",
+            "Letterboxd ? Watched", "Letterboxd ? Watchlist", "Trakt ? Watched", "Trakt ? Watchlist",
+            "MyAnimeList ? Watched", "MyAnimeList ? Watchlist",
         )
         val fehlend = ArrayList<String>()
         val unuebersetzt = ArrayList<String>()
