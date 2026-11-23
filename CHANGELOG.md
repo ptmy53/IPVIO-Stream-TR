@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Docs: README gets an install troubleshooting pointer, a "Privacy and security" section (API keys, backup servers, phone remote over plain HTTP, VPN without kill switch, own DNS), a "Known limitations" section and a link to the test documentation. No app change
 
 ## 1.4.8 (versionCode 14)
 - Settings > General > VPN (new): connect the device through WireGuard. Choose the `.conf` file of your VPN provider, then connect and disconnect there. The video stream goes through the VPN as well. The key is stored encrypted and never shown. There is no kill switch yet. Not device tested yet, and not checked on Fire TV
